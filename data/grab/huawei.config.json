@@ -40,7 +40,7 @@
   "profileId": "huawei_user_01",
   "enabled": true,
   "mode": "rush",
-  "dryRun": true,
+  "dryRun": false,
   "earlyEnterSec": 90,
   "_B方案拦截": {
     "说明": "在『本机浏览器收到的内容』上做手脚：不构造、不重放、不伪造任何请求，流量仍全部由页面自己发起。改版体检（控制台『改版体检』页）会对着真实环境逐项验证这些规则仍有效。",
@@ -60,7 +60,7 @@
     }
   },
   "_A方案触发器": "triggerMode: click=可信点击（默认，CDP 真实鼠标事件）；internal=到点直接调页面内部下单函数（更快，但 2026-10-07 体检实测 window.rush 已不存在，等体检 C7 项变绿后才可打开）。internal 调用失败会自动回落真点击。",
-  "triggerMode": "internal",
+  "triggerMode": "click",
   "products": [
     {
       "id": "mate90-pro-max",

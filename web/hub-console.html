@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QG 抢购中枢</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #12161f; --panel2: #171c27; --line: #232a38;
+    --accent: #4f8cff; --accent2: #2f6ae0; --ok: #34d399; --warn: #fbbf24; --err: #f87171;
+    --text: #e8ecf3; --muted: #8b95a7; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5;
+  }
+  a { color: var(--accent); text-decoration: none; }
+
+  /* 顶栏 */
+  .topbar {
+    display: flex; align-items: center; gap: 14px; padding: 12px 20px;
+    border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgba(11,14,20,.92);
+    backdrop-filter: blur(8px); z-index: 50;
+  }
+  .logo { font-size: 17px; font-weight: 800; letter-spacing: .5px; }
+  .logo em { color: var(--accent); font-style: normal; }
+  .topbar .sub { color: var(--muted); font-size: 12px; }
+  .topbar .grow { flex: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px;
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; font-size: 12px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .dot.off { background: var(--err); box-shadow: 0 0 6px var(--err); }
+  .pill .mono { font-family: var(--mono); color: var(--accent); cursor: pointer; }
+
+  /* 布局 */
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 16px 20px 60px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; align-items: start; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .card h3 {
+    margin: 0 0 12px; font-size: 14px; font-weight: 700; color: #cdd6e4;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .card h3 .grow { flex: 1; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .badge.blue { background: rgba(79,140,255,.15); color: #8ab4ff; border: 1px solid rgba(79,140,255,.35); }
+  .badge.green { background: rgba(52,211,153,.12); color: var(--ok); border: 1px solid rgba(52,211,153,.35); }
+  .badge.gray { background: rgba(139,149,167,.12); color: var(--muted); border: 1px solid var(--line); }
+
+  /* 表单 */
+  .frow { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .frow.full { grid-template-columns: 1fr; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+  input, select {
+    width: 100%; background: #0d1118; border: 1px solid var(--line); color: var(--text);
+    padding: 9px 10px; border-radius: 8px; font-size: 13px; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* 按钮 */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 9px 16px; border-radius: 8px; border: 1px solid transparent;
+    font-size: 13px; font-weight: 700; cursor: pointer; transition: filter .15s, opacity .15s;
+    background: var(--panel2); color: var(--text); border-color: var(--line);
+  }
+  .btn:hover { filter: brightness(1.15); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.primary { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+  .btn.ok { background: #0d9668; border-color: #0d9668; color: #fff; }
+  .btn.danger { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+  .btn.sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+  .btnrow { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+
+  /* 设备卡 */
+  .dev {
+    display: flex; gap: 14px; align-items: center; background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; flex-wrap: wrap;
+  }
+  .dev .icon { font-size: 26px; }
+  .dev .info { flex: 1; min-width: 200px; }
+  .dev .name { font-weight: 700; }
+  .dev .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .kv { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .kv b { color: var(--text); font-weight: 600; }
+
+  /* 芯片 */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; cursor: pointer;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip.sel { border-color: var(--accent); background: rgba(79,140,255,.12); }
+  .chip .sub { color: var(--muted); font-size: 11px; }
+
+  /* 步骤时间线 */
+  .steps { display: flex; flex-direction: column; gap: 0; }
+  .step { display: flex; gap: 10px; position: relative; padding-bottom: 14px; }
+  .step:last-child { padding-bottom: 0; }
+  .step .rail { width: 20px; display: flex; flex-direction: column; align-items: center; }
+  .step .node {
+    width: 18px; height: 18px; border-radius: 50%; background: var(--panel2);
+    border: 2px solid var(--line); display: flex; align-items: center; justify-content: center;
+    font-size: 10px; flex-shrink: 0;
+  }
+  .step .rail .bar { flex: 1; width: 2px; background: var(--line); margin-top: 2px; }
+  .step.done .node { border-color: var(--ok); color: var(--ok); }
+  .step.done .rail .bar { background: rgba(52,211,153,.4); }
+  .step.active .node { border-color: var(--accent); animation: pulse 1.2s infinite; }
+  .step.failed .node { border-color: var(--err); color: var(--err); }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(79,140,255,.5);} 50% { box-shadow: 0 0 0 5px rgba(79,140,255,0);} }
+  .step .body { flex: 1; min-width: 0; }
+  .step .t { font-weight: 600; font-size: 13px; }
+  .step .d { color: var(--muted); font-size: 12px; word-break: break-all; }
+
+  /* 结果横幅 */
+  .result {
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; font-size: 13px;
+    display: none; border: 1px solid;
+  }
+  .result.show { display: block; }
+  .result.success { background: rgba(52,211,153,.08); border-color: rgba(52,211,153,.4); }
+  .result.failed { background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.4); }
+  .result.other { background: rgba(251,191,36,.08); border-color: rgba(251,191,36,.4); }
+  .result .rt { font-weight: 800; margin-bottom: 4px; }
+
+  /* 日志 */
+  .logbox {
+    background: #080b11; border: 1px solid var(--line); border-radius: 10px;
+    height: 460px; overflow-y: auto; padding: 10px; font-family: var(--mono); font-size: 12px;
+  }
+  .loge { padding: 2px 6px; border-radius: 4px; line-height: 1.55; word-break: break-all; }
+  .loge:hover { background: rgba(255,255,255,.03); }
+  .loge .t { color: #5b667a; margin-right: 8px; }
+  .loge .e { color: #6ea8ff; margin-right: 6px; font-weight: 600; }
+  .loge.resultline.success { color: var(--ok); }
+  .loge.resultline.failed { color: var(--err); }
+
+  /* toast */
+  #toasts { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
+  .toast {
+    background: var(--panel2); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    animation: slidein .2s ease-out;
+  }
+  .toast.ok { border-left-color: var(--ok); }
+  .toast.err { border-left-color: var(--err); }
+  .toast.warn { border-left-color: var(--warn); }
+  .toast b { display: block; margin-bottom: 2px; }
+  .toast .sub { color: var(--muted); font-size: 12px; word-break: break-all; }
+  @keyframes slidein { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  /* modal */
+  #modal-mask { position: fixed; inset: 0; background: rgba(4,6,10,.72); z-index: 9998; display: none; align-items: center; justify-content: center; }
+  #modal-mask.show { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    width: min(92vw, 560px); max-height: 82vh; display: flex; flex-direction: column;
+    box-shadow: 0 24px 60px rgba(0,0,0,.6);
+  }
+  .modal .mh { padding: 14px 18px; border-bottom: 1px solid var(--line); font-weight: 700; display: flex; align-items: center; }
+  .modal .mh .grow { flex: 1; }
+  .modal .mb { padding: 16px 18px; overflow-y: auto; font-size: 13px; white-space: pre-wrap; }
+  .modal .mf { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 10px; }
+  .xbtn { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1; }
+
+  /* 连接步骤列表 */
+  .connect-steps { font-size: 12px; margin-top: 10px; }
+  .connect-steps .cs { padding: 3px 0; display: flex; gap: 8px; }
+  .connect-steps .cs.ok::before { content: "✅"; }
+  .connect-steps .cs.bad::before { content: "❌"; }
+
+  .section-note { color: var(--muted); font-size: 12px; margin: 4px 0 10px; }
+  .divider { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
+</style>
+</head>
+<body>
+
+<div id="toasts"></div>
+<div id="modal-mask">
+  <div class="modal">
+    <div class="mh"><span id="modal-title">提示</span><span class="grow"></span><button class="xbtn" onclick="closeModal()">&times;</button></div>
+    <div class="mb" id="modal-body"></div>
+    <div class="mf" id="modal-footer"><button class="btn primary" onclick="closeModal()">知道了</button></div>
+  </div>
+</div>
+
+<div class="topbar">
+  <div>
+    <div class="logo">QG <em>抢购中枢</em></div>
+    <div class="sub">大麦移动端精准击发 · 热启动防广告 · 多观演人配对</div>
+  </div>
+  <div class="grow"></div>
+  <span class="pill"><span class="dot" id="hub-dot"></span><span id="hub-text">连接中…</span></span>
+  <span class="pill">Wi-Fi <span class="mono" title="点击复制" onclick="copyText('http://${LAN_IP}:${PORT}','局域网地址已复制')">http://${LAN_IP}:${PORT}</span></span>
+  <span class="pill">USB <span class="mono">127.0.0.1:${PORT}</span></span>
+</div>
+
+<div class="wrap">
+  <div class="grid">
+    <!-- ============ 左列 ============ -->
+    <div>
+      <!-- 设备 -->
+      <div class="card">
+        <h3>📱 设备 <span class="badge gray" id="dev-badge">检测中</span>
+          <span class="grow"></span>
+          <button class="btn sm" onclick="refreshDevices(true)">刷新</button>
+        </h3>
+        <div id="dev-area"><div class="hint">正在检测设备…</div></div>
+        <div class="btnrow">
+          <button class="btn ok" id="btn-connect" onclick="connectDevice()">⚡ 一键连接设备 (全自动)</button>
+          <button class="btn" id="btn-update" onclick="updateScript()">📦 更新手机脚本并重启 Agent</button>
+        </div>
+        <div class="connect-steps" id="connect-steps"></div>
+        <div class="hint" style="margin-top:8px">一键连接 = USB 检测 → 端口代理 → 写入通信配置 → 推送脚本与省市区数据 → 拉起 AutoJs6 运行 → 验证上线。全程无需操作手机。</div>
+      </div>
+
+      <!-- 演出配置 -->
+      <div class="card">
+        <h3>🎯 目标演出 <span class="badge blue">探针库联动</span></h3>
+        <div class="frow full">
+          <div>
+            <label>从探针库选择</label>
+            <select id="catalog-select" onchange="onCatalogChange()"><option value="">载入中…</option></select>
+          </div>
+        </div>
+        <div class="frow">
+          <div>
+            <label>演出 ID / 链接 (探针采集)</label>
+            <div style="display:flex;gap:8px">
+              <input id="probe-input" placeholder="如 87541290" style="flex:1">
+              <button class="btn sm" onclick="runProbe()">采集</button>
+            </div>
+          </div>
+          <div><label>目标演出名称</label><input id="target-name" placeholder="选择上方演出后自动填充"></div>
+        </div>
+        <div class="frow">
+          <div><label>场次</label><select id="session-select" onchange="onSessionChange()"></select></div>
+          <div><label>票档</label><select id="price-select" onchange="onPriceChange()"></select></div>
+        </div>
+        <div class="frow">
+          <div>
+            <label>购票张数 (与观演人席位联动)</label>
+            <select id="target-count" onchange="renderSlots()">
+              <option value="1">1 张</option><option value="2">2 张</option>
+              <option value="3">3 张</option><option value="4">4 张</option>
+            </select>
+          </div>
+          <div>
+            <label>执行模式</label>
+            <select id="task-mode" onchange="onModeChange()">
+              <option value="test" selected>🟢 安全演练 (停在提交前, 不扣款)</option>
+              <option value="buy">🛒 立即购买 (直通提交)</option>
+              <option value="rush">⏰ 定时抢票 (到点高频击发)</option>
+            </select>
+            <div class="hint" id="mode-hint">演练完整跑通: 详情→选票→观演人→停在「立即提交」前</div>
+          </div>
+        </div>
+        <div class="frow" id="fire-row" style="display:none">
+          <div><label>开售时间 (抢票模式)</label><input id="fire-time" placeholder="2026-10-10 18:59:59"></div>
+        </div>
+        <div>
+          <label>实名观演人席位</label>
+          <div id="slots" class="chips" style="flex-direction:column;align-items:stretch"></div>
+          <div class="hint">席位 1 为主观演人; 多张票时为每个席位指定观演人, 留空则自动补齐。</div>
+        </div>
+        <div class="btnrow">
+          <button class="btn ok" onclick="dispatchTask('test')">🟢 一键安全演练</button>
+          <button class="btn primary" onclick="dispatchTask(currentMode())">🚀 按当前模式执行</button>
+          <button class="btn" onclick="saveConfig()">💾 保存配置</button>
+        </div>
+      </div>
+
+      <!-- 账号信息库 -->
+      <div class="card">
+        <h3>👤 观演人与收货地址
+          <span class="badge blue" id="viewer-count">0 位观演人</span>
+          <span class="badge green" id="addr-count">0 个地址</span>
+          <span class="grow"></span>
+          <button class="btn sm" onclick="loadProfile(true)">刷新</button>
+        </h3>
+        <div class="section-note">手机大麦账号内已有的实名观演人与收货地址 (新增成功后自动同步)。</div>
+        <label>已有观演人 (点击设为席位 1)</label>
+        <div class="chips" id="viewer-chips"></div>
+        <hr class="divider">
+        <label>已有收货地址</label>
+        <div class="chips" id="addr-chips"></div>
+        <hr class="divider">
+        <div class="frow">
+          <div>
+            <label>新增观演人 · 姓名</label>
+            <input id="nv-name" placeholder="真实姓名">
+          </div>
+          <div>
+            <label>身份证号</label>
+            <input id="nv-idcard" placeholder="18 位" oninput="onIdInput()">
+            <div class="hint" id="nv-badge">待输入</div>
+          </div>
+        </div>
+        <div class="btnrow" style="margin-bottom:14px">
+          <button class="btn" onclick="addViewer()">➕ 手机端自动添加观演人</button>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--warn)">
+            <input type="checkbox" id="nv-bypass" style="width:auto">假数据测试(触发风控拦截)
+          </label>
+        </div>
+        <div class="frow">
+          <div><label>新增地址 · 收货人</label><input id="na-name" placeholder="姓名"></div>
+          <div>
+            <label>手机号</label><input id="na-phone" placeholder="11 位" oninput="onPhoneInput()">
+            <div class="hint" id="na-pbadge">待输入</div>
+          </div>
+        </div>
+        <div class="frow">
+          <div><label>省市区</label><input id="na-region" value="浙江省杭州市西湖区" placeholder="省+市+区"></div>
+          <div><label>详细地址</label><input id="na-detail" placeholder="不少于 4 个字"></div>
+        </div>
+        <div class="btnrow"><button class="btn" onclick="addAddress()">➕ 手机端自动添加收货地址</button></div>
+      </div>
+    </div>
+
+    <!-- ============ 右列 ============ -->
+    <div>
+      <!-- 任务进度 -->
+      <div class="card">
+        <h3>⚡ 任务执行状态 <span class="badge gray" id="task-state-badge">空闲</span></h3>
+        <div class="result" id="task-result"></div>
+        <div class="steps" id="steps">
+          <div class="hint">暂无任务。点击「一键安全演练」后, 这里实时显示每个环节的执行进度。</div>
+        </div>
+      </div>
+
+      <!-- 实时日志 -->
+      <div class="card">
+        <h3>📜 实时日志
+          <span class="grow"></span>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;margin:0">
+            <input type="checkbox" id="only-task" style="width:auto" onchange="renderLogs()">只看当前任务
+          </label>
+          <button class="btn sm" onclick="clearLogs()">清空日志</button>
+        </h3>
+        <div class="logbox" id="logbox"></div>
+      </div>
+
+      <!-- 最近任务 -->
+      <div class="card">
+        <h3>🗂 最近任务 <span class="grow"></span><button class="btn sm" onclick="loadTaskStates()">刷新</button></h3>
+        <div id="recent-tasks"><div class="hint">暂无</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ==================== 基础工具 ==================== */
+const $ = id => document.getElementById(id);
+
+function toast(title, sub, type = 'info', ms = 4000) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type === 'success' ? 'ok' : type === 'error' ? 'err' : type === 'warn' ? 'warn' : '');
+  t.innerHTML = `<b>${esc(title)}</b>` + (sub ? `<div class="sub">${esc(sub)}</div>` : '');
+  $('toasts').appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 320); }, ms);
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function modal(title, bodyHtml) {
+  $('modal-title').textContent = title;
+  $('modal-body').innerHTML = bodyHtml;
+  $('modal-footer').style.display = '';
+  $('modal-mask').classList.add('show');
+}
+function closeModal() { $('modal-mask').classList.remove('show'); }
+async function copyText(text, tip) {
+  try { await navigator.clipboard.writeText(text); } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e2) {}
+    ta.remove();
+  }
+  toast(tip || '已复制', text, 'success');
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, Object.assign({ cache: 'no-store' }, opts));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+
+/* ==================== 校验 ==================== */
+function validateIdCard(id) {
+  const str = String(id || '').trim().toUpperCase();
+  if (!/^[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dX]$/.test(str)) return { valid: false, message: '格式错误 (需 18 位)' };
+  const w = [7,9,10,5,8,4,2,1,6,3,7,9,10,5,8,4,2], c = ['1','0','X','9','8','7','6','5','4','3','2'];
+  let sum = 0;
+  for (let i = 0; i < 17; i++) sum += parseInt(str[i], 10) * w[i];
+  if (c[sum % 11] !== str[17]) return { valid: false, message: '校验码错误, 末位应为 ' + c[sum % 11] };
+  return { valid: true, message: '格式合规' };
+}
+function onIdInput() {
+  const v = $('nv-idcard').value.trim(), b = $('nv-badge');
+  if (!v) { b.textContent = '待输入'; b.style.color = ''; return; }
+  const c = validateIdCard(v);
+  b.textContent = (c.valid ? '✅ ' : '❌ ') + c.message;
+  b.style.color = c.valid ? 'var(--ok)' : 'var(--err)';
+}
+function onPhoneInput() {
+  const v = $('na-phone').value.trim(), b = $('na-pbadge');
+  const ok = /^1[3-9]\d{9}$/.test(v);
+  b.textContent = v ? (ok ? '✅ 手机号合规' : '❌ 请输入有效 11 位手机号') : '待输入';
+  b.style.color = v ? (ok ? 'var(--ok)' : 'var(--err)') : '';
+}
+
+/* ==================== 设备 ==================== */
+async function refreshDevices(manual) {
+  try {
+    const data = await api('/api/devices');
+    $('hub-dot').classList.remove('off');
+    $('hub-text').textContent = `服务正常 :${location.port || 3120}`;
+    const area = $('dev-area');
+    const list = data.devices || [];
+    if (!list.length) {
+      area.innerHTML = `<div class="dev"><div class="icon">🔌</div><div class="info">
+        <div class="name">未检测到设备</div>
+        <div class="meta">用 USB 线连接手机并开启 USB 调试, 然后点击「一键连接设备」。</div></div></div>`;
+      $('dev-badge').textContent = '未连接'; $('dev-badge').className = 'badge gray';
+      if (manual) toast('未检测到设备', '请检查 USB 连接与调试授权', 'warn');
+      return;
+    }
+    const agentOnline = list.some(d => !d.isAdbOnly && d.isAlive);
+    $('dev-badge').textContent = agentOnline ? 'Agent 在线' : (data.adbDevicesCount ? 'USB 已连接' : '未连接');
+    $('dev-badge').className = 'badge ' + (agentOnline ? 'green' : data.adbDevicesCount ? 'blue' : 'gray');
+    area.innerHTML = list.map(d => {
+      if (d.isAdbOnly) return `<div class="dev"><div class="icon">📱</div><div class="info">
+        <div class="name">${esc(d.model)} <span class="badge blue">USB 已连接</span></div>
+        <div class="meta">Agent 未运行 — 点击下方「一键连接设备」自动部署并启动。</div></div></div>`;
+      const alive = d.isAlive;
+      const state = d.state === 'busy' ? `执行任务中 ${d.currentTaskId || ''}` : (d.state || 'idle');
+      return `<div class="dev"><div class="icon">${alive ? '🟢' : '🔴'}</div><div class="info">
+        <div class="name">${esc(d.deviceId)} <span class="badge ${alive ? 'green' : 'gray'}">${alive ? '在线' : '失联'}</span></div>
+        <div class="meta">${esc(d.connectionMode || '')}</div>
+        <div class="kv">
+          <span>状态 <b>${esc(state)}</b></span>
+          <span>电量 <b>${d.battery != null ? d.battery + '%' : '--'}</b></span>
+          <span>无障碍 <b style="color:${d.accessibility ? 'var(--ok)' : 'var(--err)'}">${d.accessibility ? '正常' : '未开启'}</b></span>
+        </div></div></div>`;
+    }).join('');
+    if (manual) toast('设备已刷新', `${list.length} 台设备`, 'success', 2000);
+  } catch (e) {
+    $('hub-dot').classList.add('off');
+    $('hub-text').textContent = '中枢连接失败';
+  }
+}
+
+async function connectDevice() {
+  const btn = $('btn-connect');
+  btn.disabled = true; btn.textContent = '⏳ 正在一键连接…';
+  $('connect-steps').innerHTML = '';
+  try {
+    const r = await api('/api/device/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    $('connect-steps').innerHTML = (r.steps || []).map(s =>
+      `<div class="cs ${s.ok ? 'ok' : 'bad'}">${esc(s.name)}${s.detail ? ' — ' + esc(s.detail) : ''}</div>`).join('');
+    if (r.ok) toast('设备连接成功', '手机 Agent 已上线, 可以开始演练', 'success', 6000);
+    else toast('连接未完成', r.error || '请查看步骤详情', 'error', 8000);
+  } catch (e) {
+    toast('一键连接失败', e.message, 'error', 8000);
+  } finally {
+    btn.disabled = false; btn.textContent = '⚡ 一键连接设备 (全自动)';
+    refreshDevices();
+  }
+}
+
+async function updateScript() {
+  const btn = $('btn-update');
+  btn.disabled = true; btn.textContent = '⏳ 正在推送并重启…';
+  $('connect-steps').innerHTML = '';
+  try {
+    const r = await api('/api/device/update-script', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    $('connect-steps').innerHTML = (r.steps || []).map(s =>
+      `<div class="cs ${s.ok ? 'ok' : 'bad'}">${esc(s.name)}${s.detail ? ' — ' + esc(s.detail) : ''}</div>`).join('');
+    if (r.ok) toast('脚本已更新', 'Agent 已使用最新脚本重启', 'success');
+    else toast('更新未完成', r.error || '', 'error');
+  } catch (e) {
+    toast('更新脚本失败', e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '📦 更新手机脚本并重启 Agent';
+    refreshDevices();
+  }
+}
+
+/* ==================== 探针库与表单 ==================== */
+let catalog = [];
+let profile = { viewers: [], addresses: [] };
+
+async function loadCatalog(manual) {
+  try {
+    const data = await api('/api/catalog');
+    if (data.items && data.items.length) {
+      catalog = data.items;
+      renderCatalog();
+      if (manual) toast('探针库已刷新', `${catalog.length} 场演出`, 'success', 2500);
+    } else if (manual) {
+      toast('探针库为空', '在上方输入演出 ID 采集', 'warn');
+    }
+  } catch (e) { if (manual) toast('刷新失败', e.message, 'error'); }
+}
+function renderCatalog() {
+  const sel = $('catalog-select');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">-- 选择演出 --</option>' + catalog.map((it, i) =>
+    `<option value="${i}">${esc(it.name)} (${esc(it.city || '全国')} · ${esc(it.status || '在售')})</option>`).join('');
+  if (prev && catalog[prev]) sel.value = prev;
+  else if (catalog.length) { sel.selectedIndex = 1; onCatalogChange(); }
+}
+function onCatalogChange() {
+  const idx = $('catalog-select').value;
+  if (idx === '' || !catalog[idx]) return;
+  const item = catalog[idx];
+  $('target-name').value = item.name;
+  const ss = $('session-select');
+  ss.innerHTML = '<option value="">-- 自适应首个有票场次 --</option>' + (item.sessions || []).map(s =>
+    `<option value="${esc(s.name)}" ${s.inStock ? '' : 'disabled'}>${esc(s.name)}${s.inStock ? '' : ' [无票]'}</option>`).join('');
+  if (item.sessions?.length) { ss.selectedIndex = 1; onSessionChange(); }
+  const ps = $('price-select');
+  ps.innerHTML = '<option value="">-- 自适应在售最低票档 --</option>' + (item.priceTiers || []).map(p =>
+    `<option value="${esc(p.price ?? p.name)}" ${p.inStock ? '' : 'style="color:#6b7487"'}>${esc(p.name)} [${esc(p.tag || (p.inStock ? '有票' : '缺货'))}]</option>`).join('');
+  const firstOk = (item.priceTiers || []).findIndex(p => p.inStock);
+  if (firstOk >= 0) { ps.selectedIndex = firstOk + 1; onPriceChange(); }
+}
+function onSessionChange() { }
+function onPriceChange() { }
+function onModeChange() {
+  const m = $('task-mode').value;
+  $('fire-row').style.display = m === 'rush' ? '' : 'none';
+  $('mode-hint').textContent = m === 'test'
+    ? '演练完整跑通: 详情→选票→观演人→停在「立即提交」前'
+    : m === 'buy' ? '立即购买: 全流程直通提交订单' : '定时抢票: 到点进入高频监测, 按钮出现瞬间击发';
+}
+function currentMode() { return $('task-mode').value; }
+
+async function loadProfile(manual) {
+  try {
+    const data = await api('/api/account/profile');
+    if (data.profile) {
+      profile = data.profile;
+      $('viewer-count').textContent = `${profile.viewers?.length || 0} 位观演人`;
+      $('addr-count').textContent = `${profile.addresses?.length || 0} 个地址`;
+      $('viewer-chips').innerHTML = (profile.viewers || []).map(v =>
+        `<div class="chip" onclick="pickPrimary(${esc(JSON.stringify(v.name))})">👤 <b>${esc(v.name)}</b>
+         <span class="sub">${esc(v.idCard || '')}</span></div>`).join('') || '<span class="hint">暂无</span>';
+      $('addr-chips').innerHTML = (profile.addresses || []).map(a =>
+        `<div class="chip">📦 <b>${esc(a.name)}</b> <span class="sub">${esc(a.phone || '')} · ${esc((a.address || '').slice(0, 30))}</span></div>`).join('') || '<span class="hint">暂无</span>';
+      renderSlots();
+      if (manual) toast('账号库已刷新', '', 'success', 1800);
+    }
+  } catch (e) { if (manual) toast('读取账号库失败', e.message, 'error'); }
+}
+function pickPrimary(name) {
+  const s1 = $('slot-1');
+  if (s1) { s1.value = name; toast('已设为主观演人', name, 'success', 2000); }
+}
+function renderSlots() {
+  const count = parseInt($('target-count').value, 10) || 1;
+  const old = [];
+  for (let i = 1; i <= 4; i++) { const el = $('slot-' + i); if (el) old[i] = el.value; }
+  const opts = v => (profile.viewers || []).map(x =>
+    `<option value="${esc(x.name)}" ${x.name === v ? 'selected' : ''}>${esc(x.name)} · ${esc(x.idCard || '')}</option>`).join('');
+  let html = `<div style="display:flex;gap:8px;align-items:center">
+    <span class="badge blue">席位 1 主观演人</span>
+    <select id="slot-1" style="flex:1">${opts(old[1] || (profile.viewers?.[0]?.name ?? ''))}</select></div>`;
+  for (let i = 2; i <= count; i++) {
+    html += `<div style="display:flex;gap:8px;align-items:center">
+      <span class="badge gray">席位 ${i}</span>
+      <select id="slot-${i}" style="flex:1"><option value="">-- 自动补齐 --</option>${opts(old[i] || '')}</select></div>`;
+  }
+  $('slots').innerHTML = html;
+}
+function collectViewers() {
+  const count = parseInt($('target-count').value, 10) || 1;
+  const out = [];
+  const s1 = $('slot-1');
+  out.push(s1 ? s1.value : (profile.viewers?.[0]?.name || ''));
+  for (let i = 2; i <= count; i++) {
+    const el = $('slot-' + i);
+    if (el && el.value.trim()) out.push(el.value.trim());
+  }
+  return out.filter(Boolean);
+}
+
+/* ==================== 动作 ==================== */
+async function addViewer() {
+  const name = $('nv-name').value.trim(), idCard = $('nv-idcard').value.trim();
+  if (!name) return toast('请输入姓名', '', 'warn');
+  if (!idCard) return toast('请输入身份证号', '', 'warn');
+  if (!$('nv-bypass').checked) {
+    const c = validateIdCard(idCard);
+    if (!c.valid) return toast('身份证校验未通过', c.message + ' (勾选假数据测试可绕过)', 'warn');
+  }
+  try {
+    await api('/api/account/add-viewer', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, idCard, bypassValidation: $('nv-bypass').checked }) });
+    toast('任务已下发', `手机正在自动添加观演人 ${name}`, 'success', 5000);
+  } catch (e) { toast('下发失败', e.message, 'error'); }
+}
+async function addAddress() {
+  const name = $('na-name').value.trim(), phone = $('na-phone').value.trim();
+  const region = $('na-region').value.trim(), detail = $('na-detail').value.trim();
+  if (!name) return toast('请输入收货人', '', 'warn');
+  if (!/^1[3-9]\d{9}$/.test(phone)) return toast('手机号不合规', '', 'warn');
+  if (detail.length < 4) return toast('详细地址不少于 4 个字', '', 'warn');
+  if (!region || region.replace(/\s/g, '').length < 5) return toast('省市区不完整', '如: 浙江省杭州市西湖区', 'warn');
+  try {
+    await api('/api/account/add-address', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, phone, region, detailAddress: detail }) });
+    toast('任务已下发', '手机正在自动填写并选择省市区', 'success', 5000);
+  } catch (e) { toast('下发失败', e.message, 'error'); }
+}
+async function runProbe() {
+  const v = $('probe-input').value.trim();
+  if (!v) return toast('请输入演出 ID 或链接', '', 'warn');
+  toast('探针采集中…', v, 'info', 2500);
+  try {
+    const r = await api('/api/probe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemId: v }) });
+    toast('采集成功', r.item?.name || '', 'success');
+    loadCatalog();
+  } catch (e) { toast('采集失败', e.message, 'error'); }
+}
+async function saveConfig() {
+  const viewers = collectViewers();
+  const payload = {
+    project: { name: $('target-name').value, projectId: currentItem()?.itemId || '' },
+    selection: {
+      sessionTarget: $('session-select').value || '',
+      priceTierTarget: $('price-select').value || '',
+      ticketCount: parseInt($('target-count').value, 10) || 1,
+    },
+    identity: { primaryAttendee: viewers[0] || '', attendees: viewers },
+    safetyGuard: { mode: $('task-mode').value },
+  };
+  try {
+    await api('/api/config/damai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    toast('配置已保存', `主观演人 ${viewers[0] || '-'} · ${viewers.length} 席位`, 'success');
+  } catch (e) { toast('保存失败', e.message, 'error'); }
+}
+function currentItem() {
+  const idx = $('catalog-select').value;
+  return (idx !== '' && catalog[idx]) ? catalog[idx] : null;
+}
+
+async function dispatchTask(forcedMode) {
+  const mode = forcedMode || currentMode();
+  const viewers = collectViewers();
+  const item = currentItem();
+  const count = parseInt($('target-count').value, 10) || 1;
+  if (!$('target-name').value && !item) return toast('请先选择目标演出', '', 'warn');
+
+  let fireAt = 0;
+  if (mode === 'rush') {
+    const ft = $('fire-time').value.trim();
+    if (ft) {
+      fireAt = new Date(ft.replace(/-/g, '/')).getTime();
+      if (isNaN(fireAt)) return toast('开售时间格式错误', '如 2026-10-10 18:59:59', 'warn');
+    }
+  }
+
+  if (mode === 'buy' || (mode === 'rush' && fireAt)) {
+    const ok = await confirmModal(
+      mode === 'buy' ? '🛒 确认立即购买?' : '⏰ 确认定时抢票?',
+      `目标: ${esc($('target-name').value)}\n席 位: ${esc(viewers.join(' + '))}\n张 数: ${count}\n模式: ${mode === 'buy' ? '立即购买 (将直接提交订单!)' : '定时抢票 (到点自动提交!)'}\n\n${mode === 'buy' ? '此操作会产生真实订单!' : '到点后将真实下单!'}`);
+    if (!ok) return;
+  }
+
+  const task = {
+    taskId: 't-' + mode + '-' + Date.now(),
+    platform: 'damai',
+    mode,
+    target: {
+      name: $('target-name').value || '大麦演练项目',
+      itemId: item ? (item.itemId || String(item.id || '').replace('item-', '')) : '',
+      session: $('session-select').value || '',
+      priceText: $('price-select').value || '',
+      viewer: viewers[0] || '',
+      viewers,
+      count,
+    },
+    timing: { fireAtEpochMs: fireAt, leadMs: 40 },
+  };
+  try {
+    const r = await api('/api/tasks/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task }) });
+    startTracking(task);
+    toast(mode === 'test' ? '🟢 安全演练已启动' : '🚀 任务已下发',
+      `${task.target.name} · ${viewers.join('+')} · ${count} 张`, 'success', 6000);
+  } catch (e) {
+    toast('下发失败', e.message, 'error', 6000);
+  }
+}
+
+function confirmModal(title, text) {
+  return new Promise(resolve => {
+    $('modal-title').textContent = title;
+    $('modal-body').textContent = text;
+    $('modal-footer').innerHTML = '';
+    const yes = document.createElement('button');
+    yes.className = 'btn danger'; yes.textContent = '确认执行';
+    yes.onclick = () => { closeModal(); resetModalFooter(); resolve(true); };
+    const no = document.createElement('button');
+    no.className = 'btn'; no.textContent = '取消';
+    no.onclick = () => { closeModal(); resetModalFooter(); resolve(false); };
+    $('modal-footer').append(no, yes);
+    $('modal-mask').classList.add('show');
+  });
+}
+function resetModalFooter() {
+  $('modal-footer').innerHTML = '<button class="btn primary" onclick="closeModal()">知道了</button>';
+}
+
+/* ==================== 任务进度跟踪 ==================== */
+let currentTask = null;
+const STEP_NAMES = {
+  wakeup: '唤起大麦 (热启动)', goto_detail: '就位演出详情页', open_sku: '打开选票页',
+  select_sku: '选择场次/票档/数量', order_confirm: '确认订单与观演人', submit: '提交订单',
+  add_viewer: '添加观演人', add_address: '添加收货地址',
+};
+const stepState = {};
+
+function startTracking(task) {
+  currentTask = task;
+  for (const k in stepState) delete stepState[k];
+  $('task-result').className = 'result';
+  $('task-state-badge').textContent = '执行中';
+  $('task-state-badge').className = 'badge blue';
+  renderSteps();
+}
+function renderSteps() {
+  const box = $('steps');
+  if (!currentTask) return;
+  const order = Object.keys(STEP_NAMES);
+  const seen = order.filter(k => stepState[k]);
+  if (!seen.length) {
+    box.innerHTML = '<div class="hint">任务已下发, 等待手机 Agent 响应…</div>';
+    return;
+  }
+  const lastIdx = seen.length - 1;
+  box.innerHTML = seen.map((k, i) => {
+    const s = stepState[k];
+    const cls = s.status === 'failed' ? 'failed' : s.status === 'done' ? 'done' : 'active';
+    const mark = s.status === 'failed' ? '✕' : s.status === 'done' ? '✓' : '…';
+    return `<div class="step ${cls}">
+      <div class="rail"><div class="node">${mark}</div>${i < lastIdx ? '<div class="bar"></div>' : ''}</div>
+      <div class="body"><div class="t">${esc(STEP_NAMES[k])}</div>${s.detail ? `<div class="d">${esc(s.detail)}</div>` : ''}</div>
+    </div>`;
+  }).join('');
+}
+function showTaskResult(r) {
+  const box = $('task-result');
+  const ok = r.outcome === 'success' || r.outcome === 'ordered';
+  box.className = 'result show ' + (ok ? 'success' : r.outcome === 'failed' ? 'failed' : 'other');
+  box.innerHTML = `<div class="rt">${ok ? '✅' : r.outcome === 'failed' ? '❌' : '⚠️'} ${esc(r.outcome)}</div>
+    <div>${esc(r.message || r.evidence || '')}</div>`;
+  $('task-state-badge').textContent = ok ? '成功' : r.outcome === 'failed' ? '失败' : r.outcome;
+  $('task-state-badge').className = 'badge ' + (ok ? 'green' : r.outcome === 'failed' ? 'gray' : 'blue');
+  modal(ok ? '✅ 任务结果' : '❌ 任务结果',
+    `<div style="font-size:14px;line-height:1.7"><b>结果:</b> ${esc(r.outcome)}<br><b>说明:</b> ${esc(r.message || r.evidence || '')}<br><b>任务:</b> ${esc(r.taskId || '')}</div>`);
+}
+
+/* ==================== 日志流 (游标式增量) ==================== */
+let eventCursor = Date.now();
+let logLines = [];
+const dismissedAlerts = new Set();
+
+async function pollEvents() {
+  try {
+    const data = await api(`/api/events?sinceMs=${eventCursor}&limit=200`);
+    if (data.clearedAt && data.clearedAt > eventCursor) {
+      eventCursor = data.clearedAt;
+      logLines = [];
+      renderLogs();
+    }
+    const evts = data.events || [];
+    if (evts.length) {
+      eventCursor = evts[evts.length - 1].at || eventCursor;
+      for (const e of evts) processEvent(e);
+      renderLogs();
+    }
+  } catch (e) { /* 下轮重试 */ }
+}
+
+function processEvent(e) {
+  const time = (e.receivedAt || '').split('T')[1]?.slice(0, 8) || new Date(e.at || Date.now()).toTimeString().slice(0, 8);
+  const det = e.detail || {};
+  if (e.event === 'log' && det.msg) {
+    logLines.push({ t: time, e: '[日志]', m: det.msg, taskId: e.taskId });
+    // 步骤日志同步高亮
+    const m = String(det.msg).match(/^【(.+?)】|^\[(.+?)\]/);
+  } else if (e.event === 'step') {
+    stepState[det.step] = { status: det.status, detail: det.detail || '' };
+    logLines.push({ t: time, e: '[步骤]', m: `${STEP_NAMES[det.step] || det.step} → ${det.status}${det.detail ? ' · ' + det.detail : ''}`, taskId: e.taskId });
+    renderSteps();
+  } else if (e.event === 'task_dispatched') {
+    logLines.push({ t: time, e: '[下发]', m: `${det.mode} · ${det.target || ''} · ${det.viewers?.join('+')} × ${det.count}`, taskId: det.taskId });
+  } else if (e.event === 'task_result') {
+    const r = det;
+    logLines.push({ t: time, e: '[结果]', m: `${r.outcome} — ${r.message || r.evidence || ''}`, taskId: r.taskId, cls: r.outcome === 'success' || r.outcome === 'ordered' ? 'success' : r.outcome === 'failed' ? 'failed' : '' });
+    showTaskResult(r);
+    if (r.outcome === 'success' && (r.data?.viewers || r.data?.addresses || String(r.taskId || '').includes('add'))) loadProfile();
+  } else if (e.event === 'task_started') {
+    logLines.push({ t: time, e: '[开始]', m: `${det.mode} ${det.target || ''}`, taskId: e.taskId });
+  } else if (e.event === 'ticket_status_change') {
+    logLines.push({ t: time, e: '[监控]', m: `票务状态 → ${det.status}`, taskId: e.taskId });
+  } else {
+    logLines.push({ t: time, e: '[' + e.event + ']', m: JSON.stringify(det).slice(0, 160), taskId: e.taskId });
+  }
+  if (logLines.length > 600) logLines = logLines.slice(-500);
+}
+
+function renderLogs() {
+  const box = $('logbox');
+  const only = $('only-task').checked && currentTask;
+  const lines = only ? logLines.filter(l => !l.taskId || l.taskId === currentTask.taskId) : logLines;
+  box.innerHTML = lines.slice(-300).map(l =>
+    `<div class="loge ${l.cls || ''}"><span class="t">${l.t}</span><span class="e">${esc(l.e)}</span><span>${esc(l.m)}</span></div>`).join('')
+    || '<div class="hint" style="padding:8px">暂无日志</div>';
+  box.scrollTop = box.scrollHeight;
+}
+
+async function clearLogs() {
+  try {
+    await api('/api/events/clear', { method: 'POST' });
+  } catch (e) { /* 服务端失败也做本地清空 */ }
+  eventCursor = Date.now();
+  logLines = [];
+  renderLogs();
+  toast('日志已清空', '服务端与本地日志均已清空', 'success', 2500);
+}
+
+/* ==================== 最近任务 ==================== */
+async function loadTaskStates() {
+  try {
+    const data = await api('/api/tasks/state');
+    const list = data.tasks || [];
+    $('recent-tasks').innerHTML = list.map(t => {
+      const r = t.result;
+      const badge = r
+        ? (r.outcome === 'success' || r.outcome === 'ordered'
+            ? '<span class="badge green">成功</span>'
+            : r.outcome === 'failed' ? '<span class="badge gray">失败</span>' : '<span class="badge blue">' + esc(r.outcome) + '</span>')
+        : '<span class="badge blue">执行中</span>';
+      return `<div class="dev" style="padding:8px 12px;margin-bottom:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px">${badge} ${esc(t.mode)} · ${esc(t.target || '')}</div>
+          <div class="meta" style="color:var(--muted);font-size:11px">${new Date(t.dispatchedAt).toLocaleTimeString('zh-CN', {hour12:false})} · ${esc(t.viewers?.join('+') || '')} × ${t.count}</div>
+          ${r ? `<div class="meta" style="color:var(--muted);font-size:11px">${esc((r.message || r.evidence || '').slice(0, 80))}</div>` : ''}
+        </div></div>`;
+    }).join('') || '<div class="hint">暂无</div>';
+  } catch (e) { /* ignore */ }
+}
+
+/* ==================== 初始化 ==================== */
+refreshDevices();
+loadCatalog();
+loadProfile();
+loadTaskStates();
+pollEvents();
+setInterval(refreshDevices, 3000);
+setInterval(pollEvents, 1200);
+setInterval(loadTaskStates, 5000);
+</script>
+</body>
+</html>

@@ -120,7 +120,11 @@ run(`adb shell appops set ${pkg} ACCESS_RESTRICTED_SETTINGS allow`, true);
 
 // 5. 静默赋权并激活无障碍服务
 console.log('⚡ 静默激活无障碍服务...');
-run(`adb shell settings put secure enabled_accessibility_services ${pkg}/com.stardust.autojs.core.accessibility.AccessibilityService`, true);
+const serviceClass = pkg === 'org.autojs.autojs6'
+  ? 'org.autojs.autojs.core.accessibility.AccessibilityServiceUsher'
+  : 'com.stardust.autojs.core.accessibility.AccessibilityService';
+run('adb shell settings delete secure enabled_accessibility_services', true);
+run(`adb shell settings put secure enabled_accessibility_services ${pkg}/${serviceClass}`, true);
 run('adb shell settings put secure accessibility_enabled 1', true);
 
 // 6. 提速优化：关闭窗口动画并常亮
@@ -130,17 +134,32 @@ run('adb shell settings put global transition_animation_scale 0', true);
 run('adb shell settings put global animator_duration_scale 0', true);
 run('adb shell svc power stayon true', true);
 
-// 7. 建立通信管道
+// 7. 建立通信管道与无线调试
 console.log('🔌 建立 USB adb reverse 专线 (:3120)...');
 run('adb reverse tcp:3120 tcp:3120', true);
 
-// 8. 推送端侧代码
+console.log('📶 开启局域网无线调试模式 (adb tcpip 5555)...');
+run('adb tcpip 5555', true);
+
+// 8. 推送端侧代码 (同步至根目录与 AutoJs6 脚本目录)
 console.log('📦 推送最新 Agent 代码至手机 /sdcard/qg-agent/ ...');
-run('adb shell mkdir -p /sdcard/qg-agent', true);
+run('adb shell mkdir -p /sdcard/qg-agent /sdcard/脚本/qg-agent /sdcard/Scripts/qg-agent', true);
 run(`adb push "${AGENT_SRC_DIR}/." /sdcard/qg-agent/`, true);
+run('adb shell "cp -r /sdcard/qg-agent/* /sdcard/脚本/qg-agent/ 2>/dev/null || true"', true);
+run('adb shell "cp -r /sdcard/qg-agent/* /sdcard/Scripts/qg-agent/ 2>/dev/null || true"', true);
+
+// 探测手机 Wi-Fi IP
+const phoneIp = run('adb shell "ip -4 addr show wlan0 2>/dev/null | grep -oE \'inet [0-9.]+\' | cut -d\' \' -f2" || true', true) || '';
+
+// 9. 自动拉起端侧抢购 Agent
+console.log('🚀 正在手机上静默唤起抢购 Agent...');
+run(`adb shell am start -n ${pkg}/org.autojs.autojs.external.open.RunIntentActivity -d file:///sdcard/qg-agent/main.js`, true);
 
 console.log('====================================================');
-console.log('🎉 真机整备完成！');
-console.log('   可通过以下命令在手机上静默拉起抢购 Agent:');
-console.log(`   adb shell am start -n ${pkg}/org.autojs.autojs.external.open.RunIntentActivity -d file:///sdcard/qg-agent/main.js`);
+console.log('🎉 真机整备与启动完成！');
+console.log('   设备已自动连接至手机中枢 (:3120)。');
+if (phoneIp) {
+  console.log(`   📶 手机当前 Wi-Fi IP: ${phoneIp}`);
+  console.log(`   拔掉数据线后，可随时在终端运行无线连线: adb connect ${phoneIp}:5555`);
+}
 console.log('====================================================');

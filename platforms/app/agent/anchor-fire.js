@@ -26,9 +26,13 @@ var AnchorFire = {
 
         var target = null;
         try {
-            target = textMatches(matcherRegex).findOne(2500);
+            var patStr = (matcherRegex instanceof RegExp) ? matcherRegex.source : String(matcherRegex);
+            if (!patStr.startsWith(".*") && !patStr.startsWith("^")) {
+                patStr = ".*(" + patStr + ").*";
+            }
+            target = textMatches(patStr).findOne(2000);
             if (!target) {
-                target = descMatches(matcherRegex).findOne(1000);
+                target = descMatches(patStr).findOne(800);
             }
         } catch (e) {
             console.error("【锚定异常】控件查询失败: " + e.message);
@@ -68,20 +72,28 @@ var AnchorFire = {
     },
 
     /**
-     * T0 临界击发：纯物理触摸注入
+     * T0 临界击发：单次物理触摸注入 (热路径速度优先, 抖动保留防指纹)
+     * 注意: 只注入一次触摸! (旧版 click()+press() 连发两次是双击 bug)
      * @returns {boolean}
      */
     fire: function() {
         if (this.cachedPoint && this.cachedPoint.x > 0 && this.cachedPoint.y > 0) {
-            console.log("【击发出膛】注入点击坐标: (" + this.cachedPoint.x + ", " + this.cachedPoint.y + ")");
+            var jx = this.cachedPoint.x + Math.floor((Math.random() - 0.5) * 10);
+            var jy = this.cachedPoint.y + Math.floor((Math.random() - 0.5) * 8);
+            console.log("【击发出膛】注入物理坐标: (" + jx + ", " + jy + ")");
             try {
-                // 35ms 触摸按压，高度贴合真人手指点按动作
-                press(this.cachedPoint.x, this.cachedPoint.y, 35);
-                return true;
-            } catch (err) {
-                console.error("【击发失败】press 注入失败: " + err.message);
-                return false;
+                if (typeof press === "function") {
+                    return press(jx, jy, 30);
+                }
+            } catch (eP) {}
+            try {
+                if (typeof click === "function") {
+                    return click(jx, jy);
+                }
+            } catch (eC) {
+                console.error("【击发失败】触摸注入失败: " + eC.message);
             }
+            return false;
         } else {
             console.error("【击发拒绝】未就绪的坐标点，拒绝盲点！");
             return false;

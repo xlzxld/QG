@@ -28,6 +28,20 @@
       ],
       "desc": "采集华为商城商品目录、SKU 库存、开售时间与限购",
       "schedule": true
+    },
+    {
+      "id": 2,
+      "name": "大麦网 (演出探针与SKU抓取)",
+      "platform": "damai",
+      "script": "platforms/damai/probe-damai.mjs",
+      "enabled": true,
+      "defaultArgs": [],
+      "presetArgs": [
+        { "key": "1", "label": "刷新已知演出商品库 (Ella/薛之谦/举重)", "args": [] },
+        { "key": "2", "label": "按 ID 或 URL 探测指定演出", "args": ["--id", "87541290"] }
+      ],
+      "desc": "探测大麦演出详情、场次清单、在售/缺货票档及开售时间",
+      "schedule": true
     }
   ]
 }

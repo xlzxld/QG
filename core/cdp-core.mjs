@@ -293,3 +293,28 @@ export async function ensureSlotWindow(slot, targetUrl, log) {
     log?.(`专用窗口已在运行，复用（端口 ${port}）`);
   }
 }
+
+/**
+ * 默认拦截的重资源后缀列表（图片、字体、音视频等媒体）
+ */
+export const DEFAULT_BLOCKED_RESOURCE_PATTERNS = [
+  '*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.svg', '*.ico',
+  '*.woff', '*.woff2', '*.ttf', '*.otf', '*.eot',
+  '*.mp4', '*.mp3', '*.webm', '*.ogg',
+];
+
+/**
+ * 启用 CDP 原生重资源过滤（图片、字体、音视频等），大幅降低首屏渲染耗时与带宽消耗。
+ * 借助 Chrome 原生 Network.setBlockedURLs，在浏览器内核网络层直接拦截丢弃，
+ * 零 Node.js 回调与 IPC 开销。通用于华为商城、秀动、大麦等所有 Web 项目。
+ *
+ * @param {CDP} cdp
+ * @param {string[]} extraPatterns 额外的通配符规则
+ */
+export async function blockHeavyResources(cdp, extraPatterns = []) {
+  const urls = [...DEFAULT_BLOCKED_RESOURCE_PATTERNS, ...extraPatterns];
+  await cdp.send('Network.enable').catch(() => {});
+  return cdp.send('Network.setBlockedURLs', { urls });
+}
+
+

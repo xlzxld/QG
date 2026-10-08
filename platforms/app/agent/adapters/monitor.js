@@ -13,10 +13,10 @@ var MonitorAdapter = {
     lastStatus: "unknown",
 
     checkTicketStatus: function() {
-        if (textMatches(/立即预订|选座购买|特惠购买/).exists()) {
+        if (textMatches(".*(立即预订|选座购买|特惠购买).*").exists()) {
             return "in_stock"; // 有票
         }
-        if (textMatches(/已售罄|缺货登记|已抢光/).exists()) {
+        if (textMatches(".*(已售罄|缺货登记|已抢光).*").exists()) {
             return "sold_out"; // 售罄
         }
         return "unknown";
