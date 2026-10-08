@@ -89,17 +89,30 @@ if (lines.length === 0) {
 const serial = lines[0].split('\t')[0];
 console.log(`✅ 成功捕获目标物理设备: [${serial}]`);
 
-// 3. 探测 AutoX 安装包名
-console.log('🔍 正在检测 AutoX 运行时包名...');
+// 3. 探测 AutoX / AutoJs6 安装包名
+console.log('🔍 正在检测端侧自动化运行时 (AutoX / AutoJs6)...');
 const packages = run('adb shell "pm list packages | grep -E \'autojs|autox\'" || true', true) || '';
-let pkg = 'org.autojs.autoxjs.v7';
+let pkg = null;
 
-if (packages.includes('org.autojs.autoxjs.v7')) {
+if (packages.includes('org.autojs.autojs6')) {
+  pkg = 'org.autojs.autojs6';
+} else if (packages.includes('org.autojs.autoxjs.v7')) {
   pkg = 'org.autojs.autoxjs.v7';
 } else if (packages.includes('org.autojs.autojs')) {
   pkg = 'org.autojs.autojs';
 }
-console.log(`✅ 选定目标包名: [${pkg}]`);
+
+if (!pkg) {
+  console.warn('⚠️ 手机上尚未检测到 AutoX.js 或 AutoJs6 运行时！');
+  console.log('   请先在手机上安装 AutoJs6 或 AutoX.js（两者均兼容）。');
+  console.log('   推荐下载官方 APK：');
+  console.log('   • AutoJs6 官方 Releases: https://github.com/SuperMonster003/AutoJs6/releases');
+  console.log('   • AutoX 官方 Releases  : https://github.com/automan-bot/AutoX/releases');
+  console.log('   💡 安装完成后，重新运行本脚本即可自动完成提权与配置！');
+  pkg = 'org.autojs.autojs6'; // 兜底默认包名
+} else {
+  console.log(`✅ 成功识别已安装的运行时包名: [${pkg}]`);
+}
 
 // 4. 解除 Android 13/14/15 侧载权限受限 (Restricted settings)
 console.log('🔓 解除 Android 侧载权限限制 (Restricted settings)...');
