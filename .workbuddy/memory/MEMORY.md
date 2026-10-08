@@ -45,9 +45,18 @@
   `platforms/showstart/`、`apple/` 占位｜`web/`（workbench + platforms 控制台 + tools 工具页）｜`tools/` 运维小工具
   ｜`verify/`（活跃工具在根、history 冻结、tmp）｜`docs/`｜`data/grab/`｜`tests/`｜归档不入库
 - git：远程 `https://github.com/xlzxld/QG.git`（代理 127.0.0.1:7897）；**仓库内 core.autocrlf=false**；
-  锚点：tag `baseline-pre-restructure` / 重组 `ebe8e4a` / 回归修复 `693ed86`
-- URL 约定：`/` = 工作台外壳；控制台 = `/console-huawei` 等专属页（**验证脚本打开页面别再用 `/`**）
+  锚点：tag `baseline-pre-restructure` / 重组 `ebe8e4a` / 回归修复 `693ed86` / 移动端大更新 `6590126`
+- URL 约定：`/` = 工作台外壳；控制台 = `/console-huawei` 等专属页（**验证脚本打开页面别再用 `/`**）；
+  移动端中枢 = `http://localhost:3120`（`启动-手机中枢.bat`）
 - 挪文件规则：同深度不动、深度 +1 的引用补一层（本次 112 项重命名即按此推）
+- ★ 2026-10-09 拉入移动端大更新（`6590126`，58 文件 +10625）：新增 `platforms/app/agent/`（AutoJs6 手机
+  Agent）、`core/device-hub.mjs`（设备中枢 :3120，一键连接/ADB 注入兜底/游标事件流）、`web/hub-console.html`、
+  `platforms/damai/`（观演人档案 + 演出探针）、`tools/mobile/`（bundle-agent / prepare-device）、
+  `core/run-drill.mjs` + `一键演练.command`；华为槽位重绑三账号 acc1/acc2/acc3（端口 9401-9403）；
+  npm scripts 改版（hub / drill / agent:build / device:prepare / huawei:slots-check）；
+  旧依赖清退（hono/pg/zod/tsx 系列），新增 china-division；文档旧稿入 `docs/archive/`
+- 本机槽位登录档案 `data/grab/chrome-profile-rush/` 目前只有 `acc1`/`acc2`（无 acc3）——
+  本机跑三槽位前先 `npm run huawei:slots-check` 补登录
 
 ## 技术约定
 
@@ -112,6 +121,13 @@
 
 ## 测试约定
 
+- ⚠️ **本机（Windows）跑 `npm test` 的坑**（2026-10-09 实证）：项目目录树被标了
+  "Low Mandatory Level" 标签 + 会话 SID（从 default-workspace 层级起才有，上级目录没有），
+  导致**工作区内的可执行文件**（如 `node_modules/@esbuild/win32-x64/esbuild.exe`）运行时读文件
+  一律被拒（`winapi error #5`，vitest 启动即挂）。**绕行（零改项目）**：把 esbuild 复制到工作区外再指路——
+  `cp node_modules/@esbuild/win32-x64/esbuild.exe /tmp/esb-test/esbuild.exe`，然后
+  `ESBUILD_BINARY_PATH=/tmp/esb-test/esbuild.exe npm test` → 34/34 全绿。
+  已二分验证：同二进制在 /tmp 可用、在工作区内（含改名副本）不可用；与 esbuild 本身无关。
 - 闸门/判据类改动，必须跑对应实测脚本（真实 Chrome 无头）：
   `verify-list-gate.mjs`（列表闸门）/ `verify-spa-gate.mjs`（SPA 切页）/
   `verify-login-detect.mjs`（登录判据三场景）/ `verify-login-cdp.mjs`（CDP 侧判据）/
@@ -137,8 +153,14 @@
   `verify/verify-3plans-pick.mjs`（合成数据、零副作用、可重复：待抢购过滤/现货与僵尸排除/
   随机挑 3/收集时刻推导/重跑保护，11 项断言）。
 
-## 移动端执行面（2026-10-08 方案定稿，未实施）
+## 移动端执行面（2026-10-09 大麦全链路已落地；下方 2026-10-08 设计稿为架构参照）
 
+- ★ 2026-10-09 已落地：手机 Agent 源码 `platforms/app/agent/`（改完必须 `npm run agent:build` 打包
+  为单文件 main.js，再经控制台「更新手机脚本」推送）；中枢 `core/device-hub.mjs` v9 + 新控制台
+  `web/hub-console.html`（一键连接设备/安全演练/游标日志）；观演人档案经手机「我的」自动探测同步
+  落 `data/grab/account.profile.json`；省市区数据 `regions.json` 随一键连接推送。
+  **注意：观演人档案/大麦配置含实名信息 → 2026-10-09 已移出仓库+加忽略（本地保留）；公开历史
+  仍含旧数据（彻底清除需重写历史，待定）。新增配置类文件含个人信息时一律先问「要不要入库」。**
 - App 端（淘宝/京东/大麦）抢购 = 「安卓真机 + `adb reverse tcp:3100 tcp:3100` + HTTP 长轮询 +
   端侧薄击发（AutoX.js v7，现址 aiselp/AutoX；旧址 kkevsekk1 已 404）」；正式场只用真机，
   模拟器仅开发/彩排；**击发不依赖 PC**（任务单先落盘手机，本地单调钟死等）。
