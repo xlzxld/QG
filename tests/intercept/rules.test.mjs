@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rewriteRushInfo, dryRunRushInfo, MATCH, PATTERNS } from '../../grab/intercept/rules.mjs';
+import { rewriteRushInfo, dryRunRushInfo, MATCH, PATTERNS } from '../../platforms/huawei/intercept/rules.mjs';
 
 /** 构造一份与 vmall 线上形状一致的响应体 */
 const body = (startTime, extra = {}) =>
