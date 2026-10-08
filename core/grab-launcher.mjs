@@ -181,27 +181,62 @@ async function waitBridgeDown(timeoutMs) {
 }
 
 /** 找出监听指定端口的进程并结束。返回 PID 或 null。
- *  ⚠ 依赖 netstat/taskkill，在受限环境会失败 —— 所以只作兜底，
- *     失败时必须如实返回 null，让调用方报失败（不能谎报成功）。 */
-function killByPort(port) {
+ *  跨平台支持：Windows 走 netstat/taskkill，macOS/Linux 走 lsof/SIGKILL。
+ *  失败时必须如实返回 null，让调用方报失败（不能谎报成功）。 */
+export function killByPort(port) {
   try {
-    const out = execSync('netstat -ano -p TCP', { encoding: 'utf8', windowsHide: true });
     const pids = new Set();
-    for (const line of out.split(/\r?\n/)) {
-      const m = line.match(/^\s*TCP\s+\S+:(\d+)\s+\S+\s+LISTENING\s+(\d+)\s*$/i);
-      if (m && Number(m[1]) === port) pids.add(m[2]);
-    }
-    let last = null;
-    for (const pid of pids) {
+    if (process.platform === 'win32') {
+      const out = execSync('netstat -ano -p TCP', { encoding: 'utf8', windowsHide: true });
+      for (const line of out.split(/\r?\n/)) {
+        const m = line.match(/^\s*TCP\s+\S+:(\d+)\s+\S+\s+LISTENING\s+(\d+)\s*$/i);
+        if (m && Number(m[1]) === port) pids.add(m[2]);
+      }
+      let last = null;
+      for (const pid of pids) {
+        try {
+          execSync(`taskkill /PID ${pid} /F`, { stdio: 'ignore', windowsHide: true });
+          last = pid;
+        } catch { /* 可能已退出 */ }
+      }
+      return last;
+    } else {
+      // macOS (Darwin) 或 Linux
       try {
-        execSync(`taskkill /PID ${pid} /F`, { stdio: 'ignore', windowsHide: true });
-        last = pid;
-      } catch { /* 可能已退出 */ }
+        const out = execSync(`lsof -ti :${port}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+        for (const pid of out.trim().split(/\s+/)) {
+          if (pid && !isNaN(Number(pid))) pids.add(pid);
+        }
+        let last = null;
+        for (const pid of pids) {
+          try {
+            process.kill(Number(pid), 'SIGKILL');
+            last = pid;
+          } catch { /* 可能已退出 */ }
+        }
+        return last;
+      } catch {
+        return null;
+      }
     }
-    return last;
   } catch (e) {
     console.log(`${C.dim}  （按端口结束失败：${e.code || e.message}）${C.reset}`);
     return null;
+  }
+}
+
+/** 跨平台打开系统默认浏览器 (macOS: open, Windows: start, Linux: xdg-open) */
+export function openBrowserUrl(url) {
+  try {
+    if (process.platform === 'darwin') {
+      spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
+    } else if (process.platform === 'win32') {
+      spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
+    } else {
+      spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
+    }
+  } catch {
+    /* 打不开就算了，地址已经打印 */
   }
 }
 
@@ -566,12 +601,8 @@ async function main() {
 
     if (a === 'C') {
       console.log(`\n  ${C.cyan}控制台地址：${BRIDGE_URL}/${C.reset}\n`);
-      // 尝试用系统默认浏览器打开
-      try {
-        spawn('cmd', ['/c', 'start', '', BRIDGE_URL], { detached: true, stdio: 'ignore' }).unref();
-      } catch {
-        /* 打不开就算了，地址已经打印 */
-      }
+      // 尝试用系统默认浏览器打开 (跨平台)
+      openBrowserUrl(BRIDGE_URL);
       continue;
     }
 

@@ -1,0 +1,127 @@
+{
+  "fetchedAt": "2026-10-08T09:15:00Z(UTC)",
+  "note": "WorkBuddy 终版方案第2轮核实的补充仓库快照",
+  "repos": [
+    {
+      "repo": "aiselp/AutoX",
+      "stars": 1898,
+      "forks": 657,
+      "pushedAt": "2026-10-05T10:16:52Z",
+      "archived": false,
+      "license": "NOASSERTION",
+      "fork": true,
+      "parent": "kkevsekk1/AutoX",
+      "desc": "A UiAutomator on android, does not need root access(安卓平台上的JavaScript自动化工具)"
+    },
+    {
+      "repo": "autox-community/AutoX",
+      "stars": 320,
+      "forks": 119,
+      "pushedAt": "2025-11-29T07:49:08Z",
+      "archived": false,
+      "license": "NOASSERTION",
+      "fork": false,
+      "parent": null,
+      "desc": "AutoX.js"
+    },
+    {
+      "repo": "autox-community/AutoX_aiselp",
+      "stars": 6,
+      "forks": 1,
+      "pushedAt": "2026-08-17T07:12:07Z",
+      "archived": false,
+      "license": "NOASSERTION",
+      "fork": true,
+      "parent": "aiselp/AutoX",
+      "desc": "AutoX v7"
+    },
+    {
+      "repo": "0pen1/PhoneControl",
+      "stars": 30,
+      "forks": 19,
+      "pushedAt": "2026-05-27T03:59:23Z",
+      "archived": false,
+      "license": null,
+      "fork": false,
+      "parent": null,
+      "desc": "多设备 Android 群控桌面应用，支持实时截屏预览、批量操作、scrcpy 投屏。基于 Tauri 2 + React + TypeScript 构建。"
+    },
+    {
+      "repo": "Guyungy/damaihelper",
+      "stars": 4215,
+      "forks": 655,
+      "pushedAt": "2026-08-19T06:30:37Z",
+      "archived": false,
+      "license": "AGPL-3.0",
+      "fork": false,
+      "parent": null,
+      "desc": "支持大麦网，淘票票、缤玩岛等多个平台，演唱会演出抢票脚本"
+    },
+    {
+      "repo": "shiyutim/tickets",
+      "stars": 3403,
+      "forks": 436,
+      "pushedAt": "2026-09-13T06:16:16Z",
+      "archived": false,
+      "license": "MIT",
+      "fork": false,
+      "parent": null,
+      "desc": "大麦网(大麦）、bilibili(B站)会员购 演唱会调用接口的抢票软件，余票监控，微信通知。"
+    },
+    {
+      "repo": "RookieTree/DaMaiHelper",
+      "stars": 1829,
+      "forks": 221,
+      "pushedAt": "2024-11-16T04:55:01Z",
+      "archived": false,
+      "license": null,
+      "fork": false,
+      "parent": null,
+      "desc": "大麦抢票辅助"
+    },
+    {
+      "repo": "viarotel-org/escrcpy",
+      "stars": 12000,
+      "forks": 838,
+      "pushedAt": "2026-09-01T10:35:45Z",
+      "archived": false,
+      "license": "Apache-2.0",
+      "fork": false,
+      "parent": null,
+      "desc": "📱 Display and control your Android device graphically with scrcpy."
+    },
+    {
+      "repo": "currycan/HaTickets",
+      "stars": 477,
+      "forks": 79,
+      "pushedAt": "2026-07-11T08:58:45Z",
+      "archived": false,
+      "license": "Apache-2.0",
+      "fork": false,
+      "parent": null,
+      "desc": "大麦网抢票自动化 — Mobile(U2) / Desktop(Tauri+Rust) 方案"
+    },
+    {
+      "repo": "hamibot/hamibot",
+      "stars": 3119,
+      "forks": 535,
+      "pushedAt": "2023-11-01T08:14:45Z",
+      "archived": false,
+      "license": "NOASSERTION",
+      "fork": false,
+      "parent": null,
+      "desc": "安卓平台自动化工具，无需 root。"
+    },
+    {
+      "repo": "Pactum7/ticket-grabbing",
+      "stars": 1950,
+      "forks": 243,
+      "pushedAt": "2026-07-23T14:52:01Z",
+      "archived": false,
+      "license": "Apache-2.0",
+      "fork": false,
+      "parent": null,
+      "desc": "猫眼纷玩岛大麦抢票、余票监控AutoX.js脚本，手机移动端，全场次选购"
+    }
+  ]
+}

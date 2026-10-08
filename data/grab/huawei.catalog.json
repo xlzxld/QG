@@ -9,8 +9,8 @@
     "addUrlPlaceholder": "https://item.vmall.com/product/comdetail/index.html?prdId=...",
     "orderLookupHint": "在华为商城「我的订单」里核对"
   },
-  "generatedAt": "2026-10-08T07:27:18.882Z",
-  "startedAt": "2026-10-08T07:27:04.054Z",
+  "generatedAt": "2026-10-08T07:48:09.460Z",
+  "startedAt": "2026-10-08T07:47:54.678Z",
   "mode": {
     "headless": true,
     "only": "HUAWEI Pura X View",
@@ -33,8 +33,8 @@
     "blocked": 0
   },
   "serverNow": {
-    "ms": 1791444426479,
-    "iso": "2026-10-08T15:27:06+08:00"
+    "ms": 1791445676866,
+    "iso": "2026-10-08T15:47:56+08:00"
   },
   "restock": [],
   "priceChanges": [],
@@ -109,8 +109,8 @@
       "currentSbomCode": "2601010634026",
       "currentSbomId": "10086014583257",
       "serverNow": {
-        "ms": 1791444426479,
-        "iso": "2026-10-08T15:27:06+08:00"
+        "ms": 1791445676866,
+        "iso": "2026-10-08T15:47:56+08:00"
       },
       "specDimensions": [
         {
@@ -239,7 +239,7 @@
             "startTime": "2026-10-09T10:08:00+08:00",
             "endTimeMs": 1791518880000,
             "endTime": "2026-10-09T12:08:00+08:00",
-            "startsInMs": 67253521,
+            "startsInMs": 66003134,
             "limitNum": 2,
             "attendQualification": 1,
             "skuStatus": 1,
@@ -367,7 +367,7 @@
             "startTime": "2026-10-09T10:08:00+08:00",
             "endTimeMs": 1791518880000,
             "endTime": "2026-10-09T12:08:00+08:00",
-            "startsInMs": 67253521,
+            "startsInMs": 66003134,
             "limitNum": 2,
             "attendQualification": 1,
             "skuStatus": 1,
@@ -582,7 +582,7 @@
             "startTime": "2026-10-09T10:08:00+08:00",
             "endTimeMs": 1791518880000,
             "endTime": "2026-10-09T12:08:00+08:00",
-            "startsInMs": 67253521,
+            "startsInMs": 66003134,
             "limitNum": 2,
             "attendQualification": 1,
             "skuStatus": 1,
@@ -710,7 +710,7 @@
             "startTime": "2026-10-09T10:08:00+08:00",
             "endTimeMs": 1791518880000,
             "endTime": "2026-10-09T12:08:00+08:00",
-            "startsInMs": 67253521,
+            "startsInMs": 66003134,
             "limitNum": 2,
             "attendQualification": 1,
             "skuStatus": 1,
@@ -925,7 +925,7 @@
             "startTime": "2026-10-09T10:08:00+08:00",
             "endTimeMs": 1791518880000,
             "endTime": "2026-10-09T12:08:00+08:00",
-            "startsInMs": 67253521,
+            "startsInMs": 66003134,
             "limitNum": 2,
             "attendQualification": 1,
             "skuStatus": 1,
@@ -1053,7 +1053,7 @@
             "startTime": "2026-10-09T10:08:00+08:00",
             "endTimeMs": 1791518880000,
             "endTime": "2026-10-09T12:08:00+08:00",
-            "startsInMs": 67253521,
+            "startsInMs": 66003134,
             "limitNum": 2,
             "attendQualification": 1,
             "skuStatus": 1,
@@ -1268,7 +1268,7 @@
             "startTime": "2026-10-09T10:08:00+08:00",
             "endTimeMs": 1791518880000,
             "endTime": "2026-10-09T12:08:00+08:00",
-            "startsInMs": 67253521,
+            "startsInMs": 66003134,
             "limitNum": 2,
             "attendQualification": 1,
             "skuStatus": 1,
@@ -1396,7 +1396,7 @@
             "startTime": "2026-10-09T10:08:00+08:00",
             "endTimeMs": 1791518880000,
             "endTime": "2026-10-09T12:08:00+08:00",
-            "startsInMs": 67253521,
+            "startsInMs": 66003134,
             "limitNum": 2,
             "attendQualification": 1,
             "skuStatus": 1,
@@ -1524,7 +1524,7 @@
             "startTime": "2026-10-09T10:08:00+08:00",
             "endTimeMs": 1791518880000,
             "endTime": "2026-10-09T12:08:00+08:00",
-            "startsInMs": 67253521,
+            "startsInMs": 66003134,
             "limitNum": 2,
             "attendQualification": 1,
             "skuStatus": 1,
@@ -2578,22 +2578,22 @@
         "packageList": "<style>*.richTextContent {\n\tline-height: 2;\n\tfont-size: 16.0px;\n\tfont-family: Helvetica Neue;\n}\n*.richTextContent, *.richTextContent * {\n}\n*.richTextContent h1 {\n\tfont-size: 2.0em;\n}\n*.richTextContent h2 {\n\tfont-size: 1.5em;\n}\n*.richTextContent h3 {\n\tfont-size: 1.17em;\n}\n*.richTextContent h4 {\n\tfont-size: 1.0em;\n}\n*.richTextContent h5 {\n\tfont-size: 0.83em;\n}\n*.richTextContent h6 {\n\tfont-size: 0.67em;\n}\n*.richTextContent a {\n\ttext-decoration: underline;\n}\n*.richTextContent img {\n\tmax-width: 100.0%;\n}\n*.richTextContent blockquote, *.richTextContent h1, *.richTextContent h2, *.richTextContent h3, *.richTextContent h4, *.richTextContent h5, *.richTextContent h6, *.richTextContent ol, *.richTextContent p, *.richTextContent pre, *.richTextContent ul {\n\tmargin: 0;\n\tpadding: 0;\n}\n*.richTextContent ol, *.richTextContent ul {\n\tpadding-left: 1.5em;\n}\n*.richTextContent ol li, *.richTextContent ul li {\n\tlist-style-type: none;\n\tpadding-left: 1.5em;\n}\n*.richTextContent ol li {\n\tcounter-increment: list-0;\n}\n</style><div class=\"richTextContent\"><p><em>手机（内置电池）× 1</em></p> <p><em>华为 SuperCharge 充电器 × 1</em></p> <p><em>USB Type-C 数据线 × 1</em></p> <p><em>透明保护壳 × 1</em></p> <p><em>快速指南 × 1</em></p> <p><em>取卡针 × 1</em></p> <p><em>保护膜（出厂已贴在手机上）× 1</em></p></div>"
       },
       "endpoints": [
-        "openapi.vmall.com/mcp/content/getProdInfoListWithPage",
         "openapi.vmall.com/mcp/queryTemplate",
         "openapi.vmall.com/mcp/recommend/queryRecommendConfig",
-        "openapi.vmall.com/mcp/querySystemConfig",
         "openapi.vmall.com/serverTime.json",
+        "openapi.vmall.com/mcp/querySystemConfig",
+        "openapi.vmall.com/mcp/content/getProdInfoListWithPage",
         "openapi.vmall.com/sg/content/getGlobalDataSource",
-        "openapi.vmall.com/mcp/recommend/queryHotWord",
+        "openapi.vmall.com/mcp/product/refreshSbomRealInfoV3",
         "openapi.vmall.com/mcp/querySkuInventoryV2",
         "openapi.vmall.com/mcp/product/batchQueryPrdInstallmentInfo",
-        "openapi.vmall.com/mcp/product/refreshSbomRealInfoV3",
+        "openapi.vmall.com/mcp/recommend/queryHotWord",
+        "dap.vmall.com/dap/batchReport",
         "buy.vmall.com/queryRushbuyInfo.json",
-        "fss-cdn.vmall.com/gd_bs_atk/atkFssCdn/tipInfo.json",
         "fss-cdn.vmall.com/gd_bs_atk/atkFssCdn/cacheUrl.json",
+        "fss-cdn.vmall.com/gd_bs_atk/atkFssCdn/tipInfo.json",
         "openapi.vmall.com/mcp/order/getShippingTime",
         "openapi.vmall.com/mcp/product/refreshProductRealInfoV2",
-        "dap.vmall.com/dap/batchReport",
         "openapi.vmall.com/mcp/v1/queryCart"
       ]
     },

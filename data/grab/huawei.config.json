@@ -40,7 +40,7 @@
   "profileId": "huawei_user_01",
   "enabled": true,
   "mode": "rush",
-  "dryRun": false,
+  "dryRun": true,
   "earlyEnterSec": 90,
   "_B方案拦截": {
     "说明": "在『本机浏览器收到的内容』上做手脚：不构造、不重放、不伪造任何请求，流量仍全部由页面自己发起。改版体检（控制台『改版体检』页）会对着真实环境逐项验证这些规则仍有效。",

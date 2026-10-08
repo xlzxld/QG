@@ -13,8 +13,40 @@
 
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
 
-export const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+/**
+ * 跨平台探测 Google Chrome 可执行文件路径 (macOS / Windows / Linux)
+ */
+export function getChromePath(platform = process.platform) {
+  if (process.env.CHROME_PATH && fs.existsSync(process.env.CHROME_PATH)) {
+    return process.env.CHROME_PATH;
+  }
+  if (platform === 'darwin') {
+    const macPaths = [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      `${process.env.HOME || ''}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+    ];
+    for (const p of macPaths) {
+      if (fs.existsSync(p)) return p;
+    }
+    return macPaths[0];
+  }
+  if (platform === 'win32') {
+    const winPaths = [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      `${process.env.LOCALAPPDATA || ''}\\Google\\Chrome\\Application\\chrome.exe`
+    ];
+    for (const p of winPaths) {
+      if (fs.existsSync(p)) return p;
+    }
+    return winPaths[0];
+  }
+  return '/usr/bin/google-chrome';
+}
+
+export const CHROME = getChromePath();
 export const SLOT_DIR = (id) => fileURLToPath(new URL(`../data/grab/chrome-profile-rush/${id}/`, import.meta.url));
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

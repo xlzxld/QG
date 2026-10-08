@@ -1,0 +1,27 @@
+{
+  "_说明": "大麦APP端抢购配置。人可以直接编辑本文件；控制台和设备中枢读写本文件。",
+  "platform": "damai",
+  "enabled": true,
+  "shows": [
+    {
+      "id": "show_sample_01",
+      "name": "测试演出项目",
+      "url": "https://detail.damai.cn/item.htm?id=12345678",
+      "session": "2026-10-15 周四 19:30",
+      "priceText": "内场 980",
+      "quantity": 1,
+      "viewers": ["张三"],
+      "saleAt": "2026-10-15T19:30:00+08:00",
+      "enabled": true
+    }
+  ],
+  "leadMs": 40,
+  "dryRun": true,
+  "mode": "rush",
+  "limits": {
+    "anchorLeadSec": 5,
+    "freezeLeadSec": 10,
+    "recheckLeadSec": 2,
+    "giveUpAfterSec": 30
+  }
+}

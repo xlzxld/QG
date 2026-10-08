@@ -75,11 +75,11 @@ const logs = [];
 page.on('console', (m) => logs.push(`${m.type()}: ${m.text()}`.slice(0, 200)));
 
 await page.goto(IN_LIST.url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
-await page.waitForTimeout(6000);
+await page.waitForTimeout(10000);
 
 const before = await page.evaluate(() => !!document.getElementById('qp-huawei-grab-panel'));
 console.log(`跳之前：面板 ${before ? '✅ 已插入（脚本已接管）' : '❌ 未插入，测不了'}`);
-if (!before) { await browser.close(); process.exit(1); }
+if (!before) { console.log('浏览器日志：\n' + logs.slice(-10).join('\n')); await browser.close(); process.exit(1); }
 
 // 模拟 Next.js 站内跳转：走 history.pushState + 换DOM，**不重载文档**
 await page.evaluate((prdId) => {

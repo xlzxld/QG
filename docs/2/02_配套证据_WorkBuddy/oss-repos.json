@@ -1,0 +1,437 @@
+{
+  "fetchedAt": "2026-10-08T08:01:39.327Z",
+  "repos": [
+    {
+      "repo": "Genymobile/scrcpy",
+      "full": "Genymobile/scrcpy",
+      "stars": 151654,
+      "forks": 13899,
+      "language": "C",
+      "license": "Apache-2.0",
+      "pushedAt": "2026-10-08T06:44:51Z",
+      "archived": false,
+      "openIssues": 2920,
+      "desc": "Display and control your Android device",
+      "homepage": null
+    },
+    {
+      "repo": "barry-ran/QtScrcpy",
+      "full": "barry-ran/QtScrcpy",
+      "stars": 32290,
+      "forks": 3806,
+      "language": "C++",
+      "license": "Apache-2.0",
+      "pushedAt": "2026-09-24T06:24:47Z",
+      "archived": false,
+      "openIssues": 630,
+      "desc": "Android real-time display control software",
+      "homepage": "https://blog.csdn.net/rankun1/article/details/87970523"
+    },
+    {
+      "repo": "NetrisTV/ws-scrcpy",
+      "full": "NetrisTV/ws-scrcpy",
+      "stars": 2575,
+      "forks": 575,
+      "language": "TypeScript",
+      "license": "MIT",
+      "pushedAt": "2026-10-05T16:33:32Z",
+      "archived": false,
+      "openIssues": 93,
+      "desc": "Web client prototype for scrcpy.",
+      "homepage": null
+    },
+    {
+      "repo": "DeviceFarmer/stf",
+      "full": "DeviceFarmer/stf",
+      "stars": 4590,
+      "forks": 625,
+      "language": "TypeScript",
+      "license": "NOASSERTION",
+      "pushedAt": "2026-10-02T16:14:15Z",
+      "archived": false,
+      "openIssues": 159,
+      "desc": "Control and manage Android devices from your browser.",
+      "homepage": "https://devicefarmer.github.io"
+    },
+    {
+      "repo": "openatx/atxserver2",
+      "full": "openatx/atxserver2",
+      "stars": 1443,
+      "forks": 451,
+      "language": "HTML",
+      "license": "MIT",
+      "pushedAt": "2026-06-17T17:57:25Z",
+      "archived": false,
+      "openIssues": 67,
+      "desc": "Smart Phone Management. Reimplement of atx-server with Python",
+      "homepage": null
+    },
+    {
+      "repo": "SonicCloudOrg/sonic-server",
+      "full": "SonicCloudOrg/sonic-server",
+      "stars": 2207,
+      "forks": 632,
+      "language": "Java",
+      "license": "AGPL-3.0",
+      "pushedAt": "2025-03-24T20:56:27Z",
+      "archived": true,
+      "openIssues": 12,
+      "desc": "🎉Back end of Sonic cloud real machine platform. Sonic云真机平台后端服务。",
+      "homepage": "https://soniccloudorg.github.io/"
+    },
+    {
+      "repo": "SonicCloudOrg/sonic-android-agent",
+      "error": "HTTP 404"
+    },
+    {
+      "repo": "openatx/uiautomator2",
+      "full": "openatx/uiautomator2",
+      "stars": 8414,
+      "forks": 1601,
+      "language": "Python",
+      "license": "MIT",
+      "pushedAt": "2026-10-05T00:00:05Z",
+      "archived": false,
+      "openIssues": 205,
+      "desc": "Android Uiautomator2 Python Wrapper",
+      "homepage": null
+    },
+    {
+      "repo": "openatx/atx-agent",
+      "full": "openatx/atx-agent",
+      "stars": 802,
+      "forks": 281,
+      "language": "Go",
+      "license": "NOASSERTION",
+      "pushedAt": "2024-04-07T08:29:32Z",
+      "archived": true,
+      "openIssues": 58,
+      "desc": "HTTP Server runs on android devices",
+      "homepage": null
+    },
+    {
+      "repo": "openatx/weditor",
+      "full": "alibaba/web-editor",
+      "stars": 1324,
+      "forks": 324,
+      "language": "JavaScript",
+      "license": "MIT",
+      "pushedAt": "2024-05-07T07:34:32Z",
+      "archived": true,
+      "openIssues": 95,
+      "desc": "please use https://uiauto.dev instead",
+      "homepage": "https://uiauto.dev"
+    },
+    {
+      "repo": "AirtestProject/Airtest",
+      "full": "AirtestProject/Airtest",
+      "stars": 9593,
+      "forks": 1454,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "pushedAt": "2026-03-23T09:16:49Z",
+      "archived": false,
+      "openIssues": 486,
+      "desc": "UI Automation Framework for Games and Apps",
+      "homepage": "http://airtest.netease.com/"
+    },
+    {
+      "repo": "appium/appium",
+      "full": "appium/appium",
+      "stars": 22051,
+      "forks": 6289,
+      "language": "TypeScript",
+      "license": "Apache-2.0",
+      "pushedAt": "2026-10-08T06:54:58Z",
+      "archived": false,
+      "openIssues": 51,
+      "desc": "Cross-platform automation framework for all kinds of apps, built on top of the W3C WebDriver protocol",
+      "homepage": "http://appium.io/"
+    },
+    {
+      "repo": "mobile-dev-inc/maestro",
+      "full": "mobile-dev-inc/Maestro",
+      "stars": 15985,
+      "forks": 983,
+      "language": "Kotlin",
+      "license": "Apache-2.0",
+      "pushedAt": "2026-10-08T06:55:43Z",
+      "archived": false,
+      "openIssues": 508,
+      "desc": "Painless E2E Automation for Mobile and Web",
+      "homepage": "https://maestro.dev"
+    },
+    {
+      "repo": "web-infra-dev/midscene",
+      "full": "web-infra-dev/midscene",
+      "stars": 15098,
+      "forks": 1173,
+      "language": "TypeScript",
+      "license": "MIT",
+      "pushedAt": "2026-10-08T07:29:58Z",
+      "archived": false,
+      "openIssues": 102,
+      "desc": "GUI Agent for E2E Testing",
+      "homepage": "https://midscenejs.com"
+    },
+    {
+      "repo": "X-PLUG/MobileAgent",
+      "full": "X-PLUG/MobileAgent",
+      "stars": 9279,
+      "forks": 929,
+      "language": "Python",
+      "license": "MIT",
+      "pushedAt": "2026-07-07T09:22:18Z",
+      "archived": false,
+      "openIssues": 196,
+      "desc": " Mobile-Agent: The Powerful GUI Agent Family",
+      "homepage": null
+    },
+    {
+      "repo": "SuperMonster003/AutoJs6",
+      "full": "SuperMonster003/AutoJs6",
+      "stars": 6447,
+      "forks": 1779,
+      "language": "Java",
+      "license": "MPL-2.0",
+      "pushedAt": "2026-03-16T14:48:05Z",
+      "archived": false,
+      "openIssues": 343,
+      "desc": "安卓平台 JavaScript 自动化工具 (Auto.js 二次开发项目)",
+      "homepage": "https://docs.autojs6.com"
+    },
+    {
+      "repo": "kkevsekk1/AutoX",
+      "error": "HTTP 404"
+    },
+    {
+      "repo": "RikkaApps/Shizuku",
+      "full": "RikkaApps/Shizuku",
+      "stars": 31189,
+      "forks": 3290,
+      "language": "Kotlin",
+      "license": "Apache-2.0",
+      "pushedAt": "2025-06-18T04:21:02Z",
+      "archived": false,
+      "openIssues": 649,
+      "desc": "Using system APIs directly with adb/root privileges from normal apps through a Java process started with app_process.",
+      "homepage": null
+    },
+    {
+      "repo": "topjohnwu/Magisk",
+      "full": "topjohnwu/Magisk",
+      "stars": 63140,
+      "forks": 18806,
+      "language": "Kotlin",
+      "license": "GPL-3.0",
+      "pushedAt": "2026-10-08T06:04:57Z",
+      "archived": false,
+      "openIssues": 38,
+      "desc": "The Magic Mask for Android",
+      "homepage": null
+    },
+    {
+      "repo": "termux/termux-app",
+      "full": "termux/termux-app",
+      "stars": 62185,
+      "forks": 7801,
+      "language": "Java",
+      "license": "NOASSERTION",
+      "pushedAt": "2026-09-26T05:11:44Z",
+      "archived": false,
+      "openIssues": 634,
+      "desc": "Termux - a terminal emulator application for Android OS extendible by variety of packages.",
+      "homepage": "https://f-droid.org/en/packages/com.termux"
+    },
+    {
+      "repo": "remote-android/redroid-doc",
+      "full": "remote-android/redroid-doc",
+      "stars": 6907,
+      "forks": 485,
+      "language": "Shell",
+      "license": null,
+      "pushedAt": "2026-05-17T08:10:59Z",
+      "archived": false,
+      "openIssues": 359,
+      "desc": "redroid (Remote-Android) is a multi-arch, GPU enabled, Android in Cloud solution. Track issues / docs here",
+      "homepage": null
+    },
+    {
+      "repo": "budtmo/docker-android",
+      "full": "budtmo/docker-android",
+      "stars": 15946,
+      "forks": 1761,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushedAt": "2026-10-07T23:03:01Z",
+      "archived": false,
+      "openIssues": 163,
+      "desc": "Android in docker solution with noVNC supported, video recording, mcp server and AI-agent",
+      "homepage": null
+    },
+    {
+      "repo": "yume-chan/ya-webadb",
+      "full": "yume-chan/ya-webadb",
+      "stars": 3239,
+      "forks": 423,
+      "language": "TypeScript",
+      "license": "MIT",
+      "pushedAt": "2026-10-02T11:14:47Z",
+      "archived": false,
+      "openIssues": 7,
+      "desc": "ADB in your browser",
+      "homepage": "https://tangoadb.dev/"
+    },
+    {
+      "repo": "openstf/adbkit",
+      "full": "openstf/adbkit",
+      "stars": 880,
+      "forks": 260,
+      "language": "CoffeeScript",
+      "license": "NOASSERTION",
+      "pushedAt": "2023-03-24T06:54:48Z",
+      "archived": false,
+      "openIssues": 71,
+      "desc": "A pure Node.js client for the Android Debug Bridge.",
+      "homepage": null
+    },
+    {
+      "repo": "DeviceFarmer/adbkit",
+      "full": "DeviceFarmer/adbkit",
+      "stars": 306,
+      "forks": 62,
+      "language": "TypeScript",
+      "license": "NOASSERTION",
+      "pushedAt": "2026-10-05T23:03:19Z",
+      "archived": false,
+      "openIssues": 56,
+      "desc": "A pure Node.js client for the Android Debug Bridge.",
+      "homepage": null
+    },
+    {
+      "repo": "openstf/minitouch",
+      "full": "openstf/minitouch",
+      "stars": 678,
+      "forks": 253,
+      "language": "C",
+      "license": "NOASSERTION",
+      "pushedAt": "2020-08-15T13:58:23Z",
+      "archived": false,
+      "openIssues": 30,
+      "desc": "Minimal multitouch event producer for Android.",
+      "homepage": null
+    },
+    {
+      "repo": "tychxn/jd-assistant",
+      "full": "tychxn/jd-assistant",
+      "stars": 5257,
+      "forks": 1848,
+      "language": "Python",
+      "license": "MIT",
+      "pushedAt": "2024-01-05T18:00:51Z",
+      "archived": false,
+      "openIssues": 60,
+      "desc": "京东抢购助手：包含登录，查询商品库存/价格，添加/清空购物车，抢购商品(下单)，查询订单等功能",
+      "homepage": null
+    },
+    {
+      "repo": "WECENG/ticket-purchase",
+      "full": "WECENG/ticket-purchase",
+      "stars": 7318,
+      "forks": 904,
+      "language": "Python",
+      "license": null,
+      "pushedAt": "2026-05-14T10:25:03Z",
+      "archived": false,
+      "openIssues": 59,
+      "desc": "大麦自动抢票，支持人员、城市、日期场次、价格选择",
+      "homepage": null
+    },
+    {
+      "repo": "huanghyw/jd_seckill",
+      "error": "HTTP 404"
+    },
+    {
+      "repo": "ztino/jd_seckill",
+      "error": "HTTP 404"
+    },
+    {
+      "repo": "zhou-xiaojun/jd_mask",
+      "error": "HTTP 404"
+    },
+    {
+      "repo": "caicai12/damai-ticket-assistant",
+      "full": "caicai12/damai-ticket-assistant",
+      "stars": 0,
+      "forks": 0,
+      "language": null,
+      "license": null,
+      "pushedAt": "2025-10-09T07:28:57Z",
+      "archived": false,
+      "openIssues": 0,
+      "desc": "一个功能完善的大麦网自动抢票工具，提供网页端和APP端两种使用方式。",
+      "homepage": null
+    },
+    {
+      "repo": "Pactum7/ticket-grabbing",
+      "full": "Pactum7/ticket-grabbing",
+      "stars": 1950,
+      "forks": 243,
+      "language": "JavaScript",
+      "license": "Apache-2.0",
+      "pushedAt": "2026-07-23T14:52:01Z",
+      "archived": false,
+      "openIssues": 42,
+      "desc": "猫眼纷玩岛大麦抢票、余票监控AutoX.js脚本，手机移动端，全场次选购",
+      "homepage": null
+    },
+    {
+      "repo": "MonsterNone/auto-taobao.js",
+      "full": "MonsterNone/auto-taobao.js",
+      "stars": 40,
+      "forks": 14,
+      "language": "JavaScript",
+      "license": "GPL-3.0",
+      "pushedAt": "2019-05-06T07:55:17Z",
+      "archived": true,
+      "openIssues": 1,
+      "desc": "利用Auto.js抢购淘宝购物车内商品",
+      "homepage": null
+    },
+    {
+      "repo": "yinwenqin/AutoJs_jingdong",
+      "full": "yinwenqin/AutoJs_jingdong",
+      "stars": 0,
+      "forks": 0,
+      "language": null,
+      "license": null,
+      "pushedAt": "2022-01-25T01:43:38Z",
+      "archived": false,
+      "openIssues": 0,
+      "desc": "AutoJs实现的京东自动化抢购流程",
+      "homepage": null
+    }
+  ],
+  "latestReleases": [
+    {
+      "repo": "SuperMonster003/AutoJs6",
+      "error": "HTTP 403"
+    },
+    {
+      "repo": "kkevsekk1/AutoX",
+      "error": "HTTP 403"
+    },
+    {
+      "repo": "Genymobile/scrcpy",
+      "error": "HTTP 403"
+    },
+    {
+      "repo": "RikkaApps/Shizuku",
+      "error": "HTTP 403"
+    },
+    {
+      "repo": "barry-ran/QtScrcpy",
+      "error": "HTTP 403"
+    }
+  ]
+}

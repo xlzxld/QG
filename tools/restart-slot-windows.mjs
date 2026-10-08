@@ -8,15 +8,16 @@
  *  ② 启动参数加 --hide-crash-restore-bubble：就算将来真的崩过，也不弹恢复条。 */
 import { spawn, execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CDP } from '../core/cdp-core.mjs';
+import { CDP, CHROME } from '../core/cdp-core.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('zh-CN', { hour12: false })}]`, ...a);
 
-const slots = JSON.parse(readFileSync(ROOT + 'data\\grab\\rush-slots.huawei.json', 'utf8')).slots || [];
+const slotsFile = path.join(ROOT, 'data', 'grab', 'rush-slots.huawei.json');
+const slots = JSON.parse(readFileSync(slotsFile, 'utf8')).slots || [];
 if (!slots.length) { console.log('槽位是空的，没窗口可重启'); process.exit(0); }
 
 // 第一步：优雅关闭（能连上调试端口就走 Browser.close，正常退出不留"未正确关闭"标记）
@@ -37,23 +38,41 @@ await sleep(3000); // 给 Chrome 时间写盘退出
 
 // 第二步：兜底强杀幸存者（优雅关闭失败/卡死的才轮得到）
 try {
-  const out = execSync('wmic process where "name=\'chrome.exe\'" get ProcessId,CommandLine /format:csv', { encoding: 'utf8' });
   const pids = new Set();
-  for (const line of out.split('\n')) {
-    if (!line.includes('chrome-profile-rush')) continue;
-    const m = line.trim().match(/(\d+)$/);
-    if (m) pids.add(m[1]);
+  if (process.platform === 'win32') {
+    const out = execSync('wmic process where "name=\'chrome.exe\'" get ProcessId,CommandLine /format:csv', { encoding: 'utf8' });
+    for (const line of out.split('\n')) {
+      if (!line.includes('chrome-profile-rush')) continue;
+      const m = line.trim().match(/(\d+)$/);
+      if (m) pids.add(m[1]);
+    }
+  } else {
+    // macOS / Linux
+    try {
+      const out = execSync('pgrep -f "chrome-profile-rush"', { encoding: 'utf8' });
+      for (const pid of out.trim().split(/\s+/)) {
+        if (pid && !isNaN(Number(pid))) pids.add(pid);
+      }
+    } catch {}
   }
   for (const pid of pids) {
-    try { execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' }); log(`兜底强杀残留进程 ${pid}`); } catch { /* 已退出 */ }
+    try {
+      if (process.platform === 'win32') {
+        execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' });
+      } else {
+        process.kill(Number(pid), 'SIGKILL');
+      }
+      log(`兜底强杀残留进程 ${pid}`);
+    } catch { /* 已退出 */ }
   }
 } catch (e) { log('枚举进程失败：' + e.message); }
 
 await sleep(2000);
 
 for (const s of slots) {
+  const profileDir = path.join(ROOT, 'data', 'grab', 'chrome-profile-rush', s.id);
   const p = spawn(CHROME, [
-    `--user-data-dir=${ROOT}data\\grab\\chrome-profile-rush\\${s.id}`,
+    `--user-data-dir=${profileDir}`,
     `--remote-debugging-port=${s.port}`,
     '--no-first-run', '--no-default-browser-check', '--start-maximized',
     '--disable-features=CalculateNativeWinOcclusion',

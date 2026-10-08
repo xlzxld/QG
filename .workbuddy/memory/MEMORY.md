@@ -136,3 +136,20 @@
 - **三方案实验脚本（`platforms/huawei/rush-experiment-3plans.mjs`）逻辑回归**：
   `verify/verify-3plans-pick.mjs`（合成数据、零副作用、可重复：待抢购过滤/现货与僵尸排除/
   随机挑 3/收集时刻推导/重跑保护，11 项断言）。
+
+## 移动端执行面（2026-10-08 方案定稿，未实施）
+
+- App 端（淘宝/京东/大麦）抢购 = 「安卓真机 + `adb reverse tcp:3100 tcp:3100` + HTTP 长轮询 +
+  端侧薄击发（AutoX.js v7，现址 aiselp/AutoX；旧址 kkevsekk1 已 404）」；正式场只用真机，
+  模拟器仅开发/彩排；**击发不依赖 PC**（任务单先落盘手机，本地单调钟死等）。
+- 硬门槛：标定 8 项（intent 组件名/存储权限/锁屏/省电/深链/无障碍覆盖率/对时源/提前量）全过
+  才允许自动击发；对时以平台服务器为权威（min-RTT 采样）；结果 outbox + taskId 幂等；
+  白名单快照冻结进任务单；深链落页需"页面身份校验"。
+- 终版全文（六方对比 + 冻结版 + 审查）：`docs/APP端抢购终极技术方案_WorkBuddy终版_2026-10-08.md`；
+  各家方案存 `docs/1/`（共 6 份：Antigravity、ZCode-GLM、整合稿、前稿等）。
+- 关键事实（2026-10-08 源码级核实）：AutoX 延续仓 = aiselp/AutoX（kkevsekk1 原仓已删的 fork，★1.9k、v7.2.4）；
+  启动组件 `org.autojs.autoxjs.v7/org.autojs.autojs.external.open.RunIntentActivity`（-d file:// 直跑脚本）；
+  无障碍组件 `com.stardust.autojs.core.accessibility.AccessibilityService`（adb settings put secure 自愈）。
+- 最新裁决：hub 独立 :3120（理由=与华为产线隔离）；引擎条件冻结（P0-0 三验证后，Plan B=AutoJs6）；
+  通道 adb reverse:3120 + 长轮询；白名单=内容快照+版本+哈希；击发=预热锚定+零查找（不承诺固定毫秒数）。
+  待拍板：平台顺序（京东先 / 大麦先）、GPL 非商业边界。

@@ -37,9 +37,26 @@
       "driverScript": "platforms/apple/apple-rush.mjs",
       "slotsFile": "data/grab/rush-slots.apple.json",
       "configFile": "data/grab/apple.config.json"
+    },
+    {
+      "id": "damai",
+      "name": "大麦票务 (APP)",
+      "icon": "🎟️",
+      "badge": "真机端",
+      "desc": "大麦 App 强实名演出抢购、场次票档预选与极速击发",
+      "status": "ready",
+      "entryUrl": "http://127.0.0.1:3120/devices",
+      "configFile": "data/grab/damai.config.json"
     }
   ],
   "tools": [
+    {
+      "id": "devices",
+      "name": "手机设备中枢",
+      "icon": "📱",
+      "desc": "Android 真机状态、任务派发、心跳与投屏管理 (:3120)",
+      "entryUrl": "http://127.0.0.1:3120/devices"
+    },
     {
       "id": "tasks",
       "name": "任务排班",

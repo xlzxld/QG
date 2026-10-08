@@ -32,7 +32,8 @@ for (const port of PORTS) {
     const r = await cdp.eval(`(async () => {
       try {
         const r = await fetch('https://openapi.vmall.com/mcp/queryUserInfo?portal=1&lang=zh_CN&country=CN', { credentials: 'include' });
-        return (await r.text()).slice(0, 300);
+        const res = typeof r.text === 'function' ? await r.text() : JSON.stringify(r);
+        return String(res).slice(0, 300);
       } catch (e) { return '__ERR__' + ((e && e.message) || e); }
     })()`).catch(() => '__ERR__');
     try { cdp.ws.close(); } catch { /* 忽略 */ }
