@@ -61,7 +61,7 @@
 
 ## 二、爬虫抓到了什么
 
-`node grab/crawler-huawei.mjs`
+`node platforms/huawei/crawler-huawei.mjs`
 
 **只去配置里的 URL，一个商品都不多跑。** 不翻首页、不扫分类页、不猜"还有什么别的商品"。
 
@@ -148,7 +148,7 @@
 
 双击 `启动.bat` 后按 `C`，或直接开 <http://127.0.0.1:3100/>。
 
-界面在 `scripts/grab-console.html`（独立文件，不嵌在 .mjs 里）。
+界面在 `web/platforms/grab-console.html`（独立文件，不嵌在 .mjs 里）。
 
 四个页签：
 
@@ -249,7 +249,7 @@
 
 ```powershell
 $env:CRAWLER_SCHEDULE = "on"
-node scripts/grab-bridge.mjs
+node core/grab-bridge.mjs
 ```
 
 规则：每天在指定窗口内随机挑一个时刻采集一次；手动跑过则当天不再自动跑；失败也算"跑过"（不反复重试放大访问量）。
@@ -331,14 +331,14 @@ node scripts/grab-bridge.mjs
 （`isTrusted=false`），vmall 的下单按钮直接无视——2026-10-06 演练实测：
 点中真按钮页面也纹丝不动。只有浏览器输入管线产生的真事件才被认可。
 
-`grab/cdp-rush.mjs` 通过 Chrome 官方调试接口（CDP）的 Input 域派发鼠标事件，
+`platforms/huawei/cdp-rush.mjs` 通过 Chrome 官方调试接口（CDP）的 Input 域派发鼠标事件，
 `isTrusted=true`，与真人点击无异；从"发现可买"到"点下去"毫秒级。
 
 ### 用法
 
 ```
-1. 启动桥接服务（启动.bat 或 node scripts/grab-bridge.mjs）
-2. node grab/cdp-rush.mjs --prdId=10086621059876
+1. 启动桥接服务（启动.bat 或 node core/grab-bridge.mjs）
+2. node platforms/huawei/cdp-rush.mjs --prdId=10086621059876
 3. 第一次运行会开一个"抢购专用 Chrome 窗口"（独立数据目录
    data/grab/chrome-profile-rush/，与日常浏览器互不干扰），
    在里面登录一次华为账号——登录态持久保存，以后不用再登
@@ -451,11 +451,11 @@ a6051529/vmall-rush-to-buy、greasyfork 397649/393577、lov3smu/hw_seckill 等�
 
 | 腿 | 原理 | 状态 |
 |---|---|---|
-| **B 主力** | CDP Fetch 域拦截改写"本机浏览器收到的内容"：流量仍全部由页面自己发起，不构造/不重放/不伪造请求 | R1/R3 自测通过（`grab/selftest-intercept.mjs` 11/11）；R2 采集阶段 |
+| **B 主力** | CDP Fetch 域拦截改写"本机浏览器收到的内容"：流量仍全部由页面自己发起，不构造/不重放/不伪造请求 | R1/R3 自测通过（`platforms/huawei/selftest-intercept.mjs` 11/11）；R2 采集阶段 |
 | **A 触发器** | 直接调页面内部函数（React fiber → onPress 闭包里的 `Yo()` / `E.goBuy()`），不产生点击事件 | ✅ **2026-10-07 走通**（现货 SKU 实测真实开出确认订单页、`DRY_RUN_OK`）；`triggerMode` 已开 `internal` |
 | **真点击兜底** | CDP Input 域可信点击 | 一直可用 |
 
-### B 方案三条规则（`grab/intercept/rules.mjs` = 纯函数模板，`install.mjs` = CDP 装配）
+### B 方案三条规则（`platforms/huawei/intercept/rules.mjs` = 纯函数模板，`install.mjs` = CDP 装配）
 
 - **R1 抢购信息提前解锁**：拦截 `buy.vmall.com/queryRushbuyInfo.json`，把
   `skuRushBuyInfoList[].startTime` 提前 `intercept.leadMs`（默认 300ms）→
@@ -494,7 +494,7 @@ a6051529/vmall-rush-to-buy、greasyfork 397649/393577、lov3smu/hw_seckill 等�
   无用户手势会被浏览器弹窗拦截器静默拦下（第一版"没走通"就栽在这里）。
 - 失败语义：连续 ~10s 入口不可达才判"结构失效"、停用回落真点击；未开售/
   重渲染瞬间的短时取不到只计数继续。体检 **C7** 监控这条链（C7a 观察旧路径）。
-- 复现/侦察工具：`node grab-probe/probe-rush-entry.mjs`（默认只读侦察入口链；
+- 复现/侦察工具：`node verify/history/probe-rush-entry.mjs`（默认只读侦察入口链；
   `--dump-closure` 读闭包变量；`--fire` 实测调用一次并监测确认页——只做
   「立即购买」级动作，**本工具不含任何"提交订单"代码**）。
 
@@ -517,7 +517,7 @@ a6051529/vmall-rush-to-buy、greasyfork 397649/393577、lov3smu/hw_seckill 等�
 60 秒内压过凭据判断（会话刚死时它更及时）。
 **刻意不收 `200916` / "用户未登录"**——匿名小请求在已登录页面上也会返回它们，会误伤。
 
-### 改版体检（`grab/checkup-vmall.mjs`）——定期维护的核心
+### 改版体检（`platforms/huawei/checkup-vmall.mjs`）——定期维护的核心
 
 抢购脚本押注在 vmall 的页面结构/接口形状/内部函数上，华为一改版就**静默失效**。
 体检把这些押注逐项对着真实环境验证：**C0 商品列表闸门**、C1 窗口/登录态、
@@ -525,7 +525,7 @@ C2 按钮锚点+文案字典、C3 接口形状+R1 干跑、C4 校时、C5 __NEXT
 C6 匹配器+排队样本、C7 A 方案内部入口（fiber→Yo/goBuy；C7a 观察旧全局路径）、
 C8 价格读取。每项 DRIFT 都带"改哪里"。
 
-- 手动：控制台「改版体检」页 → 立即体检；或 `node grab/checkup-vmall.mjs`
+- 手动：控制台「改版体检」页 → 立即体检；或 `node platforms/huawei/checkup-vmall.mjs`
 - 自动：桥接每日一次（8~22 点随机时刻，`CHECKUP_SCHEDULE=off` 可关）
 - 报告：`data/grab/checkup-report.json`（最新）+ `checkup-history.jsonl`（历史）
 - 退出码：有 DRIFT/FAIL 时为 1（可挂 CI/计划任务）
@@ -544,8 +544,9 @@ C8 价格读取。每项 DRIFT 都带"改哪里"。
 ### 模块结构（2026-10-07 重构后）
 
 ```
-grab/
+core/
   cdp-core.mjs          CDP 客户端（事件订阅）+ 可信点击 + 槽位窗口（共用）
+platforms/huawei/
   vmall-api.mjs         官方接口探测 + 校时（驱动与体检共用同一份解析）
   cdp-rush.mjs          抢购驱动（拦截装配、A 方案入口 pickInternalEntry、
                         触发器、确认页信号都接在这里）
@@ -554,13 +555,13 @@ grab/
                         的字段名是 base64Encoded）
   checkup-vmall.mjs     改版体检（C7 只读检测 A 方案入口链）
   selftest-intercept.mjs 端到端自测（本地 mock + 真 Chrome，11 项断言）
-grab-probe/
+verify/history/
   probe-rush-entry.mjs  A 方案入口侦察器（只读定位 / --dump-closure / --fire）
 ```
 
-自测：`node grab/selftest-intercept.mjs`（约 30s，不碰 vmall）——验证改写→
+自测：`node platforms/huawei/selftest-intercept.mjs`（约 30s，不碰 vmall）——验证改写→
 提前解锁→可信点击→确认页信号→提交→留证→放行全链。
-A 方案入口复检：`node grab-probe/probe-rush-entry.mjs`（只读；加 `--dump-closure`
+A 方案入口复检：`node verify/history/probe-rush-entry.mjs`（只读；加 `--dump-closure`
 看闭包变量，加 `--fire` 实测开确认页）。
 
 ---
@@ -600,7 +601,7 @@ A 方案入口复检：`node grab-probe/probe-rush-entry.mjs`（只读；加 `--
 
 ### 11.3 跨商品预热（实测验证 + 驱动内置）
 
-实测（`grab-probe/verify-warm-cross.mjs`，清缓存对照）：预热商品确认页按钮挂载
+实测（`verify/history/verify-warm-cross.mjs`，清缓存对照）：预热商品确认页按钮挂载
 852ms → 紧随其后的目标商品 **501ms**（对照用户观测的冷加载 ~5.8s）。静态资源是
 全商品共享的，任何现货商品的确认页都能焐热目标商品的确认页。
 
@@ -619,7 +620,7 @@ A 方案入口复检：`node grab-probe/probe-rush-entry.mjs`（只读；加 `--
 
 ### 11.4 登录保活（存活短的根因 + 对策）
 
-实测根因（`grab-probe/probe-login-ttl.mjs`）：
+实测根因（`verify/history/probe-login-ttl.mjs`）：
 - `sid`/`hwid_cas_sid`（登录凭据）本身 **400 天有效期**，不是它过期；
 - 真凶是 vmall 侧的滚动短命 Cookie：**`cluster`（负载均衡路由粘性）只有 15 分钟
   窗口**、`cartId` 数小时。值守期间零请求 → 它们过期 → 下次请求被路由到别的后端
@@ -636,7 +637,7 @@ A 方案入口复检：`node grab-probe/probe-rush-entry.mjs`（只读；加 `--
 
 ### 11.5 回流监控 · SKU 随机切换扫描（默认方式，2026-10-08 晚按用户要求定稿）
 
-依据（`grab-probe/probe-sku-switch.mjs` 实证）：在商品页切换规格，页面 **~150ms
+依据（`verify/history/probe-sku-switch.mjs` 实证）：在商品页切换规格，页面 **~150ms
 内自发重拉该 SKU 实时状态**（refreshSbomRealInfoV3 / sbomDetailParamCacheInfo），
 按钮随之重渲染——这就是"疯狂切规格"能捡到回流的原理。
 
@@ -656,7 +657,7 @@ A 方案入口复检：`node grab-probe/probe-rush-entry.mjs`（只读；加 `--
 
 ### 11.6 出手链路改为「内部优先、真点击兜底」
 
-2026-10-08 实测（`grab-probe/probe-click-debug.mjs`）：当前 RNW 版页面上，
+2026-10-08 实测（`verify/history/probe-click-debug.mjs`）：当前 RNW 版页面上，
 **CDP 真点击连购买按钮也打不动了**（锚点/host 中心点击均无反应），内部 onPress
 稳定开出确认页。因此 `triggerBuyFlow()` 统一出手：内部入口 8s 窗 → 没出确认页
 再真点击 30s 窗兜底。正抢、预开、回流捕获全部走这条链。
@@ -669,10 +670,10 @@ saleAt——纯定时商品想演练人工设定时刻时用（否则永远被�
 ### 11.8 新增探针工具
 
 ```
-grab-probe/bench-internal-chain.mjs  内部链路延迟基准（可重跑回归）
-grab-probe/verify-submit-entry.mjs   确认页提交入口真机验证（只查不调）
-grab-probe/verify-warm-cross.mjs     跨商品预热对照实验
-grab-probe/probe-sku-switch.mjs      SKU 切换数据重拉实证
-grab-probe/probe-login-ttl.mjs       登录 Cookie 全景 + 续期实验
-grab-probe/probe-click-debug.mjs     真点击 vs 内部入口对照
+verify/bench-internal-chain.mjs  内部链路延迟基准（可重跑回归）
+verify/verify-submit-entry.mjs   确认页提交入口真机验证（只查不调）
+verify/history/verify-warm-cross.mjs     跨商品预热对照实验
+verify/history/probe-sku-switch.mjs      SKU 切换数据重拉实证
+verify/history/probe-login-ttl.mjs       登录 Cookie 全景 + 续期实验
+verify/history/probe-click-debug.mjs     真点击 vs 内部入口对照
 ```

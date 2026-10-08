@@ -1,4 +1,14 @@
-# grab-probe —— 监控路线技术探针
+# verify —— 验证与探针区
+
+> 2026-10-08 结构重组：本目录 = 验证区。
+> - 根目录 = **活跃回归工具**：`verify-console-settings.mjs`（控制台面板冒烟）／`verify-list-gate.mjs`、`verify-spa-gate.mjs`（白名单闸门）／`verify-login-detect.mjs`、`verify-login-cdp.mjs`（登录判据）／`verify-submit-entry.mjs`（提交入口真机）／`verify-picker-refresh.mjs`（采集下拉栏，净零）／`verify-3plans-pick.mjs`（三方案逻辑回归）／`bench-internal-chain.mjs`（内部链路基准）／`collect-rush-evidence.mjs`（复盘取证）／`sample_windows.py`
+> - `history/` = 冻结的一次性探针（不再保证可跑；下方文档描述的 `probe.mjs` 框架在这里）
+> - `tmp/` = Chrome 临时 profile（不入库）；`output/`、`evidence/` = 产物与证据（不入库）
+> - URL 约定：桥接 `/` = 工作台外壳；控制台 = `/console-huawei`
+
+---
+
+## 附：原探针框架文档（监控路线研究，已冻结）
 
 ## 这个探针要回答什么
 

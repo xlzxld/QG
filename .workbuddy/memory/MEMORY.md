@@ -39,6 +39,16 @@
 - ⚠️ **换绑自测必须零副作用**（只弹确认框再取消）。不要在生产槽位上做"临时换绑"——
   控制台轮询会把 1 秒的瞬时值缓存，之后一次保存就写进正式配置（2026-10-07：34026→34031→34026）
 
+## 项目结构（2026-10-08 深度重组 · 已入 git）
+
+- 布局：`core/`（桥接/启动器/保活/定时器/CDP 底座）｜`platforms/huawei/`（驱动/采集/体检/api/油猴/intercept/recon/实验脚本）；
+  `platforms/showstart/`、`apple/` 占位｜`web/`（workbench + platforms 控制台 + tools 工具页）｜`tools/` 运维小工具
+  ｜`verify/`（活跃工具在根、history 冻结、tmp）｜`docs/`｜`data/grab/`｜`tests/`｜归档不入库
+- git：远程 `https://github.com/xlzxld/QG.git`（代理 127.0.0.1:7897）；**仓库内 core.autocrlf=false**；
+  锚点：tag `baseline-pre-restructure` / 重组 `ebe8e4a` / 回归修复 `693ed86`
+- URL 约定：`/` = 工作台外壳；控制台 = `/console-huawei` 等专属页（**验证脚本打开页面别再用 `/`**）
+- 挪文件规则：同深度不动、深度 +1 的引用补一层（本次 112 项重命名即按此推）
+
 ## 技术约定
 
 - **vmall 是 Next.js 单页应用**：站内跳转不重载文档 → 老脚本判定结果会一直沿用。
@@ -48,7 +58,7 @@
   读判断用的只读接口（校时、队列信息、列表）不算越界。
 - **油猴脚本 `$` 是 getElementById 包装，传纯 id**（写 `$('#x')` 会让整段脚本静默死掉）。
 - 抢购配置：`dryRun` 默认必须谨慎；改完检查 `data/grab/rush-slots.huawei.json` 的槽位。
-- 桥接服务（`scripts/grab-bridge.mjs`）改动后**必须重启**才生效——它不会热加载。
+- 桥接服务（`core/grab-bridge.mjs`）改动后**必须重启**才生效——它不会热加载。
   （重启姿势：**让用户点「重启服务.bat」**——沙箱起的进程活不过命令边界/会话结束；
   会话内救急可用「后台任务」方式撑住，收尾仍要用户侧接管。2026-10-07 再证。）
 - **spawn 子进程一律带 `windowsHide: true`**（2026-10-07，实测取证）：用户环境的 bridge
@@ -63,10 +73,10 @@
   且命中时打显眼日志（crawler-huawei.mjs）。**控制台任何写商品列表的入口后必须 `renderOnlyPicker()`**
   （当年漏在删除流程，已补齐 4 处：删除/商品设置/添加/原始JSON——下拉栏残留=能选中=能操作，属白名单泄漏）。
 - **控制台采集范围 = 下拉栏**（`renderOnlyPicker()`，grab-console.html）：loadConfig /
-  refreshCatalog 时刷新并保留选中值。验证脚本 `grab-probe/verify-only-picker.mjs`。
+  refreshCatalog 时刷新并保留选中值。验证脚本 `verify/history/verify-only-picker.mjs`。
 - **服务常驻与"窗口弹不弹"类验证必须借用户环境**（2026-10-07 实证）：助手沙箱里我启动的进程
   活不过命令结束、沙箱进程树 spawn 的子进程不弹窗口（无法复现对照组）、schtasks/wmic 在黑名单。
-  → 这类验证的姿势：用户点 bat / 点按钮，我在旁采样（`grab-probe/sample_windows.py`）。
+  → 这类验证的姿势：用户点 bat / 点按钮，我在旁采样（`verify/sample_windows.py`）。
 - **常规控制台操作用户自己点界面即可**（加删商品/勾规格/填开售时间/采集/派发），别揽成必经
   助手的事；助手的价值在代码行为层——用户报"配置类"需求时先分辨：界面能做的引导他自己点，
   界面解决不了的（如 2026-10-07 现货挂 saleAt 会提前出手 → 必须加 T0 出手闸门）才动代码。
@@ -75,14 +85,14 @@
   （提前 >65s 派发）走到预开块即 TDZ ReferenceError，整槽崩溃（已修：声明上移 576 行）。
   此类问题用 **tsc 静态扫**：`tsc --noEmit --allowJs --checkJs --target ES2022 --module ES2022
   --moduleResolution bundler --skipLibCheck <文件>` 后 grep `TS2448|TS2454`。
-- **内部通道耗时基准**：`grab-probe/bench-internal-chain.mjs`（真实 Chrome + 生产同款 CDP 链，
+- **内部通道耗时基准**：`verify/bench-internal-chain.mjs`（真实 Chrome + 生产同款 CDP 链，
   可重跑，自动清理）。2026-10-08 实测：内部购买全链 p50 4.6ms / 内部提交 0.5ms /
   trustedClick 47ms / 提交兜底链（含 300ms 硬睡）~352ms。内部通道达标 0.1s，兜底链超标（未修）。
 - **控制台「抢购行为」面板 = 可调参数的唯一入口**（2026-10-08 全量化，5 组 17 项、全大白话标注）：
   新增 `limits.internalFireMs`（内部喊话节奏，默认 50，替代写死的 300）；开关拨动即存、数字走
   「保存设置」；保存是桥接 deepMerge 局部 patch（不丢字段）；页面按 mtime 热重载（改完刷新浏览器）。
-  加字段三步：HTML 元素 + renderSettings 读取 + 保存 patch（开关用 bindInstantSwitch），缺一不可；
-  回归：`grab-probe/verify-console-settings.mjs`（只读冒烟：面板值==配置值 + 零 JS 异常）。
+  加字段三步：HTML 元素 + renderSettings 读取 + 保存 patch（开关用 bindInstantSwitch），缺一不可（2026-10-08 晚按三步补回 setBuyRetry/setMonMax，门户改版曾弄丢）；
+  回归：`verify/verify-console-settings.mjs`（只读冒烟：面板值==配置值 + 零 JS 异常；打开 URL 用 /console-huawei）。
 - **预开确认页路径的提交闸门**（2026-10-08 已修）：改用 `preOpenSubmitLeadMs`（默认 0 = 对准 T0）
   ——不再沿用 T0-500ms 的点击提前量（审计 P1-2：太早发会被服务器"未开始"拒收且失败不补发）。
   · 新观察点：**B 快切路径**命中开出的确认页会立即提交（无 T0 锚定）——待真场次看服务器接受性。
@@ -98,13 +108,14 @@
   改造方向（已沟通待拍板）：P1 文案归一+字段统一；P2 设置面板改为「平台自带设置清单」驱动渲染；
   P3 能力开关 + 桥接注册数据化。目标：加平台=三件套+一份平台描述，控制台零改动。
   建议拿第二个平台当试金石、实战后实施。
+  ★ 2026-10-08 下午已落地门户架构（workbench + 专属页）；P1-P3 留到写第二个平台时再定。
 
 ## 测试约定
 
 - 闸门/判据类改动，必须跑对应实测脚本（真实 Chrome 无头）：
   `verify-list-gate.mjs`（列表闸门）/ `verify-spa-gate.mjs`（SPA 切页）/
   `verify-login-detect.mjs`（登录判据三场景）/ `verify-login-cdp.mjs`（CDP 侧判据）/
-  `grab-probe/verify-picker-refresh.mjs`（删商品后采集下拉栏即时刷新，净零可重复跑；
+  `verify/verify-picker-refresh.mjs`（删商品后采集下拉栏即时刷新，净零可重复跑；
   采集闸门拒绝+对照组用 curl 复核）
 - **测试垫片必须真实现**：`GM_xmlhttpRequest` 要真回调、桥接请求要 `page.route` 代理
   （真实 GM_xmlhttpRequest 绕过 CORS，页面 fetch 不绕）。否则测出来的是垫片的毛病。
@@ -114,14 +125,14 @@
   以桥接日志为准核对）；换绑保存链路用 API + 文件核对验证，别在控制台点保存（会真写）。
   控制台页面代码整体包在 `__runConsole()` 里，不是全局 —— 想在无头浏览器里内省 JS 变量不可行，
   用 DOM 交互测（点按钮/派发 change 事件）。
-- **提交捷径"还能不能走通"验证**：`grab-probe/verify-submit-entry.mjs`（真机：开确认页草稿 →
+- **提交捷径"还能不能走通"验证**：`verify/verify-submit-entry.mjs`（真机：开确认页草稿 →
   测按钮挂载 → 生产同款查找逻辑只查不调 → 自动关页；失败输出页面状态+截图）。
   2026-10-08 实测：入口可达（向上 8 层 handleOrderSubmit）；确认页「提交订单」挂载冷 ~5.8s /
   热 ~0.5s → 驱动提交等待预算 30s。**"提交疑似失效/总走兜底"类问题：先跑它，再翻日志**
   （驱动日志可用 `GET /api/dispatch/status` 拉最近 200 行，含上次运行）。
-- **内部通道/降级链路改动回归**：跑 `grab-probe/bench-internal-chain.mjs` 对照 0.1s 预算
+- **内部通道/降级链路改动回归**：跑 `verify/bench-internal-chain.mjs` 对照 0.1s 预算
   （逐操作实测），并用 tsc --checkJs 扫 TS2448/TS2454 防 TDZ；审计结论在
   《华为抢购脚本审计_内部通道降级与耗时_2026-10-08.md》。
-- **三方案实验脚本（`scripts/rush-experiment-3plans.mjs`）逻辑回归**：
-  `grab-probe/verify-3plans-pick.mjs`（合成数据、零副作用、可重复：待抢购过滤/现货与僵尸排除/
+- **三方案实验脚本（`platforms/huawei/rush-experiment-3plans.mjs`）逻辑回归**：
+  `verify/verify-3plans-pick.mjs`（合成数据、零副作用、可重复：待抢购过滤/现货与僵尸排除/
   随机挑 3/收集时刻推导/重跑保护，11 项断言）。
