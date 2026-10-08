@@ -18,7 +18,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execSync } from 'node:child_process';
+import { execSync, exec as execAsync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { validateIdCard, validatePhone, loadAccountProfile, saveAccountProfile } from '../platforms/damai/account-manager.mjs';
 
@@ -41,26 +41,33 @@ function runAdb(cmd, timeoutMs = 4000) {
   return execSync(cmd, { encoding: 'utf8', timeout: timeoutMs, stdio: 'pipe' });
 }
 
+function parseAdbDevices(output) {
+  const list = [];
+  for (const line of String(output).split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('List of devices attached')) continue;
+    const parts = trimmed.split(/\s+/);
+    if (parts[1] === 'device') {
+      const modelMatch = trimmed.match(/model:(\S+)/);
+      list.push({
+        serial: parts[0],
+        model: modelMatch ? modelMatch[1] : 'Android',
+      });
+    }
+  }
+  return list;
+}
+
 function scanAdbDevices() {
   const now = Date.now();
   if (now - lastAdbScanTime < 2000) return cachedAdbDevices;
   lastAdbScanTime = now;
   try {
     const output = runAdb('adb devices -l', 1500);
-    const list = [];
-    for (const line of output.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('List of devices attached')) continue;
-      const parts = trimmed.split(/\s+/);
-      if (parts[1] === 'device') {
-        const modelMatch = trimmed.match(/model:(\S+)/);
-        list.push({
-          serial: parts[0],
-          model: modelMatch ? modelMatch[1] : 'Android',
-        });
-        // 自动维持 USB 反向端口代理
-        try { runAdb(`adb -s ${parts[0]} reverse tcp:${PORT} tcp:${PORT}`, 1200); } catch (e) {}
-      }
+    const list = parseAdbDevices(output);
+    // 自动维持 USB 反向端口代理
+    for (const d of list) {
+      try { runAdb(`adb -s ${d.serial} reverse tcp:${PORT} tcp:${PORT}`, 1200); } catch (e) {}
     }
     cachedAdbDevices = list;
   } catch (e) {
@@ -68,6 +75,21 @@ function scanAdbDevices() {
   }
   return cachedAdbDevices;
 }
+
+// 后台周期探测: 维持 adb reverse 隧道与设备缓存 (hub 重启 / 手机重插 USB 后自动恢复,
+// 不依赖浏览器控制台是否打开; async 执行避免阻塞事件循环)
+setInterval(() => {
+  execAsync('adb devices -l', { timeout: 2000 }, (err, stdout) => {
+    if (err) { cachedAdbDevices = []; lastAdbScanTime = Date.now(); return; }
+    const list = parseAdbDevices(stdout);
+    lastAdbScanTime = Date.now();
+    cachedAdbDevices = list;
+    for (const d of list) {
+      execAsync(`adb -s ${d.serial} reverse tcp:${PORT} tcp:${PORT}`, { timeout: 1500 }, () => {});
+    }
+    if (list.length) log(`[USB 隧道] 已自动维持 ${list.length} 台设备的 tcp:${PORT} 反向代理`);
+  });
+}, 5000).unref();
 
 if (!fs.existsSync(GRAB_DIR)) fs.mkdirSync(GRAB_DIR, { recursive: true });
 
