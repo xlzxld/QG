@@ -45,7 +45,7 @@ if not defined PLAYWRIGHT_BROWSERS_PATH (
 )
 
 rem ---- run -------------------------------------------------------
-"%NODE_EXE%" "scripts\grab-launcher.mjs" %*
+"%NODE_EXE%" "core\grab-launcher.mjs" %*
 set "EXITCODE=%ERRORLEVEL%"
 
 if not "%EXITCODE%"=="0" (

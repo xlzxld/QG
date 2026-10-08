@@ -35,3 +35,13 @@ pip-wheel-metadata/
 wheels/
 # ----- ↑ 以上为 ZCode 默认排除规则（自定义规则请写在本行下方，不会被同步/恢复改动）-----
 # 自定义规则写在下方（本行提示可删除）
+
+# ── QG 抢购项目（2026-10-08 结构重组后）──
+归档_旧抢购平台_2026-10-08/
+data/grab/chrome-profile-rush/
+data/grab/selftest-profile/
+verify/tmp/
+verify/output/
+verify/evidence/
+verify/node_modules/
+.snapshots/

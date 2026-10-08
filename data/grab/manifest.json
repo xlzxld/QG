@@ -10,7 +10,7 @@
       "desc": "VMall 手机/平板/穿戴设备多槽位真点击秒杀",
       "status": "ready",
       "entryUrl": "/console-huawei",
-      "driverScript": "grab/cdp-rush.mjs",
+      "driverScript": "platforms/huawei/cdp-rush.mjs",
       "slotsFile": "data/grab/rush-slots.huawei.json",
       "configFile": "data/grab/huawei.config.json"
     },
@@ -22,7 +22,7 @@
       "desc": "Livehouse 演出排队、观演人锁定、开票秒杀",
       "status": "prototype",
       "entryUrl": "/console-showstart",
-      "driverScript": "grab/showstart-rush.mjs",
+      "driverScript": "platforms/showstart/showstart-rush.mjs",
       "slotsFile": "data/grab/rush-slots.showstart.json",
       "configFile": "data/grab/showstart.config.json"
     },
@@ -34,7 +34,7 @@
       "desc": "Apple Store 线下直营店现货补货与取货预约",
       "status": "prototype",
       "entryUrl": "/console-apple",
-      "driverScript": "grab/apple-rush.mjs",
+      "driverScript": "platforms/apple/apple-rush.mjs",
       "slotsFile": "data/grab/rush-slots.apple.json",
       "configFile": "data/grab/apple.config.json"
     }

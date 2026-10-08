@@ -34,7 +34,7 @@ if not defined NODE_EXE (
     exit /b 1
 )
 
-"%NODE_EXE%" "scripts\grab-launcher.mjs" --restart
+"%NODE_EXE%" "core\grab-launcher.mjs" --restart
 set "EXITCODE=%ERRORLEVEL%"
 
 echo.

@@ -17,7 +17,7 @@
       "id": 1,
       "name": "华为商城",
       "platform": "huawei",
-      "script": "grab/crawler-huawei.mjs",
+      "script": "platforms/huawei/crawler-huawei.mjs",
       "enabled": true,
       "defaultArgs": [],
       "presetArgs": [

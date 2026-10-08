@@ -1,6 +1,6 @@
 # ============================================================
 # QG 抢购项目 .gitignore
-# （baseline 版：重组前路径口径；重组提交里会更新为新路径）
+# 结构口径：core / platforms / web / tools / verify / docs（2026-10-08 重组后）
 # ============================================================
 
 # ── 依赖（体积大、可重装）──
@@ -16,17 +16,15 @@ data/grab/evidence/
 *.pid
 data/grab/*.log
 data/grab/*.results.jsonl
-data/grab/*.history.jsonl
 data/grab/*-schedule.json
 data/grab/*.bak-*
+# 说明：checkup-history.jsonl 有意入库（低频率的体检证据流水）
 
-# ── 验证区（grab-probe）临时产物 ──
-grab-probe/.probe-work/
-grab-probe/chrome-profile/
-grab-probe/.probe-tmp*/
-grab-probe/output/
-grab-probe/evidence/
-grab-probe/node_modules/
+# ── 验证区（verify/）：临时目录与产物排除 ──
+verify/tmp/
+verify/output/
+verify/evidence/
+verify/node_modules/
 
 # ── 快照 / 编辑器 / 工具运行态 ──
 .snapshots/

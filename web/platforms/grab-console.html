@@ -1,0 +1,1793 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>华为抢购控制台</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#141925; --panel2:#1a2130; --panel3:#202941;
+    --border:#28324a; --border2:#37456a;
+    --fg:#e8edf6; --dim:#94a3b8; --dim2:#64748b;
+    --green:#34d399; --greenBg:rgba(52,211,153,.12);
+    --red:#f87171; --redBg:rgba(248,113,113,.12);
+    --amber:#fbbf24; --amberBg:rgba(251,191,36,.12);
+    --blue:#60a5fa; --blueBg:rgba(96,165,250,.12);
+    --purple:#c084fc;
+    --radius:14px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    padding:0 0 60px;
+  }
+  code, .mono { font-family:ui-monospace,Consolas,monospace; }
+
+  /* ── 顶栏：标题 + 页签 + 状态灯 ── */
+  header {
+    position:sticky; top:0; z-index:20;
+    background:rgba(11,14,20,.93); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--border);
+    padding:10px 28px; display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+  }
+  header .brand { display:flex; align-items:baseline; gap:10px; }
+  header h1 { font-size:17px; font-weight:700; margin:0; letter-spacing:.5px; }
+  header .brand .sub { font-size:11.5px; color:var(--dim2); }
+  .tabs { display:flex; gap:4px; flex-wrap:wrap; }
+  .tab {
+    padding:7px 16px; border-radius:10px; cursor:pointer; color:var(--dim);
+    border:1px solid transparent; font-size:13.5px; user-select:none; transition:all .12s;
+  }
+  .tab:hover { background:var(--panel2); color:var(--fg); }
+  .tab.on { background:var(--panel3); color:var(--fg); border-color:var(--border2); font-weight:600; }
+  .spacer { flex:1; }
+
+  /* 顶栏状态灯 */
+  .lamps { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .lamp {
+    display:inline-flex; align-items:center; gap:7px;
+    font-size:12px; padding:5px 12px; border-radius:20px;
+    background:var(--panel2); border:1px solid var(--border); color:var(--dim);
+  }
+  .lamp b { font-weight:600; color:var(--fg); }
+  .lamp .dot { width:8px; height:8px; border-radius:50%; background:var(--dim2); }
+  .lamp.ok .dot { background:var(--green); box-shadow:0 0 6px var(--green); }
+  .lamp.ok { color:var(--green); border-color:rgba(52,211,153,.35); }
+  .lamp.warn .dot { background:var(--amber); box-shadow:0 0 6px var(--amber); }
+  .lamp.warn { color:var(--amber); border-color:rgba(251,191,36,.35); }
+  .lamp.err .dot { background:var(--red); box-shadow:0 0 6px var(--red); }
+  .lamp.err { color:var(--red); border-color:rgba(248,113,113,.4); background:var(--redBg); }
+
+  main { max-width:1320px; margin:0 auto; padding:22px 28px; }
+  .page { display:none; }
+  .page.on { display:block; }
+
+  /* ── 卡片 ── */
+  .card {
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:var(--radius); padding:20px; margin-bottom:18px;
+  }
+  .card > h2 {
+    font-size:15px; font-weight:700; margin:0 0 6px;
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  }
+  .card > h2 .ico { font-size:16px; }
+  .card > .hint { color:var(--dim); font-size:13px; margin:0 0 16px; }
+  .subttl {
+    font-size:13px; font-weight:700; color:var(--fg); margin:20px 0 12px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .subttl::before { content:''; width:3px; height:14px; border-radius:2px; background:var(--blue); }
+  .subttl:first-of-type { margin-top:4px; }
+  .fhint { color:var(--dim2); font-size:12px; line-height:1.55; margin:6px 0 0; }
+  .f > label.sw { display:flex; margin-bottom:0; }
+
+  /* ── 表单 ── */
+  .f { margin-bottom:14px; }
+  .f > label { display:block; font-size:12.5px; color:var(--dim); margin-bottom:5px; }
+  input[type=text], input[type=number], input[type=datetime-local], select, textarea {
+    width:100%; background:var(--bg); border:1px solid var(--border);
+    color:var(--fg); border-radius:9px; padding:9px 11px;
+    font:13px/1.5 ui-monospace,Consolas,monospace;
+    transition:border-color .12s, box-shadow .12s;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline:none; border-color:var(--blue);
+    box-shadow:0 0 0 3px rgba(96,165,250,.14);
+  }
+  input::placeholder { color:var(--dim2); }
+  textarea { min-height:220px; resize:vertical; line-height:1.6; }
+  .row { display:flex; gap:14px; flex-wrap:wrap; }
+  .row > .f { flex:1; min-width:190px; margin-bottom:14px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0 14px; }
+  @media (max-width:900px){ .grid2,.grid3 { grid-template-columns:1fr; } .row{flex-direction:column;} }
+
+  /* ── 开关 ── */
+  .sw { display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none; }
+  .sw input { display:none; }
+  .sw .track {
+    width:42px; height:24px; border-radius:12px; background:var(--border);
+    position:relative; transition:background .15s; flex:0 0 auto;
+  }
+  .sw .track::after {
+    content:''; position:absolute; top:3px; left:3px; width:18px; height:18px;
+    border-radius:50%; background:#fff; transition:transform .15s;
+  }
+  .sw input:checked + .track { background:var(--green); }
+  .sw input:checked + .track::after { transform:translateX(18px); }
+  .sw .lab { font-size:13px; }
+
+  /* ── 按钮 ── */
+  button {
+    background:var(--green); border:none; color:#06281c; padding:9px 18px;
+    border-radius:10px; cursor:pointer; font-size:13.5px; font-weight:600;
+    transition:filter .12s, transform .05s;
+  }
+  button:hover:not(:disabled) { filter:brightness(1.1); }
+  button:active:not(:disabled) { transform:translateY(1px); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.sec { background:var(--panel2); border:1px solid var(--border); color:var(--fg); }
+  button.sec:hover:not(:disabled) { background:var(--panel3); }
+  button.sm { padding:5px 12px; font-size:12px; border-radius:8px; }
+  button.danger { background:transparent; border:1px solid var(--red); color:var(--red); }
+  button.big { padding:13px 34px; font-size:15px; border-radius:12px; }
+  button.launch { background:linear-gradient(135deg,#34d399,#10b981); box-shadow:0 4px 18px rgba(16,185,129,.3); }
+
+  /* ── 徽章 ── */
+  .badge {
+    display:inline-block; padding:3px 10px; border-radius:20px; font-size:11.5px;
+    border:1px solid var(--border2); color:var(--dim); flex:0 0 auto; background:var(--panel2);
+  }
+  .badge.ok { color:var(--green); border-color:rgba(52,211,153,.4); background:var(--greenBg); }
+  .badge.off { color:var(--dim2); }
+  .badge.warn { color:var(--amber); border-color:rgba(251,191,36,.4); background:var(--amberBg); }
+  .badge.err { color:var(--red); border-color:rgba(248,113,113,.45); background:var(--redBg); }
+  .badge.blue { color:var(--blue); border-color:rgba(96,165,250,.4); background:var(--blueBg); }
+
+  /* ── 首页状态大卡 ── */
+  .statusgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+  .statcard {
+    background:var(--panel2); border:1px solid var(--border); border-radius:12px;
+    padding:16px 18px; display:flex; flex-direction:column; gap:6px;
+  }
+  .statcard .t { font-size:12px; color:var(--dim); }
+  .statcard .v { font-size:22px; font-weight:700; letter-spacing:.5px; }
+  .statcard .v.small { font-size:14px; }
+  .statcard .v.green { color:var(--green); }
+  .statcard .v.red { color:var(--red); }
+  .statcard .v.amber { color:var(--amber); }
+
+  /* ── 商品卡片 ── */
+  .prod {
+    border:1px solid var(--border); border-radius:12px;
+    margin-bottom:14px; overflow:hidden; background:var(--panel2);
+  }
+  .prod > .hd {
+    padding:14px 18px; display:flex; gap:12px; align-items:center;
+    background:var(--panel2); cursor:pointer; user-select:none;
+  }
+  .prod > .hd:hover { background:var(--panel3); }
+  .prod .caret { color:var(--dim); transition:transform .15s; font-size:11px; flex:0 0 auto; }
+  .prod.open .caret { transform:rotate(90deg); }
+  .prod .info { flex:1; min-width:0; }
+  .prod .name { font-size:14px; font-weight:600; margin-bottom:2px; }
+  .prod .url {
+    font-size:11px; color:var(--dim2); overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap;
+  }
+  .prod > .bd { padding:18px; display:none; border-top:1px solid var(--border); }
+  .prod.open > .bd { display:block; }
+
+  /* ── 表格 ── */
+  .tblwrap { overflow-x:auto; border:1px solid var(--border); border-radius:11px; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  th { background:var(--panel2); color:var(--dim); font-weight:500; font-size:11.5px; white-space:nowrap; position:sticky; top:0; }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:rgba(255,255,255,.03); }
+  tbody tr.picked { background:rgba(52,211,153,.08); }
+  tbody tr.picked:hover { background:rgba(52,211,153,.13); }
+  td.px { font-family:ui-monospace,Consolas,monospace; font-weight:600; white-space:nowrap; }
+  td.code { font-family:ui-monospace,Consolas,monospace; color:var(--dim); font-size:11px; white-space:nowrap; }
+  td.attrs { min-width:170px; }
+  .chip {
+    display:inline-block; padding:2px 8px; margin:1px 3px 1px 0;
+    border-radius:6px; background:var(--panel2); border:1px solid var(--border);
+    font-size:11px; color:var(--fg);
+  }
+  input[type=checkbox] { width:16px; height:16px; accent-color:var(--green); cursor:pointer; }
+
+  /* ── 维度筛选 ── */
+  .dims { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center; }
+  .dims .dl { font-size:12px; color:var(--dim); margin-right:2px; }
+  .dimbtn {
+    padding:4px 12px; border-radius:20px; cursor:pointer; font-size:12px;
+    background:var(--panel2); border:1px solid var(--border); color:var(--fg);
+    transition:all .12s;
+  }
+  .dimbtn:hover { border-color:var(--border2); background:var(--panel3); }
+  .dimbtn.on { background:var(--blue); border-color:var(--blue); color:#fff; font-weight:500; }
+
+  /* ── 消息条 ── */
+  .msg { padding:10px 14px; border-radius:10px; font-size:13px; margin:10px 0; display:none; }
+  .msg.on { display:block; }
+  .msg.ok { background:var(--greenBg); color:var(--green); border:1px solid rgba(52,211,153,.3); }
+  .msg.bad { background:var(--redBg); color:var(--red); border:1px solid rgba(248,113,113,.3); }
+  .msg.warn { background:var(--amberBg); color:var(--amber); border:1px solid rgba(251,191,36,.3); }
+  .msg.info { background:var(--blueBg); color:var(--blue); border:1px solid rgba(96,165,250,.28); }
+
+  /* ── 结果表 ── */
+  .oc { font-weight:600; white-space:nowrap; }
+  .oc.good { color:var(--green); }
+  .oc.bad { color:var(--red); }
+  .oc.mid { color:var(--amber); }
+  .oc.other { color:var(--dim); }
+
+  .empty { text-align:center; color:var(--dim2); padding:40px 20px; font-size:13px; }
+  .k { display:grid; grid-template-columns:auto 1fr; gap:6px 16px; font-size:13px; }
+  .k > dt { color:var(--dim); white-space:nowrap; font-weight:600; }
+  .k > dd { margin:0; }
+
+  details > summary {
+    cursor:pointer; color:var(--blue); font-size:12.5px; padding:6px 0;
+    list-style:none; user-select:none;
+  }
+  details > summary::before { content:'▸ '; }
+  details[open] > summary::before { content:'▾ '; }
+  details > summary:hover { text-decoration:underline; }
+
+  .steps { counter-reset:s; padding-left:0; margin:0; list-style:none; }
+  .steps li {
+    counter-increment:s; padding:10px 0 10px 38px; position:relative;
+    border-bottom:1px dashed var(--border); font-size:13.5px;
+  }
+  .steps li:last-child { border-bottom:none; }
+  .steps li::before {
+    content:counter(s); position:absolute; left:0; top:10px;
+    width:24px; height:24px; border-radius:50%; background:var(--panel3);
+    border:1px solid var(--border2); color:var(--blue);
+    display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;
+  }
+  .steps li b { display:block; margin-bottom:2px; }
+  .steps li span { color:var(--dim); font-size:12.5px; }
+
+  pre.logbox {
+    max-height:300px; overflow:auto; white-space:pre-wrap; word-break:break-all;
+    background:#0a0d13; border:1px solid var(--border); border-radius:10px;
+    padding:12px 14px; font-size:12px; line-height:1.7; margin:0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>华为抢购控制台</h1>
+    <span class="sub">个人学习项目</span>
+  </div>
+  <div class="tabs">
+    <div class="tab on" data-p="page-quick">开抢</div>
+    <div class="tab" data-p="page-products">商品与规格</div>
+    <div class="tab" data-p="page-settings">抢购设置</div>
+    <div class="tab" data-p="page-results">抢购结果</div>
+    <div class="tab" data-p="page-checkup">体检</div>
+    <div class="tab" data-p="page-about">怎么用</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="lamps">
+    <span class="lamp" id="lampBridge"><span class="dot"></span>服务</span>
+    <span class="lamp" id="lampDry"><span class="dot"></span>演练</span>
+    <span class="lamp" id="lampDriver"><span class="dot"></span>驱动</span>
+    <span class="lamp" id="lampCountdown"><span class="dot"></span>开售</span>
+  </div>
+</header>
+
+<main>
+
+<!-- ═══════════════ 开抢（主页） ═══════════════ -->
+<div class="page on" id="page-quick">
+
+  <div class="card">
+    <h2><span class="ico">🚀</span>一键开抢</h2>
+    <p class="hint">
+      点「派发」后，每个账号的专用小窗口会自动打开、自动翻到你选的规格、自动盯着购买按钮；
+      到了开售时间自动出手。你只需要保证：<b>窗口里登录着账号</b>。
+    </p>
+    <div class="statusgrid" style="margin-bottom:18px;">
+      <div class="statcard">
+        <div class="t">当前模式</div>
+        <div class="v" id="qkMode">—</div>
+        <div class="t" id="qkModeNote"></div>
+      </div>
+      <div class="statcard">
+        <div class="t">下一次开售</div>
+        <div class="v" id="qkNext">—</div>
+        <div class="t" id="qkNextNote">没填开售时间的商品 = 看到能买就抢</div>
+      </div>
+      <div class="statcard">
+        <div class="t">驱动状态</div>
+        <div class="v small" id="qkDriver">未运行</div>
+        <div class="t" id="qkDriverNote">派发后这里显示运行中</div>
+      </div>
+    </div>
+    <div class="row" style="align-items:center;gap:10px;">
+      <button class="big launch" id="dpLaunch">🚀 派发（全部槽位）</button>
+      <button class="sec" id="dpStop">停止</button>
+      <label class="sw" style="margin-left:12px;">
+        <input type="checkbox" id="setDryRunQuick" />
+        <span class="track"></span>
+        <span class="lab">演练模式（只走到确认订单页，<b>不付钱不下单</b>）</span>
+      </label>
+    </div>
+    <div class="msg" id="dpMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ico">🪑</span>账号槽位 <span class="stat" style="font-weight:400;color:var(--dim);font-size:12px;">一个槽位 = 一个小窗口 = 一个账号 = 抢一个规格</span></h2>
+    <p class="hint">
+      要抢哪些规格：先去「商品与规格」页勾选，再回来点「按勾选生成槽位」（窗口和登录会自动沿用）。
+    </p>
+    <div class="row" style="margin-bottom:10px;">
+      <button class="sec" id="dpSyncChecked">⇩ 按勾选的规格生成槽位</button>
+      <button class="sec" id="dpAddSlot">＋ 手动加一个</button>
+      <span class="spacer" style="flex:1"></span>
+      <button class="sec" id="dpSaveSlots">保存槽位</button>
+    </div>
+    <div class="tblwrap">
+      <table id="dpSlotsTable">
+        <thead>
+          <tr><th style="width:9%;">槽位</th><th style="width:21%;">抢哪个商品</th><th style="width:27%;">抢哪个规格</th><th style="width:24%;">回流时切换哪些规格</th><th style="width:7%;">端口</th><th style="width:10%;">最近结果</th><th></th></tr>
+        </thead>
+        <tbody id="dpSlotsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ico">🫀</span>登录保活守护 <span class="stat" id="kaStatus" style="font-weight:400;color:var(--dim);font-size:12px;">读取中…</span></h2>
+    <p class="hint">开着它，专用窗口的登录就不会因为"半小时没动静"被服务器踢掉（驱动停着也照样续命）。</p>
+    <div class="row" style="align-items:center;gap:10px;">
+      <button class="sec" id="kaStart">启动</button>
+      <button class="sec" id="kaStop">停止</button>
+      <button class="sec" id="kaTest">立即测一轮</button>
+    </div>
+    <pre class="logbox" id="kaLog" style="max-height:120px;margin-top:10px;">（暂无日志）</pre>
+  </div>
+
+  <div class="card">
+    <h2><span class="ico">📜</span>运行日志（实时）</h2>
+    <pre class="logbox" id="dpLog">（暂无日志）</pre>
+  </div>
+
+</div>
+
+<!-- ═══════════════ 商品与规格 ═══════════════ -->
+<div class="page" id="page-products">
+
+  <div class="card">
+    <h2><span class="ico">📥</span>采集商品规格</h2>
+    <p class="hint">
+      点一下「采集」，程序会去你配置的那几个商品页，把所有规格抓下来：价格、库存、开售时间。
+      只去你加过的页面，不会自己乱逛。
+    </p>
+    <div class="row" style="align-items:flex-end;">
+      <div class="f" style="flex:0 0 auto;min-width:240px;">
+        <label>采集哪个商品</label>
+        <select id="onlyId">
+          <option value="">全部商品</option>
+        </select>
+      </div>
+      <div class="f" style="flex:0 0 auto;">
+        <label>&nbsp;</label>
+        <div style="display:flex;gap:8px;">
+          <button id="btnCrawl">采集一次</button>
+          <button class="sec" id="btnRefresh">刷新页面数据</button>
+        </div>
+      </div>
+      <div class="f" style="flex:1;min-width:200px;">
+        <label>&nbsp;</label>
+        <div class="stat" id="crawlStat" style="color:var(--dim);font-size:12.5px;">—</div>
+      </div>
+    </div>
+    <div class="msg" id="crawlMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ico">📦</span>商品列表</h2>
+    <p class="hint">
+      展开一个商品，勾上要抢的规格（颜色、容量那几行），点保存。勾选的编号会写进配置文件，抢购脚本立刻按新目标干活。
+    </p>
+    <div class="msg" id="prodMsg"></div>
+    <div id="prodList"><div class="empty">读取配置中…</div></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ico">➕</span>添加商品</h2>
+    <p class="hint">把商品页的网址粘进来就行。一个网址就是一个商品，不会认错。</p>
+    <div class="row">
+      <div class="f" style="flex:2;">
+        <label>商品页网址</label>
+        <input type="text" id="newUrl" placeholder="https://item.vmall.com/product/comdetail/index.html?prdId=..." />
+      </div>
+      <div class="f" style="flex:1;">
+        <label>备注名（可以不填）</label>
+        <input type="text" id="newId" placeholder="例如 mate90-pro-max" />
+      </div>
+      <div class="f" style="flex:0 0 auto;">
+        <label>&nbsp;</label>
+        <button id="btnAddProd">添加</button>
+      </div>
+    </div>
+    <div class="msg" id="addMsg"></div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ 抢购设置 ═══════════════ -->
+<div class="page" id="page-settings">
+
+  <div class="card">
+    <h2><span class="ico">🎯</span>怎么抢</h2>
+    <div class="grid2">
+      <div class="f">
+        <label>抢购方式</label>
+        <select id="setMode">
+          <option value="rush">到点就抢（推荐）</option>
+          <option value="monitor">只捡回流（不抢首发）</option>
+        </select>
+        <div class="fhint">到点就抢 = 开售瞬间全力抢，没抢到自动转去守回流；只捡回流 = 明知首发没戏、专门等别人退单。</div>
+      </div>
+      <div class="f">
+        <label>提前多少秒把页面准备好</label>
+        <input type="number" id="setEarly" min="0" max="3600" />
+        <div class="fhint">开售前刷新一次商品页进入临战状态。90 秒够用，不用改。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ico">⚡</span>抢多快</h2>
+    <p class="hint">带 ★ 的是直接影响速度的参数（毫秒，越小越快）。数字改完要点下面的「保存设置」。</p>
+
+    <div class="subttl">盯按钮的速度</div>
+    <div class="grid3">
+      <div class="f">
+        <label>★ 临售盯按钮间隔（毫秒）</label>
+        <input type="number" id="setPollHot" min="20" step="10" />
+        <div class="fhint">开抢前后多久看一眼按钮。50 就是最快，再小没意义。</div>
+      </div>
+      <div class="f">
+        <label>★ 走捷径的节奏（毫秒）</label>
+        <input type="number" id="setInternalFire" min="20" step="10" />
+        <div class="fhint">多久允许「喊」一次按钮干活。50 = 最快（推荐）。</div>
+      </div>
+      <div class="f">
+        <label>提前多久进入紧盯（毫秒）</label>
+        <input type="number" id="setHotWindow" min="1000" step="1000" />
+        <div class="fhint">开售前多久切成紧盯模式。3000 = 提前 3 秒。</div>
+      </div>
+    </div>
+
+    <div class="subttl">应急与收尾</div>
+    <div class="grid3">
+      <div class="f">
+        <label>平时盯梢间隔（毫秒）</label>
+        <input type="number" id="setPoll" min="200" step="100" />
+        <div class="fhint">离开售还远时的慢速盯梢，不影响开抢那几秒。</div>
+      </div>
+      <div class="f">
+        <label>开售后多久强刷一次页面（毫秒）</label>
+        <input type="number" id="setFuse" min="200" step="100" />
+        <div class="fhint">按钮迟迟不出现时的救急手段，只刷一次。1000 = 1 秒。</div>
+      </div>
+      <div class="f">
+        <label>没抢到就收手的时限（毫秒）</label>
+        <input type="number" id="setGiveUp" min="10000" step="10000" />
+        <div class="fhint">60000 = 开抢后 1 分钟没戏就转回流监控。</div>
+      </div>
+    </div>
+
+    <div class="subttl">三个提速开关（推荐全开）</div>
+    <div class="grid2">
+      <div class="f">
+        <label class="sw"><input type="checkbox" id="setTrigInternal" /><span class="track"></span><span class="lab">按钮走捷径</span></label>
+        <div class="fhint">不用鼠标去点，直接让按钮背后的代码干活，快约十倍。失败会自动换回鼠标点。</div>
+      </div>
+      <div class="f">
+        <label class="sw"><input type="checkbox" id="setInternalSubmit" /><span class="track"></span><span class="lab">提交订单也走捷径</span></label>
+        <div class="fhint">「提交订单」优先走捷径，不成自动换鼠标点。</div>
+      </div>
+      <div class="f">
+        <label class="sw"><input type="checkbox" id="setIntercept" /><span class="track"></span><span class="lab">按钮提前解锁</span></label>
+        <div class="fhint">把页面收到的倒计时偷偷提前一点点，按钮早一点点亮。只动这台电脑收到的内容，不碰服务器。</div>
+      </div>
+      <div class="f">
+        <label>提前解锁量（毫秒）</label>
+        <input type="number" id="setLead" min="0" step="100" />
+        <div class="fhint">默认 300（0.3 秒）最稳。想调大先演练一次再实战。</div>
+      </div>
+      <div class="f">
+        <label class="sw"><input type="checkbox" id="setWarmup" /><span class="track"></span><span class="lab">结算页预热</span></label>
+        <div class="fhint">开售前先用一个现货商品的结算页把资源焐热——目标商品的结算页从约 5.8 秒变约 0.5 秒。已实测有效。</div>
+      </div>
+      <div class="f">
+        <label class="sw"><input type="checkbox" id="setMonitorOn" /><span class="track"></span><span class="lab">没抢到就守回流</span></label>
+        <div class="fhint">没抢到不收工，继续守着捡别人退单的库存。</div>
+      </div>
+    </div>
+    <div class="f" style="margin-top:4px;">
+      <label>预热用哪个商品（粘商品页网址，留空 = 自动从商品列表里挑现货的）</label>
+      <input type="text" id="setWarmupUrl" placeholder="https://item.vmall.com/product/comdetail/index.html?prdId=...&sbomCode=..." />
+      <div class="fhint">推荐填一个长期现货、价格低的商品。预热只是开草稿看一眼，<b>不会产生订单</b>。改完点上面的「保存设置」。</div>
+    </div>
+
+    <button id="btnSaveSettings">保存设置</button>
+    <div class="msg" id="setMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ico">🔁</span>守回流（捡别人退单）</h2>
+    <p class="hint">
+      别人抢到不付款，约 15 分钟后订单自动取消、库存回流。脚本守着，一有货立刻出手。
+      默认用「切规格」探测：随机来回切规格（不切回），哪个亮出「立即购买」就立刻买哪个、直接提交订单——不用刷新页面，动静小。
+      <b>切换哪些规格：默认 = 该商品勾选要抢的规格；要每个账号不一样，去「开抢」页的槽位表格里单独填</b>（至少配 2 个，只配 1 个切不动会自动改回翻页模式）。
+    </p>
+    <div class="grid3">
+      <div class="f">
+        <label>探测方式</label>
+        <select id="setScanMode">
+          <option value="sku">切规格探测（推荐，动静小）</option>
+          <option value="refresh">整页刷新（老办法，动静大）</option>
+        </select>
+        <div class="fhint">切规格 = 在页面上来回换规格逼它刷新库存；整页刷新 = 老办法翻页。</div>
+      </div>
+      <div class="f">
+        <label>切规格间隔（秒）</label>
+        <input type="number" id="setMonDense" min="5" step="5" />
+        <div class="fhint">多久切一次。默认 10 秒，别小于 5 秒。</div>
+      </div>
+      <div class="f">
+        <label>之后放慢到（秒）</label>
+        <input type="number" id="setMonPoll" min="20" step="10" />
+        <div class="fhint">前 40 分钟过后放慢的节奏。默认 60。</div>
+      </div>
+    </div>
+    <div class="fhint" style="margin-top:4px;">
+      另外脚本会自动每 8 分钟发一次轻请求给商城「续命」——不这样做，窗口挂约 15 分钟不掉线也会掉（实测根因）。
+    </div>
+    <div style="margin-top:14px;">
+      <button id="btnSaveSettings2" class="sec">保存回流的设置</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ico">🧾</span>每个商品单独的条件</h2>
+    <p class="hint">价格上限、购买数量、开售时间按商品分别填。开售时间留空 = 不定时，看到能买就抢。格式：2026-10-08T10:08:00+08:00</p>
+    <div id="perProduct"></div>
+    <div class="msg" id="ppMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ico">🔧</span>原始配置文件（给懂行的人）</h2>
+    <p class="hint">面板改的就是 <code class="mono">data/grab/huawei.config.json</code>，用记事本直接改也一样。</p>
+    <details>
+      <summary>展开编辑原始 JSON</summary>
+      <div style="display:flex;gap:8px;margin:10px 0;">
+        <button class="sec sm" id="btnLoadRaw">重新载入</button>
+        <span style="align-self:center;color:var(--dim);font-size:12px;">改动会立即写回磁盘</span>
+      </div>
+      <textarea id="rawJson" class="mono" spellcheck="false"></textarea>
+      <div style="margin-top:12px;"><button id="btnSaveRaw">保存这份 JSON</button></div>
+      <div class="msg" id="rawMsg"></div>
+    </details>
+  </div>
+
+</div>
+
+<!-- ═══════════════ 抢购结果 ═══════════════ -->
+<div class="page" id="page-results">
+  <div class="card">
+    <h2><span class="ico">📊</span>抢购结果 <span class="stat" id="resCount" style="font-weight:400;color:var(--dim);font-size:12px;"></span></h2>
+    <p class="hint">
+      只有<b>平台真实返回的订单号才算抢到</b>。读不到订单号会老老实实写「结果不确定」，绝不编一个。
+      抢到后记得 15 分钟内去付款，不付订单会自动取消。
+    </p>
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
+      <button class="sec sm" id="btnRefreshRes">刷新</button>
+      <label class="sw"><input type="checkbox" id="autoRes" checked /><span class="track"></span><span class="lab">每 5 秒自动刷新</span></label>
+    </div>
+    <div class="msg" id="resMsg"></div>
+    <div id="resBox"><div class="empty">暂无记录</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════ 体检 ═══════════════ -->
+<div class="page" id="page-checkup">
+  <div class="card">
+    <h2><span class="ico">🩺</span>改版体检 <span class="stat" id="ckSummary" style="font-weight:400;color:var(--dim);font-size:12px;"></span></h2>
+    <p class="hint">
+      抢购脚本押在华为页面的结构和接口上，<b>华为一改版脚本就会悄悄失灵</b>。
+      体检就是把所有押注拿去真环境里验一遍：✅正常 · ⚠️漂移（告诉你改哪里）· ○跳过 · ❌故障。
+      每天会自动跑一次；开抢当天建议手动再点一次。
+    </p>
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+      <button id="ckRun">🔍 立即体检</button>
+      <button class="sec sm" id="ckRefresh">刷新</button>
+      <span class="stat" id="ckStatus" style="color:var(--dim);font-size:12.5px;">未加载</span>
+      <label class="sw"><input type="checkbox" id="ckAuto" checked /><span class="track"></span><span class="lab">运行中每 3 秒自动刷新</span></label>
+    </div>
+    <pre class="logbox" id="ckLog" style="display:none;max-height:160px;"></pre>
+    <div id="ckReport"><div class="empty">还没体检过。点「立即体检」跑一次（约 20~60 秒）。</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════ 怎么用 ═══════════════ -->
+<div class="page" id="page-about">
+
+  <div class="card">
+    <h2><span class="ico">🧭</span>完整流程（照着走一遍就会）</h2>
+    <ol class="steps">
+      <li><b>加商品</b><span>在「商品与规格」页把商品页网址粘进去，点添加。</span></li>
+      <li><b>采集</b><span>点「采集一次」，等十几秒，所有规格就出来了（价格、库存、开售时间）。</span></li>
+      <li><b>勾规格</b><span>展开商品，勾上要抢的那个规格，点保存。</span></li>
+      <li><b>生成槽位</b><span>回「开抢」页点「按勾选的规格生成槽位」，保存。</span></li>
+      <li><b>先演练一遍</b><span>打开演练模式开关，点「派发」。第一次会在小窗口里要求登录华为账号（登一次长期有效）。演练会走到确认订单页就停，不下单。</span></li>
+      <li><b>体检</b><span>「体检」页点「立即体检」，全绿才放心。</span></li>
+      <li><b>真抢</b><span>关掉演练模式。开售前 90 秒点「派发」，之后全自动：到点出手 → 进结算页 → 提交订单。</span></li>
+      <li><b>看结果 & 付款</b><span>「抢购结果」页看到订单号就成了，15 分钟内去付款（付款永远人工）。</span></li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2><span class="ico">💡</span>几个概念，大白话版</h2>
+    <dl class="k">
+      <dt>槽位</dt><dd>一个槽位 = 一个自动开的小浏览器窗口 = 一个账号 = 抢一个规格。窗口里登录一次，以后一直用。</dd>
+      <dt>规格（SKU）</dt><dd>同一商品下的每个具体版本（颜色 × 容量）各是一个规格，有自己的编号、价格、库存。全按编号认，绝不靠名字猜。</dd>
+      <dt>开售时间</dt><dd>按华为服务器的时间算，不受你电脑时钟快慢影响。</dd>
+      <dt>走捷径</dt><dd>不模拟鼠标点按钮，直接调用按钮背后现成的代码。快约十倍，失败自动换回鼠标点。</dd>
+      <dt>预热</dt><dd>开售前用别的现货商品把「结算页」打开一次焐热资源，轮到目标商品时结算页秒开（实测 5.8 秒 → 0.5 秒）。</dd>
+      <dt>回流</dt><dd>别人抢到不付款，15 分钟后库存自动放回来。脚本守着捡这部分。</dd>
+      <dt>续命</dt><dd>每 8 分钟给商城发个轻请求保住登录。实测约 15 分钟没动静，登录就会掉（就算窗口一直开着）。</dd>
+      <dt>库存 1000</dt><dd>是平台的封顶数字，意思是「充足」，不是正好 1000 台。</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2><span class="ico">🛑</span>底线（写在代码里的规矩）</h2>
+    <dl class="k">
+      <dt>付款永远人工</dt><dd>脚本到「订单提交成功」为止，付钱这一步永远你自己来。</dd>
+      <dt>遇到验证就停</dt><dd>弹出验证码 / 安全验证，脚本立刻停下等人，绝不尝试绕过。</dd>
+      <dt>不伪造请求</dt><dd>所有下单动作都由页面自己的代码发出（真实点击 / 页面内部函数），不拼请求、不重放、不破解签名。</dd>
+      <dt>绝不乱抢</dt><dd>页面选中的规格和槽位绑定的规格对不上时，宁可停也不抢错。</dd>
+      <dt>订单号不编造</dt><dd>读不到就写「结果不确定」，让你去「我的订单」里核对。</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2><span class="ico">📁</span>文件都在哪</h2>
+    <dl class="k">
+      <dt>配置</dt><dd class="mono">data/grab/huawei.config.json</dd>
+      <dt>采集结果</dt><dd class="mono">data/grab/huawei.catalog.json</dd>
+      <dt>结果记录</dt><dd class="mono">data/grab/huawei.results.jsonl</dd>
+      <dt>真抢驱动</dt><dd class="mono">platforms/huawei/cdp-rush.mjs</dd>
+      <dt>改版体检</dt><dd class="mono">platforms/huawei/checkup-vmall.mjs</dd>
+      <dt>本地服务</dt><dd class="mono">core/grab-bridge.mjs</dd>
+      <dt>本页面</dt><dd class="mono">web/platforms/grab-console.html</dd>
+    </dl>
+  </div>
+
+</div>
+
+</main>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+ * 全部代码包在 __runConsole 里，等 DOM 解析完才执行（避免绑定不到元素）
+ * ═══════════════════════════════════════════════════════════════════ */
+function __runConsole() {
+
+let CFG = null;
+let CATALOG = null;
+let PLATFORM = null;
+let resTimer = null;
+let countTimer = null;
+/* 商品列表的展开状态：记住用户展开的是哪个商品。
+ * 修 bug（2026-10-08）：以前每次重渲染（保存任何东西都会触发）都"默认展开第一个商品"，
+ * 排在第一的 mate90-pro-max 就总被强行弹开。现在：动过之后还原用户自己的展开状态，
+ * 只有第一次进页面才默认展开第一个。 */
+const prodOpen = { touched: false, url: null };
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function say(el, text, cls) {
+  const e = typeof el === 'string' ? $(el) : el;
+  if (!e) return;
+  e.className = 'msg on ' + (cls || 'info');
+  e.innerHTML = text;
+}
+function clearMsg(el) {
+  const e = typeof el === 'string' ? $(el) : el;
+  if (e) { e.className = 'msg'; e.textContent = ''; }
+}
+
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  const j = await r.json().catch(() => ({ error: 'HTTP ' + r.status }));
+  return j;
+}
+async function getJson(url) { return api(url); }
+async function postJson(url, body) {
+  return api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+
+function fmtDT(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso).slice(0, 16).replace('T', ' ');
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function fmtAgo(ms) {
+  if (ms == null) return '';
+  if (ms <= 0) return '已到点';
+  const sec = Math.round(ms / 1000);
+  if (sec < 90) return `还有 ${sec} 秒`;
+  const min = Math.round(ms / 60000);
+  if (min < 90) return `还有 ${min} 分钟`;
+  const h = Math.floor(min / 60);
+  if (h < 36) return `还有 ${h} 小时 ${min % 60} 分`;
+  return `还有 ${Math.floor(h / 24)} 天 ${h % 24} 小时`;
+}
+
+function invText(qty, capped) {
+  if (qty == null) return '<span style="color:var(--dim2)">未开售</span>';
+  if (qty === 0) return '<span style="color:var(--red)">缺货</span>';
+  if (capped) return '<span style="color:var(--green)">充足</span>';
+  return `<span style="color:var(--green)">${qty}</span>`;
+}
+
+function normSku(s) {
+  const r = s.rushBuy || null;
+  return {
+    id: s.skuId ?? s.sbomCode ?? '',
+    label: s.label ?? '',
+    attrs: s.attrs || {},
+    price: s.price ?? null,
+    statusText: s.statusText ?? s.buyableText ?? '未知',
+    buyable: s.buyable ?? s.buyableNow ?? null,
+    saleStartAt: s.saleStartAt ?? (r ? r.startTime : null),
+    saleStartsInMs: r && r.startsInMs != null ? r.startsInMs : null,
+    limitPerUser: s.limitPerUser ?? (r ? r.limitNum : null) ?? s.limitedQuantity ?? null,
+    stockQty: s.stockQty ?? s.inventoryQty ?? null,
+    stockCapped: s.stockCapped ?? s.inventoryCapped ?? false,
+  };
+}
+
+function platformMeta() {
+  const m = (CATALOG && CATALOG.platformMeta) || {};
+  return {
+    label: m.label || '当前平台',
+    skuIdLabel: m.skuIdLabel || 'SKU 编号',
+    specLabel: m.specLabel || '规格',
+    addUrlPlaceholder: m.addUrlPlaceholder || '商品页地址',
+    orderLookupHint: m.orderLookupHint || '在平台的「我的订单」里核对',
+  };
+}
+
+function buyBadge(sk) {
+  const t = sk.statusText || '未知';
+  if (sk.buyable) return '<span class="badge ok">可买</span>';
+  if (t.includes('抢购')) return '<span class="badge warn">待抢购</span>';
+  if (t.includes('缺货') || t.includes('售罄')) return '<span class="badge err">缺货</span>';
+  return `<span class="badge">${esc(t)}</span>`;
+}
+
+/* ═══════════════ 页面切换 ═══════════════ */
+document.querySelectorAll('.tab').forEach((t) => {
+  t.onclick = () => {
+    document.querySelectorAll('.tab').forEach((x) => x.classList.remove('on'));
+    document.querySelectorAll('.page').forEach((x) => x.classList.remove('on'));
+    t.classList.add('on');
+    $(t.dataset.p).classList.add('on');
+  };
+});
+
+/* ═══════════════ 槽位（开抢页） ═══════════════ */
+let dpSlots = [];
+let dpSlotsSrc = {};
+let dpLastBySlot = {};
+let dpDirty = false;
+
+const dpPrdOf = (url) => (String(url).match(/prdId=(\d+)/) || [])[1] || '';
+const dpCatProd = (prd) => ((CATALOG && CATALOG.products) || []).find((x) => String(x.prdId) === String(prd));
+const dpSkuOf = (prd, code) => {
+  const prod = dpCatProd(prd);
+  return prod ? (prod.skus || []).find((s) => String(s.skuId) === String(code)) : null;
+};
+
+function dpCheckedOf(prd) {
+  const p = (CFG.products || []).find((x) => dpPrdOf(x.url) === String(prd));
+  return ((p && (p.skuIds || p.sbomCodes)) || []).map(String);
+}
+const dpNameOf = (prd) => {
+  const p = (CFG.products || []).find((x) => dpPrdOf(x.url) === String(prd));
+  return p ? (p.id || String(prd)) : String(prd);
+};
+const dpSnapBindings = (list) => {
+  const o = {};
+  for (const s of (list || [])) o[s.id] = { prdId: String(s.prdId), sbomCode: String(s.sbomCode) };
+  return o;
+};
+function dpRebindList() {
+  const out = [];
+  for (const s of dpSlots) {
+    const was = dpSlotsSrc[s.id];
+    if (!was) continue;
+    if (was.prdId !== String(s.prdId) || was.sbomCode !== String(s.sbomCode)) out.push({ s, was });
+  }
+  return out;
+}
+function dpConfirmRebind() {
+  const ch = dpRebindList();
+  if (!ch.length) return true;
+  const lines = ch.map((c) => `  ${c.s.id}：${dpNameOf(c.was.prdId)}（${c.was.sbomCode}）→ ${dpNameOf(c.s.prdId)}（${c.s.sbomCode}）`).join('\n');
+  return confirm(`以下槽位要换绑商品/规格：\n${lines}\n\n换绑后旧体检报告作废、「最近结果」清空。继续？`);
+}
+
+function dpSkuOptions(prd, sel) {
+  const checked = dpCheckedOf(prd);
+  if (!checked.length) return `<option value="${esc(sel || '')}">${esc(sel || '（先去「商品与规格」页勾选并保存）')}</option>`;
+  return checked.map((code) => {
+    const sk = dpSkuOf(prd, code);
+    const stock = sk ? (sk.buyable ? '✅有货' : (/缺货|售罄/.test(sk.statusText || '') ? '⛔缺货' : '⏳' + (sk.statusText || '待开售'))) : '';
+    const lab = `${(sk && sk.label) || code}（${stock}${sk && sk.price != null ? ' · ¥' + sk.price : ''}）`;
+    return `<option value="${esc(code)}" ${String(sel) === String(code) ? 'selected' : ''}>${esc(lab)}</option>`;
+  }).join('');
+}
+
+function outcomeBadge(r) {
+  const o = r.outcome || '未知';
+  const cls = /DRY_RUN_OK|ORDER_SUBMITTED/.test(o) ? 'ok'
+    : /WAITING_HUMAN/.test(o) ? 'warn'
+    : /FAILED|NO_EFFECT|GIVE_UP|ERROR/.test(o) ? 'err' : '';
+  const t = fmtDT(r.at || r.receivedAt);
+  return `<span class="badge ${cls}" title="${esc(t)} ${esc(r.message || '')}">${esc(humanOutcome(o))}</span>`;
+}
+
+function dpResCell(s) {
+  const r = dpLastBySlot[s.id];
+  if (!r) return '<span style="color:var(--dim2);font-size:12px;">—</span>';
+  if (r.pageUrl && s.prdId && !String(r.pageUrl).includes(String(s.prdId))) {
+    return '<span style="color:var(--dim2);font-size:12px;" title="换绑后未运行过">—</span>';
+  }
+  return outcomeBadge(r);
+}
+
+function dpFreeId() {
+  let n = 1;
+  while (dpSlots.some((s) => s.id === 'acc' + n)) n += 1;
+  return 'acc' + n;
+}
+function dpFreePort() {
+  let port = 9401;
+  while (dpSlots.some((s) => Number(s.port) === port)) port += 1;
+  return port;
+}
+
+function renderDpSlots() {
+  const tb = $('dpSlotsBody');
+  tb.innerHTML = '';
+  for (const s of dpSlots) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="mono">${esc(s.id || '')}</td>
+      <td><select data-k="prdId">${(CFG.products || []).filter((p) => p.enabled !== false).map((p) => {
+        const prd = dpPrdOf(p.url);
+        return `<option value="${esc(prd)}" ${String(s.prdId) === prd ? 'selected' : ''}>${esc(p.id || prd)}</option>`;
+      }).join('')}</select></td>
+      <td><select data-k="sbomCode">${dpSkuOptions(s.prdId, s.sbomCode)}</select></td>
+      <td><input type="text" class="slotScan" value="${esc((s.scanSboms || []).join(', '))}" placeholder="留空 = 抢购勾选的规格" title="回流监控时随机切换的规格编号，逗号分隔。留空 = 该商品勾选要抢的规格。多个账号各配各的。" /></td>
+      <td class="mono">${esc(s.port || '')}</td>
+      <td class="dpRes" data-slot="${esc(s.id || '')}">${dpResCell(s)}</td>
+      <td><button class="sec sm dpDel">删</button></td>`;
+    const prdSel = tr.querySelector('select[data-k="prdId"]');
+    const skuSel = tr.querySelector('select[data-k="sbomCode"]');
+    prdSel.onchange = () => {
+      s.prdId = prdSel.value;
+      s.sbomCode = dpCheckedOf(s.prdId)[0] || '';
+      skuSel.innerHTML = dpSkuOptions(s.prdId, s.sbomCode);
+      dpDirty = true;
+    };
+    skuSel.onchange = () => { s.sbomCode = skuSel.value; dpDirty = true; };
+    tr.querySelector('.slotScan').onchange = (e) => {
+      s.scanSboms = e.target.value.split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean);
+      dpDirty = true;
+    };
+    tr.querySelector('.dpDel').onclick = () => {
+      dpSlots = dpSlots.filter((x) => x !== s);
+      dpDirty = true;
+      renderDpSlots();
+    };
+    tb.appendChild(tr);
+  }
+}
+
+$('dpSyncChecked').onclick = () => {
+  const want = [];
+  for (const p of (CFG.products || [])) {
+    if (p.enabled === false) continue;
+    const prd = dpPrdOf(p.url);
+    for (const sid of (p.skuIds || p.sbomCodes || [])) want.push({ prdId: prd, sbomCode: String(sid) });
+  }
+  const uniq = want.filter((w, i) => want.findIndex((v) => v.prdId === w.prdId && v.sbomCode === w.sbomCode) === i);
+  if (!uniq.length) { say('dpMsg', '「商品与规格」页还没勾任何规格，先去勾选并保存。', 'bad'); return; }
+  const pool = dpSlots.slice();
+  const used = new Set();
+  const next = [];
+  for (const w of uniq) {
+    const i = pool.findIndex((s, idx) => !used.has(idx) && String(s.sbomCode) === String(w.sbomCode) && String(s.prdId) === String(w.prdId));
+    if (i >= 0) { used.add(i); next.push({ ...pool[i], prdId: w.prdId, sbomCode: w.sbomCode }); }
+  }
+  for (const w of uniq) {
+    if (next.some((s) => String(s.prdId) === String(w.prdId) && String(s.sbomCode) === String(w.sbomCode))) continue;
+    const idx = pool.findIndex((s, i) => !used.has(i));
+    if (idx >= 0) { used.add(idx); next.push({ ...pool[idx], prdId: w.prdId, sbomCode: w.sbomCode }); }
+    else next.push({ id: dpFreeId(), prdId: w.prdId, sbomCode: w.sbomCode, port: dpFreePort() });
+  }
+  dpSlots = next;
+  dpDirty = true;
+  renderDpSlots();
+  say('dpMsg', `已生成 ${next.length} 个槽位（每个规格一个，已有窗口和登录自动沿用）。直接「派发」或先「保存槽位」。`, 'ok');
+};
+
+$('dpAddSlot').onclick = () => {
+  const first = (CFG.products || []).find((p) => p.enabled !== false);
+  const prd = first ? dpPrdOf(first.url) : '';
+  dpSlots.push({ id: dpFreeId(), prdId: prd, sbomCode: dpCheckedOf(prd)[0] || '', port: dpFreePort() });
+  dpDirty = true;
+  renderDpSlots();
+};
+
+async function loadDispatchStatus() {
+  if (!PLATFORM) return;
+  try {
+    const st = await getJson(`/api/dispatch/status?platform=${PLATFORM}`);
+    // 顶栏驱动灯 + 首页驱动卡片
+    const running = !!st.running;
+    setLamp('lampDriver', running ? 'warn' : '', running ? '运行中' : '空闲');
+    $('qkDriver').textContent = running
+      ? `运行中（${fmtDT(st.startedAt)} 起）`
+      : (st.lastExit ? `上次退出 ${fmtDT(st.lastExit.at)}` : '未运行');
+    $('qkDriverNote').textContent = running ? '窗口已就位，等登录 / 等开售' : '派发后这里显示运行中';
+    $('dpLog').textContent = (st.log || []).join('\n') || '（暂无日志）';
+    syncStatusToWorkbenchParent();
+    // 槽位：本地有未保存改动时不覆盖
+    const editing = document.activeElement && $('dpSlotsBody').contains(document.activeElement);
+    if (!editing && !dpDirty) {
+      dpSlots = (st.slots && st.slots.slots) || [];
+      dpSlotsSrc = dpSnapBindings(dpSlots);
+      renderDpSlots();
+    }
+    try {
+      const rr = await getJson(`/api/results/${PLATFORM}?limit=30`);
+      dpLastBySlot = {};
+      for (const r of (rr.results || [])) {
+        const k = r.profileId || '(默认)';
+        const prev = dpLastBySlot[k];
+        if (!prev || String(r.at || r.receivedAt) > String(prev.at || prev.receivedAt)) dpLastBySlot[k] = r;
+      }
+      for (const td of document.querySelectorAll('#dpSlotsBody .dpRes')) {
+        const s = dpSlots.find((x) => x.id === td.dataset.slot) || { id: td.dataset.slot };
+        td.innerHTML = dpResCell(s);
+      }
+    } catch { /* 结果读不到不影响 */ }
+  } catch (e) {
+    $('qkDriver').textContent = '加载失败：' + e.message;
+  }
+}
+
+/* ═══════════════ 顶栏状态灯 ═══════════════ */
+function setLamp(id, cls, text) {
+  const el = $(id);
+  if (!el) return;
+  el.className = 'lamp' + (cls ? ' ' + cls : '');
+  if (text != null) el.childNodes[el.childNodes.length - 1].textContent = text;
+}
+
+async function loadLamps() {
+  // 服务灯
+  try {
+    const s = await getJson('/health');
+    setLamp('lampBridge', s.ok ? 'ok' : 'err', s.ok ? '服务正常' : '服务异常');
+  } catch { setLamp('lampBridge', 'err', '服务没响应'); }
+  if (!CFG) return;
+  // 演练灯
+  const dry = CFG.dryRun !== false;
+  setLamp('lampDry', dry ? 'ok' : 'err', dry ? '演练中（不下单）' : '真抢（会下单！）');
+  const qk = $('setDryRunQuick');
+  if (qk && qk.checked !== dry) qk.checked = dry;
+  // 开售倒计时：找最近的未来 saleAt
+  const times = [];
+  for (const p of (CFG.products || [])) {
+    if (p.enabled === false || !p.saleAt) continue;
+    const t = new Date(p.saleAt).getTime();
+    if (Number.isFinite(t) && t > Date.now() - 60 * 1000) times.push({ t, p });
+  }
+  times.sort((a, b) => a.t - b.t);
+  if (times.length) {
+    const left = times[0].t - Date.now();
+    setLamp('lampCountdown', left < 10 * 60 * 1000 ? 'warn' : '', fmtAgo(left));
+    $('qkNext').textContent = fmtDT(times[0].p.saleAt);
+    $('qkNext').className = 'v' + (left < 10 * 60 * 1000 ? ' amber' : '');
+    $('qkNextNote').textContent = `${times[0].p.id || ''} · 共 ${times.length} 个待开售`;
+  } else {
+    setLamp('lampCountdown', '', '未设定');
+    $('qkNext').textContent = '看到能买就抢';
+    $('qkNextNote').textContent = '没填开售时间的商品不倒计时';
+  }
+  // 首页模式卡
+  $('qkMode').textContent = (CFG.mode || 'rush') === 'monitor' ? '只捡回流' : '到点就抢';
+  $('qkMode').className = 'v' + ((CFG.mode || 'rush') === 'monitor' ? ' amber' : ' green');
+  $('qkModeNote').textContent = (CFG.mode || 'rush') === 'monitor'
+    ? '不抢首发，专门等别人退单的库存'
+    : CFG.monitor?.enabled === true ? '没抢到会自动转守回流' : '没抢到就收工（回流监控未开）';
+  syncStatusToWorkbenchParent();
+}
+
+function syncStatusToWorkbenchParent() {
+  if (window.parent && window.parent !== window) {
+    try {
+      const getLampText = (id) => {
+        const el = $(id);
+        return el ? (el.childNodes[el.childNodes.length - 1]?.textContent?.trim() || '') : '';
+      };
+      window.parent.postMessage({
+        type: 'PLATFORM_STATUS_SYNC',
+        platform: 'huawei',
+        data: {
+          bridge: { ok: $('lampBridge')?.classList.contains('ok') ?? false, text: getLampText('lampBridge') },
+          dryRun: { active: $('lampDry')?.classList.contains('ok') ?? false, text: getLampText('lampDry') },
+          driver: { running: $('lampDriver')?.classList.contains('warn') ?? false, text: getLampText('lampDriver') },
+          countdown: { text: getLampText('lampCountdown') },
+        }
+      }, '*');
+    } catch { /* 忽略跨域或异常 */ }
+  }
+}
+
+async function loadStatus() {
+  const s = await getJson('/api/crawler/status');
+  if (!s || s.error) return;
+  const bits = [];
+  bits.push(s.running ? '<span style="color:var(--amber)">采集中…</span>' : '空闲');
+  if (s.lastRunAt) {
+    const c = s.lastRunSummary && s.lastRunSummary.counts;
+    const n = c ? (c.skus ?? c.products) : null;
+    bits.push(`上次采集 ${fmtDT(s.lastRunAt)}` + (n != null ? ` · ${n} 项` : '') + (s.lastRunExitCode === 0 ? '' : ' <span style="color:var(--red)">失败</span>'));
+  }
+  const el = $('crawlStat');
+  if (el && !/正在采集/.test(el.innerHTML)) el.innerHTML = bits.join(' · ') || '—';
+}
+
+/* ═══════════════ 配置载入 ═══════════════ */
+async function loadConfig() {
+  const cfg = await getJson('/api/config/' + PLATFORM);
+  if (cfg.error) { say('prodMsg', cfg.error, 'bad'); return; }
+  CFG = cfg;
+  if (!Array.isArray(CFG.products)) CFG.products = [];
+  renderProducts();
+  renderSettings();
+  renderPerProduct();
+  renderOnlyPicker();
+  $('rawJson').value = JSON.stringify(CFG, null, 2);
+  loadLamps();
+}
+
+function crawlerProductId(p, i) {
+  const url = String((p && p.url) || '');
+  const m = url.match(/prdId=(\d{6,})/) ||
+    url.match(/\/product\/(\d{6,})\.html/) ||
+    url.match(/\/product\/(\d{6,})/);
+  return String((p && p.id) || (m ? m[1] : '') || `product_${i + 1}`).trim();
+}
+
+function renderOnlyPicker() {
+  const sel = $('onlyId');
+  if (!sel) return;
+  const prev = sel.value;
+  const opts = ['<option value="">全部商品</option>'];
+  (Array.isArray(CFG && CFG.products) ? CFG.products : []).forEach((p, i) => {
+    if (!p || !p.url) return;
+    const value = crawlerProductId(p, i);
+    if (!value) return;
+    const c = CATALOG && Array.isArray(CATALOG.products)
+      ? CATALOG.products.find((x) => x.url === p.url)
+      : null;
+    const name = (c && c.name) || p.id || value;
+    const off = p.enabled === false ? '（已停用）' : '';
+    opts.push(`<option value="${esc(value)}">${esc(name)}${off}</option>`);
+  });
+  sel.innerHTML = opts.join('');
+  if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
+}
+
+function renderSettings() {
+  $('setDryRunQuick').checked = CFG.dryRun !== false;
+  $('setMode').value = CFG.mode || 'rush';
+  $('setEarly').value = CFG.earlyEnterSec ?? 90;
+  $('setPoll').value = CFG.limits?.pollIntervalMs ?? 3000;
+  $('setPollHot').value = CFG.limits?.pollIntervalHotMs ?? 150;
+  $('setHotWindow').value = CFG.limits?.hotWindowMs ?? 10000;
+  $('setGiveUp').value = CFG.limits?.giveUpAfterMs ?? 60000;
+  $('setInternalFire').value = CFG.limits?.internalFireMs ?? 50;
+  $('setFuse').value = CFG.limits?.fuseRefreshDelayMs ?? 1000;
+  $('setLead').value = CFG.intercept?.leadMs ?? 300;
+  $('setTrigInternal').checked = CFG.triggerMode === 'internal';
+  $('setInternalSubmit').checked = CFG.internalSubmit !== false;
+  $('setIntercept').checked = !!(CFG.intercept && CFG.intercept.enabled);
+  $('setWarmup').checked = !(CFG.warmup && CFG.warmup.enabled === false);
+  $('setWarmupUrl').value = (CFG.warmup && CFG.warmup.url) || '';
+  $('setMonitorOn').checked = CFG.monitor?.enabled === true;
+  $('setScanMode').value = CFG.monitor?.scanMode === 'refresh' ? 'refresh' : 'sku';
+  $('setMonDense').value = CFG.monitor?.skuScanSecs ?? 10;
+  $('setMonPoll').value = CFG.monitor?.pollSecs ?? 60;
+}
+
+/* 演练开关（首页 + 拨动立即落盘） */
+async function saveDryRun(on, src) {
+  const r = await postJson('/api/config/' + PLATFORM, { dryRun: on });
+  if (r.ok) {
+    CFG = r.config;
+    if (src !== 'quick') $('setDryRunQuick').checked = on;
+    loadLamps();
+    say('dpMsg', on
+      ? '✅ 已保存：演练模式开（走到确认订单页为止，不下单）'
+      : '🔴 已保存：演练模式关（真抢——派发后会真实下单！）', on ? 'ok' : 'warn');
+  } else {
+    say('dpMsg', '保存失败：' + esc(r.error), 'bad');
+    $('setDryRunQuick').checked = !on;
+  }
+}
+$('setDryRunQuick').addEventListener('change', (e) => saveDryRun(e.target.checked, 'quick'));
+
+/* 即落盘开关 */
+function bindInstantSwitch(id, buildPatch, onText, offText) {
+  $(id).addEventListener('change', async () => {
+    const on = $(id).checked;
+    const r = await postJson('/api/config/' + PLATFORM, buildPatch(on));
+    if (r.ok) {
+      CFG = r.config;
+      say('setMsg', on ? onText : offText, 'ok');
+      loadLamps();
+    } else {
+      $(id).checked = !on;
+      say('setMsg', '保存失败：' + esc(r.error), 'bad');
+    }
+  });
+}
+bindInstantSwitch('setTrigInternal', (on) => ({ triggerMode: on ? 'internal' : 'click' }),
+  '已保存：按钮走捷径开（推荐——快约十倍）', '已保存：只用鼠标点（慢一点但更保守）');
+bindInstantSwitch('setInternalSubmit', (on) => ({ internalSubmit: on }),
+  '已保存：提交订单也走捷径（失败自动换鼠标点）', '已保存：提交订单只用鼠标点');
+bindInstantSwitch('setIntercept', (on) => ({ intercept: { enabled: on } }),
+  '已保存：按钮提前解锁开', '已保存：按钮提前解锁关（按页面原本节奏亮）');
+bindInstantSwitch('setWarmup', (on) => ({ warmup: { enabled: on } }),
+  '已保存：结算页预热开（开售时结算页走热加载）', '已保存：结算页预热关');
+bindInstantSwitch('setMonitorOn', (on) => ({ monitor: { enabled: on } }),
+  '已保存：没抢到继续守回流', '已保存：没抢到就收工');
+
+function renderPerProduct() {
+  const box = $('perProduct');
+  if (!CFG.products.length) {
+    box.innerHTML = '<div class="empty">还没有商品，先去「商品与规格」页添加。</div>';
+    return;
+  }
+  box.innerHTML = CFG.products.map((p, i) => `
+    <div style="border:1px solid var(--border);border-radius:11px;padding:16px;margin-bottom:12px;">
+      <div style="font-weight:600;margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        ${esc(p.id || p.prdId || `商品 ${i + 1}`)}
+        <span class="badge ${p.enabled !== false ? 'ok' : 'off'}">${p.enabled !== false ? '启用' : '停用'}</span>
+        ${((p.skuIds || p.sbomCodes) || []).length ? `<span class="badge blue">已选 ${(p.skuIds || p.sbomCodes).length} 个规格</span>` : `<span class="badge">全部规格都算</span>`}
+      </div>
+      <div class="row">
+        <div class="f">
+          <label>价格上限（超过就不抢，留空不限）</label>
+          <input type="number" id="pp-max-${i}" value="${p.maxPrice ?? ''}" placeholder="不限" />
+        </div>
+        <div class="f" style="flex:0 0 120px;">
+          <label>买几件</label>
+          <input type="number" id="pp-qty-${i}" min="1" value="${p.quantity ?? 1}" />
+        </div>
+        <div class="f" style="flex:2;">
+          <label>开售时间（留空 = 看到能买就抢）</label>
+          <input type="text" id="pp-sale-${i}" value="${p.saleAt ?? ''}" placeholder="2026-10-08T10:08:00+08:00" />
+        </div>
+      </div>
+      <div><button class="sm" data-savepp="${i}">保存这条</button></div>
+    </div>
+  `).join('');
+}
+
+/* ═══════════════ 商品列表 ═══════════════ */
+function renderProducts() {
+  const box = $('prodList');
+  clearMsg('prodMsg');
+
+  if (!CFG.products.length) {
+    box.innerHTML = '<div class="empty">还没有商品。在下面「添加商品」粘一个商品页网址。</div>';
+    return;
+  }
+
+  const cat = CATALOG;
+  const catByUrl = new Map();
+  if (cat && cat.products) for (const p of cat.products) catByUrl.set(p.url, p);
+
+  box.innerHTML = CFG.products.map((p, i) => {
+    const c = catByUrl.get(p.url);
+    const badge = p.enabled !== false
+      ? '<span class="badge ok">启用</span>'
+      : '<span class="badge off">停用</span>';
+    let stat = '';
+    if (!c) {
+      stat = '<span class="badge warn">没采集过</span>';
+    } else if (!c.ok) {
+      stat = '<span class="badge err">采集失败</span>';
+    } else {
+      const nskus = (c.skus || []).map(normSku);
+      const ready = nskus.filter((s) => s.buyable).length;
+      const rush = nskus.filter((s) => s.saleStartAt).length;
+      const specLabel = platformMeta().specLabel;
+      stat = `<span class="badge">${nskus.length} 个规格</span>` +
+        (ready ? `<span class="badge ok">${ready} 个能买</span>` : '') +
+        (rush ? `<span class="badge warn">${rush} 个待开售</span>` : '');
+    }
+
+    return `
+      <div class="prod" data-i="${i}">
+        <div class="hd">
+          <span class="caret">▶</span>
+          <div class="info">
+            <div class="name">${esc((c && c.name) || p.id || p.prdId || `商品 ${i + 1}`)}</div>
+            <div class="url">${esc(p.url)}</div>
+          </div>
+          ${stat}${badge}
+        </div>
+        <div class="bd"></div>
+      </div>
+    `;
+  }).join('');
+
+  box.querySelectorAll('.prod .hd').forEach((hd) => {
+    hd.onclick = () => {
+      const el = hd.parentElement;
+      const i = Number(el.dataset.i);
+      const open = el.classList.toggle('open');
+      prodOpen.touched = true;
+      prodOpen.url = open ? CFG.products[i].url : null;
+      if (open) renderSkuPanel(el.querySelector('.bd'), i);
+    };
+  });
+
+  // 展开哪个：用户动过 → 还原他展开的那个（收起就都收起）；没动过 → 默认第一个
+  let openIdx = -1;
+  if (prodOpen.touched) {
+    if (prodOpen.url) openIdx = CFG.products.findIndex((p) => p.url === prodOpen.url);
+  } else {
+    openIdx = 0;
+  }
+  if (openIdx >= 0) {
+    const el = box.querySelector(`.prod[data-i="${openIdx}"]`);
+    if (el) { el.classList.add('open'); renderSkuPanel(el.querySelector('.bd'), openIdx); }
+  }
+}
+
+function renderSkuPanel(bd, i) {
+  const p = CFG.products[i];
+  const c = CATALOG && CATALOG.products
+    ? CATALOG.products.find((x) => x.url === p.url)
+    : null;
+
+  const settings = `
+    <div style="border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:14px;">
+      <div class="row">
+        <div class="f">
+          <label>备注名</label>
+          <input type="text" id="pd-id-${i}" value="${esc(p.id || '')}" placeholder="自己起个名字" />
+        </div>
+        <div class="f" style="flex:0 0 auto;display:flex;align-items:flex-end;padding-bottom:4px;">
+          <label class="sw">
+            <input type="checkbox" id="pd-en-${i}" ${p.enabled !== false ? 'checked' : ''} />
+            <span class="track"></span><span class="lab">启用这个商品</span>
+          </label>
+        </div>
+        <div class="f" style="flex:2;">
+          <label>商品页网址</label>
+          <input type="text" id="pd-url-${i}" value="${esc(p.url)}" />
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="sm" data-save="${i}">保存商品设置</button>
+        <button class="sm danger" data-del="${i}">删除这个商品</button>
+      </div>
+    </div>
+  `;
+
+  if (!c || !c.ok) {
+    bd.innerHTML = settings +
+      `<div class="empty">${c ? '上次采集失败：' + esc(c.error || '未知原因') : '这个商品还没采集过。<br/>点上面的「采集一次」把规格抓下来。'}</div>`;
+    bindSkuPanel(bd, i, null);
+    return;
+  }
+
+  const rawSkus = c.skus || [];
+  const skus = rawSkus.map(normSku);
+  const selected = new Set(p.skuIds || p.sbomCodes || []);
+
+  const dims = (c.specDimensions || []).map((d) => {
+    const btns = d.values.map((v) =>
+      `<span class="dimbtn" data-dim="${esc(d.name)}" data-val="${esc(v.value)}" data-sbom="${esc(((v.skuIds || v.sbomCodes) || []).join(','))}">${esc(v.value)}</span>`
+    ).join('');
+    return `<span class="dl">${esc(d.name)}</span>${btns}`;
+  }).join('');
+
+  const rows = skus.map((s) => {
+    const attrChips = Object.entries(s.attrs || {}).map(([k, v]) => `<span class="chip">${esc(v)}</span>`).join('');
+    const rush = s.saleStartAt
+      ? `${fmtDT(s.saleStartAt)} 开售${s.limitPerUser != null ? ` · 限购 ${s.limitPerUser}` : ''}${s.saleStartsInMs != null ? `<br/><span style="color:var(--dim2);font-size:11px">${fmtAgo(s.saleStartsInMs)}</span>` : ''}`
+      : '<span style="color:var(--dim2)">—</span>';
+
+    return `
+      <tr class="${selected.has(s.id) ? 'picked' : ''}" data-sbom="${esc(s.id)}">
+        <td style="text-align:center;"><input type="checkbox" class="skuchk" data-sbom="${esc(s.id)}" ${selected.has(s.id) ? 'checked' : ''} /></td>
+        <td class="px">${s.price != null ? '¥' + s.price : '<span style="color:var(--dim2)">—</span>'}</td>
+        <td>${buyBadge(s)}</td>
+        <td>${invText(s.stockQty, s.stockCapped)}</td>
+        <td class="attrs">${attrChips}</td>
+        <td style="font-size:12px;">${rush}</td>
+        <td class="code">${esc(s.id)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const allChecked = selected.size === 0;
+
+  bd.innerHTML = settings + `
+    <div class="dims">
+      ${dims}
+      <span style="flex:1"></span>
+      <button class="sec sm" data-selall="1">全选</button>
+      <button class="sec sm" data-selnone="1">清空</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+      <span style="color:var(--dim);font-size:12.5px;">
+        共 <b style="color:var(--fg)">${skus.length}</b> 个规格 ·
+        能买 <b style="color:var(--fg)">${skus.filter((s) => s.buyable).length}</b> ·
+        待开售 <b style="color:var(--fg)">${skus.filter((s) => s.saleStartAt).length}</b>
+      </span>
+      <span class="badge ${allChecked ? 'warn' : 'ok'}">
+        ${allChecked ? '当前：全部规格都算目标' : `当前：只抢选中的 ${selected.size} 个`}
+      </span>
+    </div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr>
+          <th style="width:36px;text-align:center;">抢</th>
+          <th>价格</th><th>状态</th><th>库存</th><th>规格</th><th>开售</th><th>${esc(platformMeta().skuIdLabel)}</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+      <button data-savSku="${i}">保存勾选的规格</button>
+      <span style="color:var(--dim2);font-size:12px;">保存后写进配置文件，抢购脚本立刻按新目标干活</span>
+    </div>
+  `;
+
+  bindSkuPanel(bd, i, p);
+}
+
+function bindSkuPanel(bd, i, product) {
+  bd.querySelector(`[data-save="${i}"]`)?.addEventListener('click', async () => {
+    const next = CFG.products.slice();
+    next[i] = {
+      ...next[i],
+      id: $(`pd-id-${i}`).value.trim(),
+      enabled: $(`pd-en-${i}`).checked,
+      url: $(`pd-url-${i}`).value.trim(),
+    };
+    const r = await postJson(`/api/config/${PLATFORM}/products`, { products: next });
+    if (r.ok) { CFG = r.config; renderProducts(); renderPerProduct(); renderOnlyPicker(); say('prodMsg', '商品设置已保存', 'ok'); }
+    else say('prodMsg', '保存失败：' + esc(r.error), 'bad');
+  });
+
+  bd.querySelector(`[data-del="${i}"]`)?.addEventListener('click', async () => {
+    if (!confirm('确定删除这个商品？配置里的这一条会被移除。')) return;
+    const next = CFG.products.slice();
+    next.splice(i, 1);
+    const r = await postJson(`/api/config/${PLATFORM}/products`, { products: next });
+    if (r.ok) { CFG = r.config; renderProducts(); renderPerProduct(); renderOnlyPicker(); say('prodMsg', '已删除', 'ok'); }
+    else say('prodMsg', '删除失败：' + esc(r.error), 'bad');
+  });
+
+  const markRows = () => {
+    bd.querySelectorAll('tbody tr').forEach((tr) => {
+      const c = bd.querySelector(`input[data-sbom="${tr.dataset.sbom}"]`);
+      tr.classList.toggle('picked', !!(c && c.checked));
+    });
+  };
+  bd.querySelectorAll('.skuchk').forEach((c) => { c.onchange = markRows; });
+
+  bd.querySelectorAll('.dimbtn').forEach((btn) => {
+    btn.onclick = () => {
+      btn.classList.toggle('on');
+      const on = [...bd.querySelectorAll('.dimbtn.on')].map((b) => (b.dataset.sbom || '').split(',').filter(Boolean));
+      if (!on.length) {
+        bd.querySelectorAll('.skuchk').forEach((c) => { c.checked = true; });
+      } else {
+        const set = new Set(on.flat());
+        bd.querySelectorAll('.skuchk').forEach((c) => { c.checked = set.has(c.dataset.sbom); });
+      }
+      markRows();
+    };
+  });
+
+  bd.querySelector('[data-selall]')?.addEventListener('click', () => {
+    bd.querySelectorAll('.skuchk').forEach((c) => { c.checked = true; }); markRows();
+  });
+  bd.querySelector('[data-selnone]')?.addEventListener('click', () => {
+    bd.querySelectorAll('.skuchk').forEach((c) => { c.checked = false; }); markRows();
+  });
+
+  bd.querySelector(`[data-savSku="${i}"]`)?.addEventListener('click', async () => {
+    const codes = [...bd.querySelectorAll('.skuchk')].filter((c) => c.checked).map((c) => c.dataset.sbom);
+    const r = await postJson(`/api/config/${PLATFORM}/sku-select`, {
+      productUrl: CFG.products[i].url,
+      skuIds: codes,
+    });
+    if (r.ok) {
+      await loadConfig();
+      const el = document.querySelector(`.prod[data-i="${i}"]`);
+      if (el) { el.classList.add('open'); renderSkuPanel(el.querySelector('.bd'), i); }
+      say('prodMsg', codes.length
+        ? `已保存 <b>${codes.length}</b> 个规格为抢购目标`
+        : '已清空选择 —— 现在该商品的<b>全部规格</b>都算目标', 'ok');
+    } else {
+      say('prodMsg', '保存失败：' + esc(r.error), 'bad');
+    }
+  });
+}
+
+/* ═══════════════ 采集 ═══════════════ */
+async function runCrawl() {
+  const btn = $('btnCrawl');
+  const sel = $('onlyId');
+  const only = sel.value.trim();
+  const onlyLabel = sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : only;
+  btn.disabled = true;
+  $('crawlStat').innerHTML = '<span style="color:var(--amber)">正在采集…</span>';
+  say('crawlMsg', only ? `正在采集「${esc(onlyLabel)}」…` : '正在采集全部商品…（约 10~30 秒）', 'warn');
+
+  try {
+    const r = await postJson('/api/crawler/run', only ? { only } : {});
+    if (r.ok) {
+      const c = r.summary?.counts || {};
+      say('crawlMsg',
+        `采集完成：商品 <b>${c.ok ?? '?'}</b> 个 · 规格 <b>${c.skus ?? '?'}</b> 个 · ` +
+        `能买 <b>${c.buyableNow ?? 0}</b> · 待开售 <b>${c.withRushBuy ?? 0}</b>`, 'ok');
+    } else {
+      say('crawlMsg', '采集失败：' + esc(r.error || ('退出码 ' + r.exitCode)) +
+        (r.stderrTail ? `<br/><span style="font-size:12px;opacity:.8">${esc(String(r.stderrTail).slice(-300))}</span>` : ''), 'bad');
+    }
+  } catch (e) {
+    say('crawlMsg', '请求出错：' + esc(e.message), 'bad');
+  } finally {
+    btn.disabled = false;
+    await refreshCatalog();
+    loadStatus();
+  }
+}
+
+async function refreshCatalog() {
+  const c = await getJson('/api/crawler/catalog?platform=' + PLATFORM);
+  if (c.error) { CATALOG = null; $('crawlStat').innerHTML = `<span style="color:var(--dim2)">${esc(c.error)}</span>`; }
+  else {
+    CATALOG = c;
+    const k = c.counts || {};
+    $('crawlStat').innerHTML =
+      `上次采集 ${fmtDT(c.generatedAt)} · 商品 ${k.ok ?? 0} · 规格 ${k.skus ?? 0}` +
+      (k.blocked ? ` · <span style="color:var(--red)">风控中断 ${k.blocked}</span>` : '');
+  }
+  renderProducts();
+  renderOnlyPicker();
+  const urlInput = $('newUrl');
+  if (urlInput) urlInput.placeholder = platformMeta().addUrlPlaceholder;
+}
+
+/* ═══════════════ 设置保存 ═══════════════ */
+function buildSettingsPatch() {
+  const leadRaw = $('setLead').value.trim();
+  const leadN = Number(leadRaw);
+  return {
+    mode: $('setMode').value,
+    earlyEnterSec: Number($('setEarly').value) || 90,
+    limits: {
+      pollIntervalMs: Number($('setPoll').value) || 3000,
+      pollIntervalHotMs: Number($('setPollHot').value) || 150,
+      hotWindowMs: Number($('setHotWindow').value) || 10000,
+      giveUpAfterMs: Number($('setGiveUp').value) || 60000,
+      internalFireMs: Number($('setInternalFire').value) || 50,
+      fuseRefreshDelayMs: Number($('setFuse').value) || 1000,
+    },
+    intercept: { leadMs: leadRaw === '' || !Number.isFinite(leadN) ? 300 : leadN },
+    warmup: { url: $('setWarmupUrl').value.trim() },
+  };
+}
+async function saveSettings() {
+  const r = await postJson('/api/config/' + PLATFORM, buildSettingsPatch());
+  if (r.ok) {
+    CFG = r.config;
+    renderSettings();
+    loadLamps();
+    say('setMsg', '已保存到磁盘', 'ok');
+  } else say('setMsg', '保存失败：' + esc(r.error), 'bad');
+}
+$('btnSaveSettings').addEventListener('click', saveSettings);
+$('btnSaveSettings2').addEventListener('click', async () => {
+  const r = await postJson('/api/config/' + PLATFORM, {
+    monitor: {
+      scanMode: $('setScanMode').value,
+      skuScanSecs: Number($('setMonDense').value) || 10,
+      pollSecs: Number($('setMonPoll').value) || 60,
+    },
+  });
+  if (r.ok) { CFG = r.config; loadLamps(); say('setMsg', '回流的节奏已保存（切换哪些规格在「开抢」页每个槽位单独配）', 'ok'); }
+  else say('setMsg', '保存失败：' + esc(r.error), 'bad');
+});
+
+/* 每商品条件 */
+$('perProduct').addEventListener('click', async (e) => {
+  if (!e.target.matches('[data-savepp]')) return;
+  const next = CFG.products.map((p, i) => ({
+    ...p,
+    maxPrice: $(`pp-max-${i}`).value.trim() === '' ? null : Number($(`pp-max-${i}`).value),
+    quantity: Number($(`pp-qty-${i}`).value) || 1,
+    saleAt: $(`pp-sale-${i}`).value.trim() || null,
+  }));
+  const r = await postJson(`/api/config/${PLATFORM}/products`, { products: next });
+  if (r.ok) { CFG = r.config; renderPerProduct(); loadLamps(); say('ppMsg', '已保存', 'ok'); }
+  else say('ppMsg', '保存失败：' + esc(r.error), 'bad');
+});
+
+/* 原始 JSON */
+$('btnLoadRaw').addEventListener('click', async () => {
+  await loadConfig();
+  clearMsg('rawMsg');
+});
+$('btnSaveRaw').addEventListener('click', async () => {
+  let obj;
+  try { obj = JSON.parse($('rawJson').value); }
+  catch (e) { say('rawMsg', 'JSON 语法错误：' + esc(e.message), 'bad'); return; }
+  const r = await postJson('/api/config/' + PLATFORM, obj);
+  if (r.ok) { CFG = r.config; renderProducts(); renderSettings(); renderPerProduct(); renderOnlyPicker(); loadLamps(); say('rawMsg', '已保存', 'ok'); }
+  else say('rawMsg', '保存失败：' + esc(r.error), 'bad');
+});
+
+/* 添加商品 */
+$('btnAddProd').addEventListener('click', async () => {
+  const url = $('newUrl').value.trim();
+  if (!/^https?:\/\//.test(url)) { say('addMsg', '请填一个完整的商品页地址', 'bad'); return; }
+  if (CFG.products.some((p) => p.url === url)) { say('addMsg', '这个网址已经加过了', 'warn'); return; }
+  const next = CFG.products.concat([{ id: $('newId').value.trim() || '', enabled: true, url, skuIds: [], maxPrice: null, quantity: 1, saleAt: null }]);
+  const r = await postJson(`/api/config/${PLATFORM}/products`, { products: next });
+  if (r.ok) {
+    CFG = r.config; $('newUrl').value = ''; $('newId').value = '';
+    renderProducts(); renderPerProduct(); renderOnlyPicker(); loadLamps();
+    say('addMsg', '已添加。点上面的「采集一次」把它的规格抓下来。', 'ok');
+  } else say('addMsg', '添加失败：' + esc(r.error), 'bad');
+});
+
+$('btnCrawl').addEventListener('click', runCrawl);
+$('btnRefresh').addEventListener('click', refreshCatalog);
+
+/* ═══════════════ 派发按钮 ═══════════════ */
+$('dpSaveSlots').onclick = async () => {
+  try {
+    if (!dpConfirmRebind()) return;
+    const res = await postJson('/api/dispatch/slots', { platform: PLATFORM, slots: dpSlots });
+    dpSlots = res.slots || dpSlots;
+    dpSlotsSrc = dpSnapBindings(dpSlots);
+    dpDirty = false;
+    renderDpSlots();
+    const rb = res.rebinds || [];
+    if (rb.length) {
+      say('dpMsg', `槽位已保存（换绑重置：${rb.map((r) => r.id).join('、')}，建议重新体检一次）`, 'warn');
+    } else {
+      say('dpMsg', '槽位已保存', 'ok');
+    }
+  } catch (e) {
+    say('dpMsg', '保存失败：' + e.message, 'bad');
+  }
+};
+$('dpLaunch').onclick = async () => {
+  try {
+    if (!dpConfirmRebind()) return;
+    if (CFG && CFG.dryRun === false) {
+      if (!confirm('⚠️ 演练模式是关的！派发后会一路真实点「提交订单」，产生真实订单（不付款会自动取消）。\n确定继续？')) return;
+    }
+    const res = await postJson('/api/dispatch/slots', { platform: PLATFORM, slots: dpSlots });
+    dpSlots = res.slots || dpSlots;
+    dpSlotsSrc = dpSnapBindings(dpSlots);
+    dpDirty = false;
+    await postJson('/api/dispatch/launch', { platform: PLATFORM });
+    say('dpMsg', '已派发：专用小窗口正在自动打开并就位。没登录的窗口登一次就行，其余全自动。', 'ok');
+    setTimeout(loadDispatchStatus, 1500);
+    setTimeout(loadDispatchStatus, 5000);
+  } catch (e) {
+    say('dpMsg', '派发失败：' + e.message, 'bad');
+  }
+};
+$('dpStop').onclick = async () => {
+  try {
+    await postJson('/api/dispatch/stop', { platform: PLATFORM });
+    say('dpMsg', '已停止（已经打开的窗口保留不动）', 'ok');
+    loadDispatchStatus();
+  } catch (e) {
+    say('dpMsg', '停止失败：' + e.message, 'bad');
+  }
+};
+
+/* ═══════════════ 登录保活守护 ═══════════════ */
+async function loadKeepalive() {
+  try {
+    const st = await getJson('/api/keepalive/status');
+    const el = $('kaStatus'); if (!el) return;
+    el.textContent = st.running ? `🟢 运行中（pid ${st.pid}）` : '⚪ 已停止';
+    $('kaLog').textContent = (st.log || []).join(String.fromCharCode(10)) || '（暂无日志）';
+  } catch { /* 桥接未响应 */ }
+}
+async function kaCmd(path) {
+  try { const r = await postJson(path, {}); say('dpMsg', r.ok ? (r.note || '已执行') : ('失败：' + esc(r.error)), r.ok ? 'ok' : 'bad'); } catch (e) { say('dpMsg', '失败：' + e.message, 'bad'); }
+  setTimeout(loadKeepalive, path.includes('test') ? 2500 : 800);
+}
+$('kaStart').onclick = () => kaCmd('/api/keepalive/start');
+$('kaStop').onclick = () => kaCmd('/api/keepalive/stop');
+$('kaTest').onclick = () => kaCmd('/api/keepalive/test');
+
+/* ═══════════════ 体检页 ═══════════════ */
+const CK_ICON = { PASS: '✅', DRIFT: '⚠️', SKIP: '○', FAIL: '❌' };
+
+function renderCheckup(report) {
+  const box = $('ckReport');
+  if (!report || !report.checks || !report.checks.length) {
+    box.innerHTML = '<div class="empty">还没体检过。点「立即体检」跑一次（约 20~60 秒）。</div>';
+    $('ckSummary').textContent = '';
+    return;
+  }
+  const s = report.summary || {};
+  $('ckSummary').textContent =
+    `最近一次：${fmtDT(report.generatedAt)} · ✅${s.pass || 0} ⚠️${s.drift || 0} ○${s.skip || 0} ❌${s.fail || 0}`;
+  const rows = report.checks.map((c) => `
+    <tr>
+      <td class="mono" style="width:7%;white-space:nowrap;">${CK_ICON[c.status] || ''} ${esc(c.id)}</td>
+      <td style="width:17%;font-weight:600;">${esc(c.name)}</td>
+      <td>${esc(c.detail || '')}${c.fix ? `<div style="color:var(--amber);margin-top:3px;">↳ 怎么修：${esc(c.fix)}</div>` : ''}</td>
+    </tr>`).join('');
+  box.innerHTML = `<div class="tblwrap"><table>
+    <thead><tr><th>项</th><th>查什么</th><th>结果</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+async function loadCheckupStatus() {
+  if (!PLATFORM) return;
+  try {
+    const st = await getJson(`/api/checkup/${PLATFORM}/status`);
+    let txt = st.running
+      ? '🟢 体检运行中…'
+      : (st.lastRunAt ? `上次 ${fmtDT(st.lastRunAt)}（${st.lastRunTrigger === 'auto' ? '自动' : '手动'}）` : '从未跑过');
+    if (st.scheduleEnabled && st.plannedLocal) txt += ` · 今天自动体检 ${st.plannedLocal}`;
+    $('ckStatus').textContent = txt;
+    const logLines = st.log || [];
+    $('ckLog').style.display = (st.running || logLines.length) ? 'block' : 'none';
+    if (st.running || logLines.length) $('ckLog').textContent = logLines.join('\n') || '…';
+    renderCheckup(st.report);
+    $('ckRun').disabled = !!st.running;
+  } catch (e) {
+    $('ckStatus').textContent = '加载失败：' + e.message;
+  }
+}
+
+$('ckRun').onclick = async () => {
+  try {
+    await postJson(`/api/checkup/${PLATFORM}/run`, { platform: PLATFORM });
+    $('ckStatus').textContent = '🟢 体检已启动…';
+    setTimeout(loadCheckupStatus, 800);
+  } catch (e) {
+    $('ckStatus').textContent = '启动失败：' + e.message;
+  }
+};
+$('ckRefresh').onclick = loadCheckupStatus;
+
+/* ═══════════════ 结果页 ═══════════════ */
+const OC = {
+  DRY_RUN_OK: '演练通过', ORDER_SUBMITTED: '订单已提交',
+  ORDER_PENDING: '已锁单待支付', SUCCESS: '成功',
+  WAITING_HUMAN: '要人处理', FAILED: '没成功',
+  LOCKED_OUT: '账号被限制', MONITOR_GIVE_UP: '守回流到期',
+  OUT_OF_STOCK: '缺货', GIVE_UP: '超时收手', WRONG_SKU: '规格不对（已拦下）',
+};
+function humanOutcome(o) { return OC[o] || o || '—'; }
+function ocClass(o) {
+  if (/DRY_RUN_OK|ORDER_SUBMITTED|ORDER_PENDING|SUCCESS/.test(o)) return 'good';
+  if (/WAITING_HUMAN/.test(o)) return 'mid';
+  if (/FAILED|GIVE_UP|OUT_OF_STOCK|WRONG_SKU|LOCKED_OUT|MONITOR_GIVE_UP/.test(o)) return 'bad';
+  return 'other';
+}
+async function loadResults() {
+  const r = await getJson(`/api/results/${PLATFORM}?limit=50`);
+  const box = $('resBox');
+  if (r.error || !r.results || !r.results.length) {
+    box.innerHTML = '<div class="empty">暂无记录<br/><span style="font-size:12px">脚本跑完后结果会出现在这里</span></div>';
+    $('resCount').textContent = '';
+    return;
+  }
+  $('resCount').textContent = `（最近 ${r.results.length} 条）`;
+  const rows = r.results.slice().reverse().map((x) => {
+    const oc = x.outcome || '';
+    const label = humanOutcome(oc);
+    const no = x.platformOrderNo || x.orderNo;
+    const note = (x.message || x.reason || x.note || '').toString().slice(0, 160);
+    return `<tr>
+      <td style="color:var(--dim2);white-space:nowrap;font-size:11.5px;" class="mono">${esc(fmtDT(x.receivedAt || x.at))}</td>
+      <td class="oc ${ocClass(oc)}">${esc(label)}</td>
+      <td class="mono">${no ? esc(no) : '<span style="color:var(--dim2)">未读到</span>'}</td>
+      <td style="color:var(--dim);font-size:12px;">${esc(note)}</td>
+    </tr>`;
+  }).join('');
+  box.innerHTML = `<div class="tblwrap"><table>
+    <thead><tr><th>时间</th><th>结果</th><th>订单号</th><th>说明</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+$('btnRefreshRes').addEventListener('click', loadResults);
+$('autoRes').addEventListener('change', (e) => {
+  if (e.target.checked) resTimer = setInterval(loadResults, 5000);
+  else clearInterval(resTimer);
+});
+
+/* ═══════════════ 启动 ═══════════════ */
+(async function init() {
+  try {
+    const { platforms } = await getJson('/api/platforms');
+    const want = new URL(location.href).searchParams.get('platform');
+    PLATFORM = (want && platforms.includes(want)) ? want : (platforms[0] || null);
+  } catch {
+    PLATFORM = null;
+  }
+  if (!PLATFORM) {
+    document.querySelector('main').innerHTML =
+      '<div class="card"><div class="empty">没有找到任何平台的配置。<br/>请先在 data/grab/ 下创建 &lt;平台名&gt;.config.json。</div></div>';
+    return;
+  }
+
+  await Promise.all([loadConfig(), loadStatus(), refreshCatalog(), loadResults(), loadDispatchStatus(), loadCheckupStatus()]);
+  resTimer = setInterval(loadResults, 5000);
+  setInterval(loadStatus, 15000);
+  setInterval(loadDispatchStatus, 5000);
+  setInterval(loadCheckupStatus, 5000);
+  countTimer = setInterval(loadLamps, 5000); // 倒计时灯每 5 秒刷新
+  loadKeepalive(); setInterval(loadKeepalive, 15000);
+})();
+
+} // __runConsole
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', __runConsole, { once: true });
+} else {
+  __runConsole();
+}
+</script>
+</body>
+</html>
