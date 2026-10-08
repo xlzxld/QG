@@ -747,7 +747,7 @@ const server = http.createServer(async (req, res) => {
       const incomingTask = body.task || {};
       const config = loadDamaiConfig() || {};
       const profile = loadAccountProfile() || {};
-      const fallbackViewer = (profile.viewers && profile.viewers[0]?.name) || '薛凌志';
+      const fallbackViewer = (profile.viewers && profile.viewers[0]?.name) || '';
 
       const rawViewers = (incomingTask.target?.viewers?.length > 0)
         ? incomingTask.target.viewers
@@ -763,7 +763,7 @@ const server = http.createServer(async (req, res) => {
           itemId: incomingTask.target?.itemId || (config.project?.projectId ? String(config.project.projectId) : ''),
           session: incomingTask.target?.session || config.selection?.sessionTarget || '',
           priceText: incomingTask.target?.priceText || config.selection?.priceTierTarget || '',
-          viewer: rawViewers[0] || '薛凌志',
+          viewer: rawViewers[0] || '',
           viewers: rawViewers,
           count: ticketCount,
         },

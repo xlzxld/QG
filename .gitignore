@@ -19,6 +19,10 @@ data/grab/*.results.jsonl
 data/grab/*-schedule.json
 data/grab/*.bak-*
 # 说明：checkup-history.jsonl 有意入库（低频率的体检证据流水）
+# ── 个人实名信息文件（不入库；各机本地保留，含姓名/电话/证件/地址）──
+damai.config.json
+data/grab/damai.config.json
+data/grab/account.profile.json
 
 # ── 验证区（verify/）：临时目录与产物排除 ──
 verify/tmp/

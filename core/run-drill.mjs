@@ -29,7 +29,7 @@ async function main() {
   const targetName = config.project?.name || '大麦演练项目';
   const session = config.selection?.sessionTarget || '';
   const price = config.selection?.priceTierTarget || '';
-  const viewer = config.identity?.primaryAttendee || '薛凌志';
+  const viewer = config.identity?.primaryAttendee || '';
   const count = config.selection?.ticketCount || 1;
   const mode = process.argv.includes('--rush') ? 'rush' : 'test';
 
