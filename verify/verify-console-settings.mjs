@@ -68,12 +68,12 @@ try {
     internalSubmit: cfg.internalSubmit !== false,
     intercept: !!(cfg.intercept && cfg.intercept.enabled),
     monitorOn: cfg.monitor?.enabled === true,
-    monDense: String(cfg.monitor?.densePollSecs ?? 30),
+    monDense: String(cfg.monitor?.skuScanSecs ?? 10),
     monPoll: String(cfg.monitor?.pollSecs ?? 60),
     monMax: String(Math.round((cfg.monitor?.maxMs ?? 7200000) / 60000)),
   };
 
-  await cdp.send('Page.navigate', { url: `${BG}/` });
+  await cdp.send('Page.navigate', { url: `${BG}/console-huawei` });
   let ready = false;
   for (let i = 0; i < 60 && !ready; i++) {
     await sleep(300);

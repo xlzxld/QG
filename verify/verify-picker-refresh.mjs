@@ -43,7 +43,7 @@ try {
   page.on('pageerror', (e) => errs.push(e.message));
   page.on('dialog', (d) => d.accept()); // 删除确认框：一律接受
 
-  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.goto(`${BASE}/console-huawei`, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForFunction(() => document.querySelectorAll('#onlyId option').length > 1, null, { timeout: 15000 });
   await page.waitForTimeout(600);
 

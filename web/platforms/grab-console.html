@@ -488,6 +488,11 @@
         <input type="number" id="setGiveUp" min="10000" step="10000" />
         <div class="fhint">60000 = 开抢后 1 分钟没戏就转回流监控。</div>
       </div>
+      <div class="f">
+        <label>点了没反应就重试几次（次）</label>
+        <input type="number" id="setBuyRetry" min="0" step="1" />
+        <div class="fhint">点了「立即购买」没出确认页时，最多再重试几次。默认 3，0 = 不重试。</div>
+      </div>
     </div>
 
     <div class="subttl">三个提速开关（推荐全开）</div>
@@ -553,6 +558,11 @@
         <label>之后放慢到（秒）</label>
         <input type="number" id="setMonPoll" min="20" step="10" />
         <div class="fhint">前 40 分钟过后放慢的节奏。默认 60。</div>
+      </div>
+      <div class="f">
+        <label>最长守多久（分钟）</label>
+        <input type="number" id="setMonMax" min="10" step="10" />
+        <div class="fhint">守回流的上限，最长守这么久就收工。默认 120 分钟。</div>
       </div>
     </div>
     <div class="fhint" style="margin-top:4px;">
@@ -1125,6 +1135,7 @@ function renderSettings() {
   $('setGiveUp').value = CFG.limits?.giveUpAfterMs ?? 60000;
   $('setInternalFire').value = CFG.limits?.internalFireMs ?? 50;
   $('setFuse').value = CFG.limits?.fuseRefreshDelayMs ?? 1000;
+  $('setBuyRetry').value = CFG.limits?.cdpBuyRetry ?? 3;
   $('setLead').value = CFG.intercept?.leadMs ?? 300;
   $('setTrigInternal').checked = CFG.triggerMode === 'internal';
   $('setInternalSubmit').checked = CFG.internalSubmit !== false;
@@ -1135,6 +1146,7 @@ function renderSettings() {
   $('setScanMode').value = CFG.monitor?.scanMode === 'refresh' ? 'refresh' : 'sku';
   $('setMonDense').value = CFG.monitor?.skuScanSecs ?? 10;
   $('setMonPoll').value = CFG.monitor?.pollSecs ?? 60;
+  $('setMonMax').value = Math.round((CFG.monitor?.maxMs ?? 7200000) / 60000);
 }
 
 /* 演练开关（首页 + 拨动立即落盘） */
@@ -1511,6 +1523,7 @@ async function refreshCatalog() {
 function buildSettingsPatch() {
   const leadRaw = $('setLead').value.trim();
   const leadN = Number(leadRaw);
+  const retryRaw = Number($('setBuyRetry').value);
   return {
     mode: $('setMode').value,
     earlyEnterSec: Number($('setEarly').value) || 90,
@@ -1521,6 +1534,7 @@ function buildSettingsPatch() {
       giveUpAfterMs: Number($('setGiveUp').value) || 60000,
       internalFireMs: Number($('setInternalFire').value) || 50,
       fuseRefreshDelayMs: Number($('setFuse').value) || 1000,
+      cdpBuyRetry: Number.isFinite(retryRaw) && retryRaw >= 0 ? retryRaw : 3,
     },
     intercept: { leadMs: leadRaw === '' || !Number.isFinite(leadN) ? 300 : leadN },
     warmup: { url: $('setWarmupUrl').value.trim() },
@@ -1542,6 +1556,7 @@ $('btnSaveSettings2').addEventListener('click', async () => {
       scanMode: $('setScanMode').value,
       skuScanSecs: Number($('setMonDense').value) || 10,
       pollSecs: Number($('setMonPoll').value) || 60,
+      maxMs: (Number($('setMonMax').value) || 120) * 60000,
     },
   });
   if (r.ok) { CFG = r.config; loadLamps(); say('setMsg', '回流的节奏已保存（切换哪些规格在「开抢」页每个槽位单独配）', 'ok'); }
