@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Apple 直营店预约控制台</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#141925; --panel2:#1a2130; --panel3:#202941;
+    --border:#28324a; --border2:#37456a;
+    --fg:#e8edf6; --dim:#94a3b8; --dim2:#64748b;
+    --green:#34d399; --greenBg:rgba(52,211,153,.12);
+    --red:#f87171; --redBg:rgba(248,113,113,.12);
+    --amber:#fbbf24; --amberBg:rgba(251,191,36,.12);
+    --blue:#60a5fa; --blueBg:rgba(96,165,250,.12);
+    --radius:14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    padding:24px 28px 60px;
+  }
+  .card {
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:var(--radius); padding:20px; margin-bottom:18px;
+  }
+  .card > h2 {
+    font-size:16px; font-weight:700; margin:0 0 8px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .hint { color:var(--dim); font-size:13px; margin:0 0 16px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+  @media(max-width:850px){ .grid2, .grid3 { grid-template-columns:1fr; } }
+  .f { margin-bottom:14px; }
+  label { display:block; font-size:12.5px; color:var(--dim); margin-bottom:6px; }
+  input[type=text], select {
+    width:100%; background:var(--bg); border:1px solid var(--border);
+    color:var(--fg); border-radius:9px; padding:9px 12px; font-size:13px;
+  }
+  input:focus, select:focus { outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(96,165,250,.15); }
+  button {
+    background:var(--blue); border:none; color:#061730; padding:10px 20px;
+    border-radius:10px; cursor:pointer; font-size:13.5px; font-weight:700;
+  }
+  button:hover { filter:brightness(1.1); }
+  button.sec { background:var(--panel2); border:1px solid var(--border); color:var(--fg); }
+  .badge { display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:600; }
+  .badge.blue { background:var(--blueBg); color:var(--blue); border:1px solid rgba(96,165,250,.3); }
+  .badge.green { background:var(--greenBg); color:var(--green); border:1px solid rgba(52,211,153,.3); }
+  .statcard {
+    background:var(--panel2); border:1px solid var(--border); border-radius:12px;
+    padding:16px; display:flex; flex-direction:column; gap:6px;
+  }
+  .statcard .t { font-size:12px; color:var(--dim); }
+  .statcard .v { font-size:20px; font-weight:700; color:var(--blue); }
+  .store-item {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 14px; border:1px solid var(--border); border-radius:10px; margin-bottom:8px;
+    background:var(--panel2);
+  }
+</style>
+</head>
+<body>
+
+<div class="card" style="border-left: 4px solid var(--blue);">
+  <h2><span>🍎</span>Apple Store 直营店预约控制台 <span class="badge blue">专属形态视图</span></h2>
+  <p class="hint">
+    形态特点：苹果抢购不是定点秒杀，而是<b>全天候高频轮询库存补货</b>，一旦放货立刻预约<b>到店取货时间段</b>。
+    专属页展示多门店库存监控与自动锁单机制。
+  </p>
+
+  <div class="grid3" style="margin-bottom:18px;">
+    <div class="statcard">
+      <div class="t">目标机型</div>
+      <div class="v" style="font-size:15px; color:var(--fg);">iPhone 16 Pro Max 256G 原色</div>
+    </div>
+    <div class="statcard">
+      <div class="t">监控频次</div>
+      <div class="v" style="color:var(--green);">每 3.5 秒探测 (官方API)</div>
+    </div>
+    <div class="statcard">
+      <div class="t">当前放货状态</div>
+      <div class="v" style="color:var(--amber);" id="appleStatus">监控中 (暂无现货)</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h2><span>⚙️</span>预约参数配置</h2>
+    <div class="f">
+      <label>Apple ID 登录态</label>
+      <input type="text" value="apple_id_account_01 (已就绪)" readonly style="color:var(--green);" />
+    </div>
+    <div class="f">
+      <label>首选取货时间段</label>
+      <select>
+        <option>最早可用时段 (自动匹配)</option>
+        <option>上午 10:00 - 12:00</option>
+        <option>下午 14:00 - 18:00</option>
+      </select>
+    </div>
+    <div class="f">
+      <label>短信验证码代接 (中国移动/联通)</label>
+      <input type="text" value="138****8888 (自动捕获)" readonly />
+    </div>
+    <button style="width:100%;">启动库存守候守护</button>
+  </div>
+
+  <div class="card">
+    <h2><span>🏬</span>直营门店监控列表 (多选并发)</h2>
+    <div class="store-item">
+      <div>
+        <b>上海环贸 iapm</b>
+        <div style="font-size:11px; color:var(--dim);">淮海中路 999 号</div>
+      </div>
+      <span class="badge" style="background:var(--panel3); color:var(--dim);">无货</span>
+    </div>
+    <div class="store-item">
+      <div>
+        <b>上海静安</b>
+        <div style="font-size:11px; color:var(--dim);">南京西路 1699 号</div>
+      </div>
+      <span class="badge" style="background:var(--panel3); color:var(--dim);">无货</span>
+    </div>
+    <div class="store-item">
+      <div>
+        <b>上海浦东</b>
+        <div style="font-size:11px; color:var(--dim);">世纪大道 8 号国金中心</div>
+      </div>
+      <span class="badge green">刚刚有货 (释放)</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  function syncToParent() {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({
+        type: 'PLATFORM_STATUS_SYNC',
+        platform: 'apple',
+        data: {
+          bridge: { ok: true, text: '苹果守护在线' },
+          dryRun: { active: false, text: '预约模式' },
+          driver: { running: true, text: '轮询中(3.5s)' },
+          countdown: { text: '实时补货监控' }
+        }
+      }, '*');
+    }
+  }
+  setInterval(syncToParent, 2000);
+  syncToParent();
+</script>
+</body>
+</html>

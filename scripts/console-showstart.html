@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>秀动演出抢票专属控制台</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#141925; --panel2:#1a2130; --panel3:#202941;
+    --border:#28324a; --border2:#37456a;
+    --fg:#e8edf6; --dim:#94a3b8; --dim2:#64748b;
+    --green:#34d399; --greenBg:rgba(52,211,153,.12);
+    --red:#f87171; --redBg:rgba(248,113,113,.12);
+    --amber:#fbbf24; --amberBg:rgba(251,191,36,.12);
+    --blue:#60a5fa; --blueBg:rgba(96,165,250,.12);
+    --purple:#c084fc; --purpleBg:rgba(192,132,252,.12);
+    --radius:14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    padding:24px 28px 60px;
+  }
+  .card {
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:var(--radius); padding:20px; margin-bottom:18px;
+  }
+  .card > h2 {
+    font-size:16px; font-weight:700; margin:0 0 8px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .hint { color:var(--dim); font-size:13px; margin:0 0 16px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+  @media(max-width:850px){ .grid2, .grid3 { grid-template-columns:1fr; } }
+  .f { margin-bottom:14px; }
+  label { display:block; font-size:12.5px; color:var(--dim); margin-bottom:6px; }
+  input[type=text], select {
+    width:100%; background:var(--bg); border:1px solid var(--border);
+    color:var(--fg); border-radius:9px; padding:9px 12px; font-size:13px;
+  }
+  input:focus, select:focus { outline:none; border-color:var(--purple); box-shadow:0 0 0 3px rgba(192,132,252,.15); }
+  button {
+    background:var(--purple); border:none; color:#180b2c; padding:10px 20px;
+    border-radius:10px; cursor:pointer; font-size:13.5px; font-weight:700;
+  }
+  button:hover { filter:brightness(1.1); }
+  button.sec { background:var(--panel2); border:1px solid var(--border); color:var(--fg); }
+  .badge { display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:600; }
+  .badge.purple { background:var(--purpleBg); color:var(--purple); border:1px solid rgba(192,132,252,.3); }
+  .badge.green { background:var(--greenBg); color:var(--green); border:1px solid rgba(52,211,153,.3); }
+  .tbl { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px; }
+  .tbl th, .tbl td { padding:10px 12px; border-bottom:1px solid var(--border); text-align:left; }
+  .tbl th { background:var(--panel2); color:var(--dim); }
+  .statcard {
+    background:var(--panel2); border:1px solid var(--border); border-radius:12px;
+    padding:16px; display:flex; flex-direction:column; gap:6px;
+  }
+  .statcard .t { font-size:12px; color:var(--dim); }
+  .statcard .v { font-size:20px; font-weight:700; color:var(--purple); }
+</style>
+</head>
+<body>
+
+<div class="card" style="border-left: 4px solid var(--purple);">
+  <h2><span>🎸</span>秀动演出专属抢票控制台 <span class="badge purple">专属形态视图</span></h2>
+  <p class="hint">
+    形态特点：Livehouse 演出抢票核心在于<b>实名观演人多选锁定</b>、<b>场次排队等待</b>和<b>开票毫秒级提交</b>。
+    此页面是秀动专属定制视图，无需受限于电商购物车的商品/SKU/地址模式。
+  </p>
+
+  <div class="grid3" style="margin-bottom:18px;">
+    <div class="statcard">
+      <div class="t">演出场次</div>
+      <div class="v" style="font-size:15px; color:var(--fg);">新裤子乐队 2026 上海站</div>
+    </div>
+    <div class="statcard">
+      <div class="t">观演人就绪</div>
+      <div class="v" style="color:var(--green);">已选 2 人（实名认证通过）</div>
+    </div>
+    <div class="statcard">
+      <div class="t">开票倒计时</div>
+      <div class="v" id="sdCountdown">01:14:22</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h2><span>🎟️</span>票档与场次设置</h2>
+    <div class="f">
+      <label>演出活动 URL / 活动 ID</label>
+      <input type="text" value="https://www.showstart.com/event/239841" />
+    </div>
+    <div class="f">
+      <label>优先票档顺序</label>
+      <select>
+        <option>全价票 ¥380 (首选) > 预售票 ¥280</option>
+        <option>VIP 优先入场票 ¥580</option>
+      </select>
+    </div>
+    <div class="f">
+      <label>购票数量</label>
+      <select><option>2 张</option><option>1 张</option></select>
+    </div>
+    <button style="width:100%;">保存抢票策略</button>
+  </div>
+
+  <div class="card">
+    <h2><span>👥</span>实名观演人锁定矩阵 (秀动独有)</h2>
+    <p class="hint" style="font-size:12px; margin-bottom:10px;">秀动强制一票一证实名制，开抢时自动勾选并提交身份证 Hash：</p>
+    <table class="tbl">
+      <thead>
+        <tr><th>选择</th><th>姓名</th><th>证件号</th><th>状态</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><input type="checkbox" checked /></td>
+          <td>张* (本人)</td>
+          <td>310104********1234</td>
+          <td><span class="badge green">已认证</span></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox" checked /></td>
+          <td>李* (同行)</td>
+          <td>310104********5678</td>
+          <td><span class="badge green">已认证</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="margin-top:16px; display:flex; gap:10px;">
+      <button class="sec" style="font-size:12px;">+ 添加观演人</button>
+      <button class="sec" style="font-size:12px;">同步 App 观演人列表</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 向外壳同步状态
+  function syncToParent() {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({
+        type: 'PLATFORM_STATUS_SYNC',
+        platform: 'showstart',
+        data: {
+          bridge: { ok: true, text: '秀动服务就绪' },
+          dryRun: { active: false, text: '抢票模式' },
+          driver: { running: false, text: '待派发' },
+          countdown: { text: document.getElementById('sdCountdown').textContent }
+        }
+      }, '*');
+    }
+  }
+  setInterval(syncToParent, 2000);
+  syncToParent();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+import { CDP, listTabs } from '../grab/cdp-core.mjs';
+const tabs = await listTabs(9401);
+const tab = tabs.find((t) => /comdetail/.test(t.url || ''));
+const cdp = new CDP(tab.webSocketDebuggerUrl);
+await cdp.connect();
+await cdp.send('Runtime.enable');
+const sel = await cdp.eval(`((document.body.innerText.match(/已选[：:]([^\\n]{1,60})/) || [''])[1] || '').trim()`);
+console.log('当前页面已选：', sel);
+const url = await cdp.eval('location.href');
+console.log('页面 URL：', url);
+process.exit(0);

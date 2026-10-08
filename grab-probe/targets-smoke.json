@@ -1,0 +1,36 @@
+{
+  "_comment": "探针目标清单（缩减版，用于首次授权运行）。url 可随时替换为你自己的真实目标。",
+  "_expected_values": "in_stock | out_of_stock | preorder | limited | unknown",
+  "_note": "首次运行建议加 --headed，手动完成可能出现的登录或验证，登录态保存在 chrome-profile/ 目录，后续轮次复用。",
+
+  "defaults": {
+    "rounds": 3,
+    "intervalSec": 8,
+    "navTimeoutMs": 30000,
+    "httpProbe": true
+  },
+
+  "targets": [
+    {
+      "id": "apple-iphone",
+      "platform": "apple",
+      "kind": "brand_official",
+      "url": "https://www.apple.com.cn/shop/buy-iphone/iphone-17-pro",
+      "expect": "unknown"
+    },
+    {
+      "id": "jd-iphone",
+      "platform": "jd",
+      "kind": "ecommerce",
+      "url": "https://item.jd.com/100149575232.html",
+      "expect": "unknown"
+    },
+    {
+      "id": "jd-search-gpu",
+      "platform": "jd",
+      "kind": "ecommerce_listing",
+      "url": "https://search.jd.com/Search?keyword=RTX%205090",
+      "expect": "unknown"
+    }
+  ]
+}

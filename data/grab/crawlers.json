@@ -1,0 +1,33 @@
+{
+  "_说明": "抢购爬虫注册表。新增一个平台的爬虫时，在 crawlers 数组里加一项即可 —— 一键启动器（launch.bat）与桥接控制台都会自动出现该选项，不需要改代码。",
+  "_字段": {
+    "id": "编号，启动器里的序号（保持唯一、按顺序）",
+    "name": "显示名称",
+    "platform": "平台标识，需与 data/grab/<platform>.config.json 对应",
+    "script": "爬虫脚本相对仓库根目录的路径",
+    "enabled": "是否在启动器里显示",
+    "defaultArgs": "每次运行都附加的参数数组，可为空",
+    "presetArgs": "启动器上提供的快捷预设（选了之后追加到 defaultArgs 后面）",
+    "desc": "一句话说明",
+    "schedule": "是否参与每日自动调度"
+  },
+
+  "crawlers": [
+    {
+      "id": 1,
+      "name": "华为商城",
+      "platform": "huawei",
+      "script": "grab/crawler-huawei.mjs",
+      "enabled": true,
+      "defaultArgs": [],
+      "presetArgs": [
+        { "key": "1", "label": "完整采集（发现新商品 + 刷新已知商品）", "args": [] },
+        { "key": "2", "label": "只刷新已知商品（快）", "args": ["--no-discover"] },
+        { "key": "3", "label": "只发现新商品（不抓详情）", "args": ["--discover-only"] },
+        { "key": "4", "label": "显示浏览器窗口（调试用）", "args": ["--headed"] }
+      ],
+      "desc": "采集华为商城商品目录、SKU 库存、开售时间与限购",
+      "schedule": true
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "_comment": "探针目标清单。把 url 换成你自己的真实目标即可，platform 与 expect 仅作分组统计和人工比对用。",
+  "_expected_values": "in_stock | out_of_stock | unknown —— 期望值可以留 unknown，先跑一轮看分类器是否合理，再回填期望值做准确率比对。",
+  "_note": "首次运行建议加 --headed，手动完成可能出现的登录或验证，登录态会保存在 chrome-profile/ 目录里，后续轮次复用。",
+
+  "defaults": {
+    "rounds": 3,
+    "intervalSec": 8,
+    "navTimeoutMs": 30000,
+    "httpProbe": true
+  },
+
+  "targets": [
+    {
+      "id": "huawei-mate80-pc",
+      "platform": "huawei",
+      "kind": "brand_official",
+      "url": "https://www.vmall.com/product/10086133363559.html",
+      "expect": "unknown"
+    },
+    {
+      "id": "huawei-mate80-mobile",
+      "platform": "huawei",
+      "kind": "brand_official_mobile",
+      "url": "https://m.vmall.com/product/comdetail/index.html?prdId=10086133363559&sbomCode=2601010586319",
+      "expect": "unknown"
+    },
+    {
+      "id": "huawei-p40-old",
+      "platform": "huawei",
+      "kind": "brand_official_delisted",
+      "url": "https://www.vmall.com/product/10086741488253.html",
+      "expect": "unknown"
+    },
+    {
+      "id": "apple-iphone",
+      "platform": "apple",
+      "kind": "brand_official",
+      "url": "https://www.apple.com.cn/shop/buy-iphone/iphone-17-pro",
+      "expect": "unknown"
+    },
+    {
+      "id": "apple-airpods",
+      "platform": "apple",
+      "kind": "brand_official",
+      "url": "https://www.apple.com.cn/shop/buy-airpods/airpods-pro-3",
+      "expect": "unknown"
+    },
+    {
+      "id": "jd-iphone",
+      "platform": "jd",
+      "kind": "ecommerce",
+      "url": "https://item.jd.com/100149575232.html",
+      "expect": "unknown"
+    },
+    {
+      "id": "jd-search-gpu",
+      "platform": "jd",
+      "kind": "ecommerce_listing",
+      "url": "https://search.jd.com/Search?keyword=RTX%205090",
+      "expect": "unknown"
+    },
+    {
+      "id": "tmall-search",
+      "platform": "tmall",
+      "kind": "ecommerce_listing",
+      "url": "https://list.tmall.com/search_product.htm?q=RTX5090",
+      "expect": "unknown"
+    },
+    {
+      "id": "nvidia-cn",
+      "platform": "nvidia",
+      "kind": "brand_official",
+      "url": "https://www.nvidia.cn/geforce/graphics-cards/50-series/rtx-5090/",
+      "expect": "unknown"
+    }
+  ]
+}

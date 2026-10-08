@@ -1,0 +1,24 @@
+import { readFileSync } from 'node:fs';
+const base = process.env.LOCALAPPDATA + '/Google/Chrome/User Data';
+const TM = 'dhdgffkkebhmkfjojejmpbldmpobfkfo';
+const j = JSON.parse(readFileSync(base + '/Default/Secure Preferences', 'utf8'));
+const ext = j.extensions.settings[TM];
+
+console.log('=== 油猴授权实况 ===');
+console.log('disable_reasons        :', JSON.stringify(ext.disable_reasons), '← 空数组=扩展本身已启用');
+console.log('granted_permissions.api:', JSON.stringify(ext.granted_permissions.api));
+console.log('  含 userScripts        :', ext.granted_permissions.api.includes('userScripts'));
+console.log('scriptable_host        :', JSON.stringify(ext.granted_permissions.scriptable_host));
+console.log('');
+console.log('=== 关键：Chrome 138+ 的第二道授权 ===');
+console.log('userScripts API 需要额外开关：');
+console.log('  · Chrome 138+  → 扩展详情页的「允许用户脚本」开关');
+console.log('  · 或 chrome://extensions 打开「开发者模式」');
+console.log('');
+console.log('这两道开关的状态不在 Preferences 里，而是浏览器进程内存 + UI 状态，');
+console.log('无法从磁盘读到。所以只能由你手动确认。');
+console.log('');
+console.log('=== 判定 ===');
+console.log('你用的是 Chrome 154 ≥ 138 → 「允许用户脚本」开关必须打开，否则');
+console.log('油猴的 userScripts API 不可用，manifest 里的 userScripts 权限形同虚设，');
+console.log('结果是：油猴能装、能显示图标，但一个用户脚本都不执行（面板不出现、无日志）。');

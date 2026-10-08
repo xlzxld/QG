@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>任务排班中心</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#141925; --panel2:#1a2130; --panel3:#202941;
+    --border:#28324a; --border2:#37456a;
+    --fg:#e8edf6; --dim:#94a3b8; --dim2:#64748b;
+    --green:#34d399; --greenBg:rgba(52,211,153,.12);
+    --red:#f87171; --redBg:rgba(248,113,113,.12);
+    --amber:#fbbf24; --amberBg:rgba(251,191,36,.12);
+    --blue:#60a5fa; --blueBg:rgba(96,165,250,.12);
+    --purple:#c084fc;
+    --radius:14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    padding:24px 28px 60px;
+  }
+  .card {
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:var(--radius); padding:20px; margin-bottom:18px;
+  }
+  h2 { font-size:16px; font-weight:700; margin:0 0 8px; display:flex; align-items:center; gap:10px; }
+  .hint { color:var(--dim); font-size:13px; margin:0 0 16px; }
+  .timeline { display:flex; flex-direction:column; gap:12px; }
+  .item {
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--panel2); border:1px solid var(--border); border-radius:12px;
+    padding:14px 18px;
+  }
+  .item.warn { border-color:rgba(251,191,36,.4); background:rgba(251,191,36,.04); }
+  .t { font-weight:700; font-size:15px; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:11.5px; }
+  .badge.green { background:var(--greenBg); color:var(--green); border:1px solid rgba(52,211,153,.3); }
+  .badge.amber { background:var(--amberBg); color:var(--amber); border:1px solid rgba(251,191,36,.3); }
+  .badge.blue { background:var(--blueBg); color:var(--blue); border:1px solid rgba(96,165,250,.3); }
+  .notice {
+    padding:12px 16px; border-radius:10px; background:var(--blueBg); border:1px solid rgba(96,165,250,.3);
+    color:var(--fg); font-size:13px; margin-bottom:16px; display:flex; gap:10px; align-items:center;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2><span>⏱️</span>全局任务排班与防撞车看板</h2>
+  <p class="hint">汇总所有已注册平台的开售时刻，提前 15 分钟预警，防多平台同时间抢购导致的 CPU/网络冲突。</p>
+
+  <div class="notice">
+    <span>💡</span>
+    <span><b>调度建议：</b>今日 10:08 华为商城抢购与 11:00 秀动排票间隔 52 分钟，无硬件资源重叠风险。</span>
+  </div>
+
+  <div class="timeline">
+    <div class="item">
+      <div>
+        <div class="t">📱 华为商城 · HUAWEI Mate 90 Pro Max 抢购</div>
+        <div style="color:var(--dim); font-size:12px; margin-top:4px;">绑定槽位：acc1, acc2 (共 2 个专用窗口) · 目标规格：翡冷翠/16G+512G</div>
+      </div>
+      <div style="text-align:right;">
+        <span class="badge green">今日 10:08:00 开抢</span>
+        <div style="font-size:12px; color:var(--dim); margin-top:4px;">就绪检查：已配置完毕</div>
+      </div>
+    </div>
+
+    <div class="item">
+      <div>
+        <div class="t">🎸 秀动票务 · 新裤子 2026 巡演上海站</div>
+        <div style="color:var(--dim); font-size:12px; margin-top:4px;">目标票档：全价票 2 张 · 实名观演人：张*、李*</div>
+      </div>
+      <div style="text-align:right;">
+        <span class="badge amber">今日 11:00:00 开票</span>
+        <div style="font-size:12px; color:var(--dim); margin-top:4px;">就绪检查：观演人已锁定</div>
+      </div>
+    </div>
+
+    <div class="item">
+      <div>
+        <div class="t">🍎 Apple Store · iPhone 16 Pro Max 补货守候</div>
+        <div style="color:var(--dim); font-size:12px; margin-top:4px;">监控门店：上海环贸 iapm / 静安 / 浦东 · 取货时段：首选最早可用</div>
+      </div>
+      <div style="text-align:right;">
+        <span class="badge blue">常驻轮询中</span>
+        <div style="font-size:12px; color:var(--dim); margin-top:4px;">守护状态：已启动后台轮询</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

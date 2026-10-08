@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>槽位与多账号管理</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#141925; --panel2:#1a2130; --panel3:#202941;
+    --border:#28324a; --border2:#37456a;
+    --fg:#e8edf6; --dim:#94a3b8; --dim2:#64748b;
+    --green:#34d399; --greenBg:rgba(52,211,153,.12);
+    --red:#f87171; --redBg:rgba(248,113,113,.12);
+    --amber:#fbbf24; --amberBg:rgba(251,191,36,.12);
+    --blue:#60a5fa; --blueBg:rgba(96,165,250,.12);
+    --radius:14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    padding:24px 28px 60px;
+  }
+  .card {
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:var(--radius); padding:20px; margin-bottom:18px;
+  }
+  h2 { font-size:16px; font-weight:700; margin:0 0 8px; display:flex; align-items:center; gap:10px; }
+  .hint { color:var(--dim); font-size:13px; margin:0 0 16px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; }
+  th { background:var(--panel2); color:var(--dim); font-size:12px; }
+  .badge { display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; }
+  .badge.green { background:var(--greenBg); color:var(--green); border:1px solid rgba(52,211,153,.3); }
+  .badge.amber { background:var(--amberBg); color:var(--amber); border:1px solid rgba(251,191,36,.3); }
+  button {
+    background:var(--panel2); border:1px solid var(--border); color:var(--fg);
+    padding:6px 14px; border-radius:8px; cursor:pointer; font-size:12px;
+  }
+  button:hover { background:var(--panel3); }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2><span>👤</span>多账号槽位与独立浏览器环境</h2>
+  <p class="hint">
+    每个槽位分配一个独立的 Chrome UserData 目录和专用 CDP 调试端口。彻底实现 Cookie、登录态、指纹互相物理隔离。
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>槽位 ID</th>
+        <th>绑定平台</th>
+        <th>账号备注</th>
+        <th>CDP 端口</th>
+        <th>独立 Profile 目录</th>
+        <th>登录状态</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>acc1</b></td>
+        <td>华为商城</td>
+        <td>主号 (老用户权重高)</td>
+        <td><code>9222</code></td>
+        <td><code>chrome-profile-rush/acc1</code></td>
+        <td><span class="badge green">● 已登录在线</span></td>
+        <td><button>打开专用窗</button></td>
+      </tr>
+      <tr>
+        <td><b>acc2</b></td>
+        <td>华为商城</td>
+        <td>副号 (家人号)</td>
+        <td><code>9223</code></td>
+        <td><code>chrome-profile-rush/acc2</code></td>
+        <td><span class="badge green">● 已登录在线</span></td>
+        <td><button>打开专用窗</button></td>
+      </tr>
+      <tr>
+        <td><b>showstart_01</b></td>
+        <td>秀动演出</td>
+        <td>秀动实名主号</td>
+        <td><code>9224</code></td>
+        <td><code>chrome-profile-rush/showstart_01</code></td>
+        <td><span class="badge green">● 已登录在线</span></td>
+        <td><button>打开专用窗</button></td>
+      </tr>
+      <tr>
+        <td><b>apple_id_01</b></td>
+        <td>苹果预约</td>
+        <td>国区 Apple ID</td>
+        <td><code>9225</code></td>
+        <td><code>chrome-profile-rush/apple_01</code></td>
+        <td><span class="badge green">● 已登录在线</span></td>
+        <td><button>打开专用窗</button></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>

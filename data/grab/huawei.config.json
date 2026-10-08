@@ -1,0 +1,180 @@
+{
+  "_说明": "华为抢购配置。人可以直接编辑本文件；桥接面板和爬虫也写这个文件。油猴脚本通过桥接服务读它。",
+  "_怎么用": [
+    "1. products[] 里每一项 = 一个商品页 URL。一个 URL 就是一个商品，不需要标题关键字去认。",
+    "2. 爬虫只去这些 URL，一个都不多跑（不会自己去首页翻商品）。",
+    "3. 跑一次爬虫，面板的 SKU 表里会列出该商品的全部规格（颜色/版本/…）和价格、库存、开售时间。",
+    "4. 在面板上勾中要抢的 SKU，它会把编号写回下面这条商品的 sbomCodes。",
+    "5. sbomCodes 留空 = 该商品所有 SKU 都算抢购目标。"
+  ],
+  "_字段": {
+    "products[].url": "★ 商品页地址。必填。采集和抢购都以这一条为准",
+    "products[].id": "自己起的名字，只用于区分和显示，随便写",
+    "products[].enabled": "false = 本次跳过这条（爬虫不采、脚本不抢）",
+    "products[].openSbomCode": "打开页面时定位到哪个规格。留空用 URL 自带的。只想看清某个规格的价格时用",
+    "products[].maxPrice": "价格上限：页面价高于此值就不提交。null = 不限",
+    "products[].quantity": "买几件",
+    "products[].saleAt": "开售时间 ISO8601 带时区，如 2026-10-07T10:08:00+08:00。null = 不定时，看到可买就买",
+    "mode": "rush=到点抢购 / monitor=缺货时轮询等回流",
+    "dryRun": "true = 只走到点下购买为止，不提交订单。先用它验证页面元素认不认得准",
+    "earlyEnterSec": "开售前多少秒进页面就位",
+    "limits.pollIntervalMs": "平时轮询间隔（毫秒）。离目标时刻远的时候用这个",
+    "limits.pollIntervalHotMs": "★ 临售/开售后的轮询间隔（毫秒）。默认 150 —— 实测这个值是决定抢购速度的关键：一轮检测只要 6ms，所以延迟几乎全看这个间隔",
+    "limits.hotWindowMs": "距目标开售时刻还有多久就切到快查（毫秒）。默认 10000 = 开售前 10 秒开始高频监听",
+    "limits.giveUpAfterMs": "多久还没成功就放弃（毫秒）",
+    "limits.internalFireMs": "★ 内部喊话节奏（毫秒）：走捷径调页面内部入口的最低间隔。50=跟轮询同速（推荐），300=老版行为",
+    "limits.cdpBuyRetry": "购买点击重试次数：点了『立即购买』没出确认页，最多再试几次",
+    "limits.fuseRefreshDelayMs": "保险丝：开售后按钮迟迟不出现，等这么久强制刷新一次页面（只刷一次）",
+    "products[].skuIds": "要抢的 SKU 编号列表。留空 = 全部。在面板上勾选后自动写入",
+    "limits.sessionPingMs": "★ 登录保活间隔（毫秒）：每隔这么久发一次轻请求，把商城的短命 Cookie 续上（实测约 15 分钟不活动就会掉线）。默认 480000 = 8 分钟，别大于 10 分钟",
+    "limits.preOpenSubmitLeadMs": "预开确认页的提交提前量（毫秒）：0 = 开售时刻一到就提交（最稳）；实测网络延迟后可调 50~150 让请求踩点到达",
+    "limits.submitErrorRetryMax": "提交失败时的补发次数上限：只在页面明确说「提交失败/网络异常/活动未开始」时才补发，默认 2",
+    "warmup.enabled": "★ 结算页预热：开售前自动用另一个现货商品的结算页把资源焐热，目标商品开售时结算页从冷加载约 5.8 秒变热加载约 0.5 秒",
+    "monitor.scanMode": "回流检测方式：sku=切规格探测（默认，不刷新页面、每轮约 1.5 秒）；refresh=老办法整页刷新",
+    "monitor.skuScanSecs": "切规格探测的间隔（秒），默认 10",
+    "monitor.skuScanJitterSecs": "切规格间隔的随机抖动上限（秒），默认 5",
+    "monitor.skuFallbackRefreshSecs": "sku 模式下多久做一次整页刷新兜底（秒），默认 600 = 10 分钟",
+    "warmup.url": "★ 预热用商品页网址：开售前用它开一次结算页草稿焐热资源（不产生订单）。留空 = 自动从商品列表里挑现货商品"
+  },
+  "platform": "huawei",
+  "profileId": "huawei_user_01",
+  "enabled": true,
+  "mode": "rush",
+  "dryRun": false,
+  "earlyEnterSec": 90,
+  "_B方案拦截": {
+    "说明": "在『本机浏览器收到的内容』上做手脚：不构造、不重放、不伪造任何请求，流量仍全部由页面自己发起。改版体检（控制台『改版体检』页）会对着真实环境逐项验证这些规则仍有效。",
+    "enabled": "true=启用响应拦截。false=完全回到旧版行为",
+    "leadMs": "抢购信息里的开售时刻提前多少毫秒（页面按钮提前解锁）。默认 300。设 0 = R1 关闭（响应原样放行）",
+    "rules.rushInfo": "R1：改写 queryRushbuyInfo.json 的 startTime，按钮提前解锁",
+    "rules.queueCapture": "R2：排队页/排队脚本自动落盘留证（data/grab/evidence/queue-samples/），原样放行。样本攒够后做排队接管",
+    "rules.orderConfirmSignal": "R3：确认订单页零延迟信号（浏览器级事件，不走 Fetch，无需配置）"
+  },
+  "intercept": {
+    "enabled": true,
+    "leadMs": 300,
+    "rules": {
+      "rushInfo": true,
+      "queueCapture": true,
+      "orderConfirmSignal": true
+    }
+  },
+  "_A方案触发器": "triggerMode: click=可信点击（默认，CDP 真实鼠标事件）；internal=到点直接调页面内部下单函数（更快，但 2026-10-07 体检实测 window.rush 已不存在，等体检 C7 项变绿后才可打开）。internal 调用失败会自动回落真点击。",
+  "triggerMode": "internal",
+  "products": [
+    {
+      "id": "mate90-pro-max",
+      "enabled": true,
+      "url": "https://item.vmall.com/product/comdetail/index.html?prdId=10086384648661&sbomCode=2601010640927&cid=391446",
+      "maxPrice": null,
+      "quantity": 1,
+      "saleAt": null,
+      "skuIds": []
+    },
+    {
+      "id": "HUAWEI Mate XT 2",
+      "enabled": true,
+      "url": "https://item.vmall.com/product/comdetail/index.html?prdId=10086839715516&sbomCode=2601010635813",
+      "maxPrice": null,
+      "quantity": 1,
+      "saleAt": null,
+      "skuIds": []
+    },
+    {
+      "id": "HUAWEI Pura X View",
+      "enabled": true,
+      "url": "https://item.vmall.com/product/comdetail/index.html?prdId=10086683896486&sbomCode=2601010634026",
+      "maxPrice": null,
+      "quantity": 1,
+      "saleAt": null,
+      "skuIds": [
+        "2601010634031",
+        "2601010634027"
+      ]
+    },
+    {
+      "id": "HUAWEI Pura X Max",
+      "enabled": true,
+      "url": "https://item.vmall.com/product/comdetail/index.html?prdId=10086621059876&sbomCode=2601010615022",
+      "skuIds": [
+        "2601010615029"
+      ],
+      "maxPrice": null,
+      "quantity": 1,
+      "saleAt": null
+    },
+    {
+      "id": "HUAWEI Mate 90 Pro",
+      "enabled": true,
+      "url": "https://item.vmall.com/product/comdetail/index.html?prdId=10086050799772&sbomCode=2601010640424",
+      "skuIds": [
+        "2601010640424",
+        "2601010640419",
+        "2601010640420",
+        "2601010640421"
+      ],
+      "maxPrice": null,
+      "quantity": 1,
+      "saleAt": null
+    },
+    {
+      "id": "HUAWEI Mate 90",
+      "enabled": true,
+      "url": "https://item.vmall.com/product/comdetail/index.html?prdId=10086824447544&sbomCode=2601010639613",
+      "skuIds": [
+        "2601010639613",
+        "2601010639614",
+        "2601010639615",
+        "2601010639616"
+      ],
+      "maxPrice": null,
+      "quantity": 1,
+      "saleAt": null
+    }
+  ],
+  "limits": {
+    "maxRetryPerPage": 1,
+    "pollIntervalMs": 5000,
+    "pollIntervalHotMs": 50,
+    "internalFireMs": 50,
+    "hotWindowMs": 3000,
+    "pollJitterRatio": 0.3,
+    "giveUpAfterMs": 60000,
+    "fuseRefreshDelayMs": 1000,
+    "cdpBuyRetry": 3,
+    "sessionPingMs": 480000,
+    "preOpenSubmitLeadMs": 0,
+    "submitErrorRetryMax": 2
+  },
+  "humanHandoff": {
+    "stopOnCaptcha": true,
+    "stopOnLogin": true,
+    "note": "遇到验证码或登录挑战一律停下来等人，不做任何绕过尝试"
+  },
+  "evidence": {
+    "screenshot": true,
+    "domText": true,
+    "maxTextChars": 6000
+  },
+  "bridge": {
+    "url": "http://127.0.0.1:3100"
+  },
+  "monitor": {
+    "enabled": true,
+    "pollSecs": 60,
+    "densePollSecs": 30,
+    "jitterSecs": 15,
+    "interfacePollSecs": 15,
+    "denseWindowMin": 40,
+    "maxMs": 7200000,
+    "scanMode": "sku",
+    "skuScanSecs": 10,
+    "skuScanJitterSecs": 5,
+    "skuFallbackRefreshSecs": 600,
+    "skuScanMaxFails": 5
+  },
+  "warmup": {
+    "enabled": true,
+    "url": "https://item.vmall.com/product/comdetail/index.html?prdId=10086824447544&sbomCode=2601010639613"
+  }
+}

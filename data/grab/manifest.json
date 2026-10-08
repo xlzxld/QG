@@ -1,0 +1,65 @@
+{
+  "_comment": "多平台抢购控制台与应用清单 (Single Source of Truth)。前端导航与后端桥接服务均由本清单驱动。",
+  "version": "1.0.0",
+  "platforms": [
+    {
+      "id": "huawei",
+      "name": "华为商城",
+      "icon": "📱",
+      "badge": "官方版",
+      "desc": "VMall 手机/平板/穿戴设备多槽位真点击秒杀",
+      "status": "ready",
+      "entryUrl": "/console-huawei",
+      "driverScript": "grab/cdp-rush.mjs",
+      "slotsFile": "data/grab/rush-slots.huawei.json",
+      "configFile": "data/grab/huawei.config.json"
+    },
+    {
+      "id": "showstart",
+      "name": "秀动票务",
+      "icon": "🎸",
+      "badge": "专属页",
+      "desc": "Livehouse 演出排队、观演人锁定、开票秒杀",
+      "status": "prototype",
+      "entryUrl": "/console-showstart",
+      "driverScript": "grab/showstart-rush.mjs",
+      "slotsFile": "data/grab/rush-slots.showstart.json",
+      "configFile": "data/grab/showstart.config.json"
+    },
+    {
+      "id": "apple",
+      "name": "苹果预约",
+      "icon": "🍎",
+      "badge": "专属页",
+      "desc": "Apple Store 线下直营店现货补货与取货预约",
+      "status": "prototype",
+      "entryUrl": "/console-apple",
+      "driverScript": "grab/apple-rush.mjs",
+      "slotsFile": "data/grab/rush-slots.apple.json",
+      "configFile": "data/grab/apple.config.json"
+    }
+  ],
+  "tools": [
+    {
+      "id": "tasks",
+      "name": "任务排班",
+      "icon": "⏱️",
+      "desc": "跨平台抢购开售时间表与全局提醒",
+      "entryUrl": "/tools/tasks"
+    },
+    {
+      "id": "accounts",
+      "name": "槽位与账号",
+      "icon": "👤",
+      "desc": "多账号 Chrome 独立环境与登录态看板",
+      "entryUrl": "/tools/accounts"
+    },
+    {
+      "id": "guide",
+      "name": "使用指引",
+      "icon": "📖",
+      "desc": "全平台操作说明与避坑守则",
+      "entryUrl": "/tools/guide"
+    }
+  ]
+}

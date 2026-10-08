@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>抢购系统使用指引</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#141925; --panel2:#1a2130; --panel3:#202941;
+    --border:#28324a; --border2:#37456a;
+    --fg:#e8edf6; --dim:#94a3b8; --dim2:#64748b;
+    --green:#34d399; --greenBg:rgba(52,211,153,.12);
+    --red:#f87171; --redBg:rgba(248,113,113,.12);
+    --amber:#fbbf24; --amberBg:rgba(251,191,36,.12);
+    --blue:#60a5fa; --blueBg:rgba(96,165,250,.12);
+    --radius:14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    padding:24px 28px 60px;
+  }
+  .card {
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:var(--radius); padding:22px; margin-bottom:18px;
+  }
+  h2 { font-size:16px; font-weight:700; margin:0 0 10px; display:flex; align-items:center; gap:10px; }
+  .steps { padding-left:20px; line-height:1.8; }
+  .steps li { margin-bottom:12px; }
+  .box { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:14px 18px; margin:14px 0; }
+  code { font-family:ui-monospace,Consolas,monospace; background:rgba(0,0,0,.3); padding:2px 6px; border-radius:4px; color:var(--blue); }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2><span>📖</span>多平台抢购工作台 · 操作说明与避坑守则</h2>
+  <div class="box">
+    <b>核心架构原则：</b>
+    「外壳 + 应用清单 + 专属页独立适配」。每个平台想怎么设计就怎么设计，通过 CDP 驱动独立真实 Chrome，零改动、零互相影响。
+  </div>
+
+  <h3>抢购标准作业流程（SOP）：</h3>
+  <ol class="steps">
+    <li>
+      <b>开售前 15 分钟：</b>在左侧选择对应平台，检查槽位窗口是否打开，确认各窗口内已登录对应账号。
+    </li>
+    <li>
+      <b>开售前 5 分钟：</b>检查商品规格（华为勾选 SKU / 秀动勾选观演人 / 苹果选定机型与门店）。
+    </li>
+    <li>
+      <b>开售前 2 分钟：</b>关闭“演练模式”（此时系统将准备真正下单提交），点击<b>「一键派发」</b>。
+    </li>
+    <li>
+      <b>开售瞬间（T0）：</b>CDP 驱动自动对齐平台服务器时钟，毫秒级模拟可信硬件点击提交订单。
+    </li>
+    <li>
+      <b>出单后：</b>人工在 15-30 分钟内完成银行卡/支付宝支付（系统遵循安全边界，绝不代扣款）。
+    </li>
+  </ol>
+</div>
+
+</body>
+</html>

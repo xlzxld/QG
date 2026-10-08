@@ -1,0 +1,396 @@
+[
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/recommend/queryRecommendConfig?lang=zh_CN&country=CN&portal=1&isRecommendConfig=true",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 63,
+    "isJson": true,
+    "topKeys": [
+      "data",
+      "info",
+      "resultCode"
+    ],
+    "preview": "{\"data\":\"user not login.\",\"info\":\"用户未登录\",\"resultCode\":\"200916\"}",
+    "score": 9
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/content/getProdInfoListWithPage?dataSourceList=[\"DA045436\",\"DA045449\",\"DA045450\",\"DA045451\",\"DA070052\",\"DA045671\",\"DA065048\",\"DA061726\",\"DA045465\",\"DA045467\",\"DA045466\",\"DA045454\",\"DA045455\",\"DA045456\",\"DA045457\",\"DA045458\",\"DA045459\",\"DA060036\",\"DA045461\",\"DA059451\",\"DA045469\",\"DA045470\",\"DA045471\",\"DA045473\",\"DA045475\",\"DA068965\",\"DA045477\",\"DA045478\",\"DA045479\",\"DA045480\",\"DA045481\",\"DA045507\",\"DA045508\",\"DA045509\"]&lang=zh_CN&country=CN&portal=1&version=1",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 76459,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "dataMap",
+      "success"
+    ],
+    "preview": "{\"code\":\"0\",\"dataMap\":{\"DA045469\":{\"dataInfos\":[{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":15.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":15.00,\"originPrice\":15.00,\"photoName\":\"6A63D369733CFF9B8757A04E71E8EF6D.png\",\"photoPath\":\"/FssCdnProxy/vmall_bop_server/BopMaterialCenter/\",\"prdId\":10086247390706,\"prdName\":\"华为音乐 超级音乐VIP卡\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":15.00,\"skuCode\":\"3201070004601\",\"supportCompare\":0},{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":144.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":144.00,\"originPrice\":144.00,\"photoName\":\"56C36FEA074CC97BE1313C1285328901.png\",\"photoPath\":\"/FssCdnProxy/vmall_product_uom/pmsSalesFile/\",\"prdId\":10086230104488,\"prdName\":\"华为音乐 音乐VIP卡\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":144.00,\"skuCode\":\"3201070001703\",\"supportCompare\":0}],\"totalRows\":3},\"DA045467\":{\"dataInfos\":[{\"customImage\":true,\"dataType\":\"tag\",\"displayPhotoWebpPathMap\":{\"webp_1\":\"/uomcdn/CN/cms/202510/48c46ba0a6954ac7a562168dfaec7fcc.png.25.webp\",\"webp_2\":\"/uomcdn/CN/cms/202510/48c46ba0a6954ac7a562168dfaec7fcc.png.50.webp\",\"webp_3\":\"/uomcdn/CN/cms/202510/48c46ba0a6954ac7a562168dfaec7fcc.png.75.webp\",\"webp_4\":\"/uomcdn/CN/cms/202510/48c46ba0a6954ac7a562168dfaec7fcc.png.webp\"},\"photoName\":\"48c46ba0a6954ac7a562168dfaec7fcc.png\",\"photoPath\":\"/uomcdn/CN/cms/202510/\",\"prdName\":\"耳机补配备件服务\",\"tagCode\":\"[{\\\"code\\\": \\\"TAG9737\\\", \\\"cnName\\\": \\\"耳机补配备件服务\\\", \\\"nodeKey\\\": \\\"670-TAG9737\\\"}]\"}],\"totalRows\":1},\"DA045466\":{\"dataInfos\":[{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":85.00,\"customImage\":true,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPhotoWebpPathMap\":{\"webp_1\":\"/uomcdn/CN/cms/202609/7fd77db338a648aba8671464668bc6eb.png.25.webp\",\"webp_2\":\"/uomcdn/CN/cms/202609/7fd77db338a648aba8671464668bc6eb.png.50.webp\",\"webp_3\":\"/uomcdn/CN/cms/202609/7fd77db338a648aba8671464668bc6eb.png.75.webp\",\"webp_4\":\"/uomcdn/CN/cms/202609/7fd77db338a648aba8671464668bc6eb.png.webp\"},\"displayPrice\":85.00,\"originPrice\":85.00,\"photoName\":\"7fd77db338a648aba8671464668bc6eb.png\",\"photoPath\":\"/uomcdn/CN/cms/202609/\",\"prdId\":10086952136102,\"prdName\":\"智慧屏上门安装服务\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":85.00,\"skuCode\":\"3201070022109\",\"supportCompare\":0}],\"totalRows\":1},\"DA068965\":{\"dataInfos\":[{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":6500.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":6500.00,\"originPrice\":6500.00,\"photoName\":\"971C7071B3718713196ADCE62FB6C4AB.png\",\"photoPath\":\"/FssCdnProxy/vmall_product_uom/pmsSalesFile/\",\"prdId\":10086072786503,\"prdName\":\"华为擎云 W585y\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":6500.00,\"skuCode\":\"4601010012301\",\"supportCompare\":0},{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":7700.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":7700.00,\"originPrice\":7700.00,\"photoName\":\"3261C9E7F90D074EE64E6E0430AD5E39.png\",\"photoPath\":\"/FssCdnProxy/vmall_product_uom/pmsSalesFile/\",\"prdId\":10086821908046,\"prdName\":\"华为擎云 W515y\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":7700.00,\"skuCode\":\"4601010012401\",\"supportCompare\":0},{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":4500.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":4500.00,\"originPrice\":4500.00,\"photoName\":\"8BB3FDB62CF214F381036560EA59FE23.png\",\"photoPath\":\"/FssCdnProxy/vmall_product_uom/pmsSalesFile/\",\"prdId\":10086922875819,\"prdName\":\"华为擎云 W585x 优享版\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":4500.00,\"skuCode\":\"4601010012001\",\"s",
+    "score": 9
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/content/getProdInfoListWithPage?dataSourceList=[\"DA045516\",\"DA045517\",\"DA045518\",\"DA045519\",\"DA045520\",\"DA045521\",\"DA045522\",\"DA068472\",\"DA045418\",\"DA045523\",\"DA053768\",\"DA045420\",\"DA045419\",\"DA045524\",\"DA045423\",\"DA045421\",\"DA045425\",\"DA045427\",\"DA045439\",\"DA050256\",\"DA050969\",\"DA050970\",\"DA050971\",\"DA066231\",\"DA050973\",\"DA068475\",\"DA050974\",\"DA065117\",\"DA051471\",\"DA045366\",\"DA056240\",\"DA045368\",\"DA045369\",\"DA045370\",\"DA045372\",\"DA045374\",\"DA045373\",\"DA045376\",\"DA045378\",\"DA067962\",\"DA067963\",\"DA057654\",\"DA057655\",\"DA045381\",\"DA045382\",\"DA045383\",\"DA045384\",\"DA059827\",\"DA063001\",\"DA049028\",\"DA045387\",\"DA056228\",\"DA045388\",\"DA051050\",\"DA054295\",\"DA045391\",\"DA057994\",\"DA045396\",\"DA045395\",\"DA050358\",\"DA052900\",\"DA045399\",\"DA045403\",\"DA058913\",\"DA045404\",\"DA045406\",\"DA054930\",\"DA057889\",\"DA045407\",\"DA045408\",\"DA045409\",\"DA045411\",\"DA068473\",\"DA068474\",\"DA064993\",\"DA060289\",\"DA064989\",\"DA064991\",\"DA064992\",\"DA045447\",\"DA066714\",\"DA066716\",\"DA066717\",\"DA066718\",\"DA066719\",\"DA045414\",\"DA058361\",\"DA057974\",\"DA045415\",\"DA069880\",\"DA069881\",\"DA069882\",\"DA053772\",\"DA045422\",\"DA053601\",\"DA059750\",\"DA045424\",\"DA059835\",\"DA045430\",\"DA064791\"]&lang=zh_CN&country=CN&portal=1&version=1",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 243309,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "dataMap",
+      "success"
+    ],
+    "preview": "{\"code\":\"0\",\"dataMap\":{\"DA045447\":{\"dataInfos\":[{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":999.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":999.00,\"originPrice\":999.00,\"photoName\":\"73AB1EF3AC19AF81FA27DDD3303E3C3F.png\",\"photoPath\":\"/FssCdnProxy/vmall_product_uom/pmsSalesFile/\",\"prdId\":10086504513116,\"prdName\":\"华为灵犀手写笔\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":999.00,\"skuCode\":\"3108060004601\",\"supportCompare\":0},{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":999.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":999.00,\"originPrice\":999.00,\"photoName\":\"5BC7F6825066CDF6AA819E2A89EFCF6E.png\",\"photoPath\":\"/FssCdnProxy/vmall_product_uom/pmsSalesFile/\",\"prdId\":10086096240558,\"prdName\":\"华为灵犀悬浮触控\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":999.00,\"skuCode\":\"3108020002501\",\"supportCompare\":0},{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":9999.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":7499.00,\"originPrice\":9999.00,\"photoName\":\"CD9F773A6B9D7D1786C97ED30824FCCF.png\",\"photoPath\":\"/FssCdnProxy/vmall_product_uom/pmsSalesFile/\",\"prdId\":10086814710103,\"prdName\":\"华为悦彰家庭影院\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":7499.00,\"skuCode\":\"3102060024003\",\"supportCompare\":0},{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":2199.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":2079.00,\"modelPoolId\":\"47\",\"originPrice\":2199.00,\"photoName\":\"B6B421462B9D1070D7344999E0B64A37.png\",\"photoPath\":\"/FssCdnProxy/vmall_product_uom/pmsSalesFile/\",\"prdId\":10086679107439,\"prdName\":\"Sound X5\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":2079.00,\"skuCode\":\"3102060025003\",\"supportCompare\":1},{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":2199.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":1799.00,\"modelPoolId\":\"47\",\"originPrice\":2199.00,\"photoName\":\"A1CA162A0504C5193EE9FACAEDA11C27mp.png\",\"photoPath\":\"/uomcdn/CN/pms/202410/gbom/6942103117800/\",\"prdId\":10086921998890,\"prdName\":\"Sound X4\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":1799.00,\"skuCode\":\"3102060019902\",\"supportCompare\":1},{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":2499.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":2499.00,\"modelPoolId\":\"47\",\"originPrice\":2499.00,\"photoName\":\"500DE8770AB587CDE091309D7DA3B684mp.png\",\"photoPath\":\"/uomcdn/CN/pms/202311/gbom/6941487278367/\",\"prdId\":10086187342516,\"prdName\":\"Sound X\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":2499.00,\"skuCode\":\"3001080007004\",\"supportCompare\":1},{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":599.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":599.00,\"originPrice\":599.00,\"photoName\":\"9FF5D4BC62F978D58987748066CD1C92.png\",\"photoPath\":\"/FssCdnProxy/vmall_product_uom/pmsSalesFile/\",\"prdId\":10086483802923,\"prdName\":\"华为灵犀指向遥控\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":599.00,\"skuCode\":\"3108020003301\",\"supportCompare\":0},{\"actionUrl\":\"\",\"actionUrlMp\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"\",\"buyBottonText\":\"立即购买\",\"currentPrice\":99.00,\"customImage\":false,\"customPrice\":\"\",\"dataType\":\"prod\",\"displayPrice\":99.00,\"originPrice\":99.00,\"photoName\":\"5B22E4486F248F1E38BC287AF93BB2A3mp.png\",\"photoPath\":\"/uomcdn/CN/pms/202407/gbom/6901443451388/\",\"prdId\":10086457428727,\"prdName\":\"华为智慧屏语音遥控器\",\"priceEndWithQi\":\"0\",\"priceMode\":\"1\",\"productPageType\":0,\"salePrice\":99.00,\"skuCode\":\"3108020002201\",\"s",
+    "score": 9
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/sg/content/queryHwAds",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 5089,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "dataInfos",
+      "success"
+    ],
+    "preview": "{\"code\":\"0\",\"dataInfos\":[{\"targetCode\":\"\",\"targetInfo\":{\"targetType\":\"pic\",\"targetCode\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"https://www.vmall.com/portal/activity/index.html?isShowLayout=false&pn=phonespc\",\"actionUrlMp\":\"\",\"actionUrl\":\"\",\"bgColor\":\"#ED2E35\",\"dataSourceCode\":\"DB071361\",\"dataSourceType\":\"ad\",\"imgUrl\":\"/uomcdn/CN/cms/202610/153f5c61d2cc4dedb63327a7516e1687.jpg\",\"hotArea\":\"[]\",\"tagSelected\":\"{}\",\"imgWebpUrlMap\":{\"webp_1\":\"/uomcdn/CN/cms/202610/153f5c61d2cc4dedb63327a7516e1687.jpg.25.webp\",\"webp_2\":\"/uomcdn/CN/cms/202610/153f5c61d2cc4dedb63327a7516e1687.jpg.50.webp\",\"webp_3\":\"/uomcdn/CN/cms/202610/153f5c61d2cc4dedb63327a7516e1687.jpg.75.webp\",\"webp_4\":\"/uomcdn/CN/cms/202610/153f5c61d2cc4dedb63327a7516e1687.jpg.webp\"},\"video\":\"\"},\"targetType\":\"pic\"},{\"targetCode\":\"\",\"targetInfo\":{\"targetType\":\"pic\",\"targetCode\":\"\",\"actionUrlWap\":\"https://m.vmall.com/portal/activity/index.html?isShowLayout=false&pn=purapc\",\"actionUrlWeb\":\"https://www.vmall.com/portal/activity/index.html?isShowLayout=false&pn=purapc\",\"actionUrlMp\":\"https://mp.vmall.com/mp.html?pagename=RnActivity/index&isShowLayout=false&pn=purapc\",\"actionUrl\":\"vmall://com.vmall.client/home/activity?isShowLayout=false&pn=purapc\",\"bgColor\":\"#ED2E35\",\"dataSourceCode\":\"DB071361\",\"dataSourceType\":\"ad\",\"imgUrl\":\"/uomcdn/CN/cms/202609/67c2f7a85bf7494dbf831bfadf698ee4.jpg\",\"hotArea\":\"[]\",\"tagSelected\":\"{}\",\"imgWebpUrlMap\":{\"webp_1\":\"/uomcdn/CN/cms/202609/67c2f7a85bf7494dbf831bfadf698ee4.jpg.25.webp\",\"webp_2\":\"/uomcdn/CN/cms/202609/67c2f7a85bf7494dbf831bfadf698ee4.jpg.50.webp\",\"webp_3\":\"/uomcdn/CN/cms/202609/67c2f7a85bf7494dbf831bfadf698ee4.jpg.75.webp\",\"webp_4\":\"/uomcdn/CN/cms/202609/67c2f7a85bf7494dbf831bfadf698ee4.jpg.webp\"},\"video\":\"\"},\"targetType\":\"pic\"},{\"targetCode\":\"\",\"targetInfo\":{\"targetType\":\"pic\",\"targetCode\":\"\",\"actionUrlWap\":\"https://m.vmall.com/product/comdetail/index.html?prdId=10086751122921\",\"actionUrlWeb\":\"https://www.vmall.com/product/comdetail/index.html?prdId=10086751122921\",\"actionUrlMp\":\"/packageGoodsDetail/pages/goodsDetail?prdId=10086751122921\",\"actionUrl\":\"vmall://com.vmall.client/product/comdetail?prdId=10086751122921\",\"bgColor\":\"#ED2E35\",\"dataSourceCode\":\"DB071361\",\"dataSourceType\":\"ad\",\"imgUrl\":\"/uomcdn/CN/cms/202609/2e4ee279618f4f248d5dae4991edeb1f.jpg\",\"hotArea\":\"[]\",\"tagSelected\":\"{}\",\"imgWebpUrlMap\":{\"webp_1\":\"/uomcdn/CN/cms/202609/2e4ee279618f4f248d5dae4991edeb1f.jpg.25.webp\",\"webp_2\":\"/uomcdn/CN/cms/202609/2e4ee279618f4f248d5dae4991edeb1f.jpg.50.webp\",\"webp_3\":\"/uomcdn/CN/cms/202609/2e4ee279618f4f248d5dae4991edeb1f.jpg.75.webp\",\"webp_4\":\"/uomcdn/CN/cms/202609/2e4ee279618f4f248d5dae4991edeb1f.jpg.webp\"},\"video\":\"\"},\"targetType\":\"pic\"},{\"targetCode\":\"\",\"targetInfo\":{\"targetType\":\"pic\",\"targetCode\":\"\",\"actionUrlWap\":\"https://m.vmall.com/product/comdetail/index.html?prdId=10086283717537\",\"actionUrlWeb\":\"https://www.vmall.com/product/comdetail/index.html?prdId=10086283717537\",\"actionUrlMp\":\"/packageGoodsDetail/pages/goodsDetail?prdId=10086283717537\",\"actionUrl\":\"vmall://com.vmall.client/product/comdetail?prdId=10086283717537\",\"bgColor\":\"#ED2E35\",\"dataSourceCode\":\"DB071361\",\"dataSourceType\":\"ad\",\"imgUrl\":\"/uomcdn/CN/cms/202609/714ebc5a774f4d2e99fc983ec6512270.jpg\",\"hotArea\":\"[]\",\"tagSelected\":\"{}\",\"imgWebpUrlMap\":{\"webp_1\":\"/uomcdn/CN/cms/202609/714ebc5a774f4d2e99fc983ec6512270.jpg.25.webp\",\"webp_2\":\"/uomcdn/CN/cms/202609/714ebc5a774f4d2e99fc983ec6512270.jpg.50.webp\",\"webp_3\":\"/uomcdn/CN/cms/202609/714ebc5a774f4d2e99fc983ec6512270.jpg.75.webp\",\"webp_4\":\"/uomcdn/CN/cms/202609/714ebc5a774f4d2e99fc983ec6512270.jpg.webp\"},\"video\":\"\"},\"targetType\":\"pic\"},{\"targetCode\":\"\",\"targetInfo\":{\"targetType\":\"pic\",\"targetCode\":\"\",\"actionUrlWap\":\"\",\"actionUrlWeb\":\"https://www.vmall.com/product/cardetail/index.html?prdId=10086341224112\",\"actionUrlMp\":\"\",\"actionUrl\":\"\",\"bgColor\":\"#ED2E35\",\"dataSourceCode\":\"DB071361\",\"dataSourceType\":\"ad\",\"imgUrl\":\"/uomcdn/CN/cms/202609/c93a877ccb5340659c526f2f5e12295f.jpg\",\"hotArea\":\"[]\",\"tagSelected\":\"{}\",\"imgWebpUrlMap\":{\"webp_1\"",
+    "score": 9
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/recommend/queryHotWord?",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 1780,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "hotWordList",
+      "success"
+    ],
+    "preview": "{\"code\":\"0\",\"hotWordList\":[{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"WATCH 6\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"华为 AI 眼镜\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"华为智能眼镜 2\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"华为无线鼠标\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"HUAWEI Tag\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"问界 新M8\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"华为手环 10 表带\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"华为智慧屏语音遥控器\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"享界 G9\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"华为灵犀手写笔 砚黑\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"华为移动路由 5\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"华为斜挎挂绳\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"华为灵犀悬浮触控\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"华为移动路由 Pro\",\"wordType\":\"2\"},{\"inSearchBox\":1,\"isActivityWords\":0,\"isAppointPrd\":0,\"saleChannel\":1,\"tagType\":0,\"word\":\"智界 R7\",\"wordType\":\"2\"}],\"success\":true}",
+    "score": 9
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/content/getProdInfoListWithPage?dataSourceList=[\"DA069837\",\"DA069838\",\"DA069839\",\"DA069840\",\"DA069841\"]&lang=zh_CN&country=CN&portal=1&version=1",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 4494,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "dataMap",
+      "success"
+    ],
+    "preview": "{\"code\":\"0\",\"dataMap\":{\"DA069838\":{\"dataInfos\":[{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"隐私政策\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://legal.cloud.huawei.com/terms/scope/huawei/vmall/privacy-statement.htm?language=zh-cn&code=CN&branchid=0&contenttag=default\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"服务协议\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://legal.cloud.huawei.com/terms/scope/huawei/vmall/terms.htm?language=zh-cn&code=CN&branchid=0&contenttag=default\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"COOKIES\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.vmall.com/portal/activity/index.html?pn=cookies\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"Copyright © 2012-2026 华为终端有限公司 版权所有\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"\",\"newTabFlag\":\"0\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"经营资质\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.vmall.com/portal/notice/index.html?targetRoute=NoticeDetail&id=zh-cn15987282\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"粤ICP备19015064号\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://beian.miit.gov.cn/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"粤公网安备 44198202000176号\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://beian.mps.gov.cn/#/query/webSearch\",\"newTabFlag\":\"1\"}],\"totalRows\":7},\"DA069837\":{\"dataInfos\":[{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\" 华为集团\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.huawei.com/cn/\",\"newTabFlag\":\"0\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"消费者业务网站\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://consumer.huawei.com/cn/\",\"newTabFlag\":\"0\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"华为应用市场\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://appgallery.huawei.com/\",\"newTabFlag\":\"0\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"HarmonyOS\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://consumer.huawei.com/cn/harmonyos-6/\",\"newTabFlag\":\"0\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"华为终端云空间\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://cloud.huawei.com/\",\"newTabFlag\":\"0\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\" 开发者联盟\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://developer.huawei.com/cn/\",\"newTabFlag\":\"0\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"华为商城手机版\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.vmall.com/portal/activity/index.html?pageId=401001427\",\"newTabFlag\":\"0\"}],\"totalRows\":7},\"DA069839\":{\"dataInfos\":[{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"增值电信业务经营许可证：粤B2-20190762\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://res.vmallres.com/uomcdn/CN/cms/202609/c1499a7c454744d5a8d25593bdd90967.png\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"备案主体编号：44201919072182\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://wxdxsba.miit.gov.cn/serviceAction.action\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"粤新出网备（2021）2号\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://res.vmallres.com/pimages/pages/cdnImages/91133651365615633119.pdf\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"（粤）网械平台备字[2022]第00005号\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://res.vmallres.com/uomcdn/CN/cms/202609/10d35f2de6f9454f94a37d86905741bf.png\",\"newTabFlag\":\"1\"}],\"totalRows\":4},\"DA069841\":{\"dataInfos\":[{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"网信算备441901536982702230011号\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://res.vmallres.com/pimages/pages/cdnImages/70619354331715391607.png\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"网信算备441901536982704230013号\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://res.vmallres.com/pimages/pages/cdnImages/84206354331715360248.png\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"微信小程序备案号：粤ICP备19015064号-46X号\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://beian.miit.gov.cn/#/Integrated/index\",\"newTabFlag\":\"1\"}],\"totalRows\":3},\"DA069840\":{\"dataInfos\":[{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"互联网药品信息服务备案：粤网药信备字〔2026〕第00406号\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://res.vmallres.com/",
+    "score": 9
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/content/getProdInfoListWithPage?dataSourceList=[\"DA069831\",\"DA069833\",\"DA069834\",\"DA069835\"]&lang=zh_CN&country=CN&portal=1&version=1",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 4847,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "dataMap",
+      "success"
+    ],
+    "preview": "{\"code\":\"0\",\"dataMap\":{\"DA069831\":{\"dataInfos\":[{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"享0分期利息\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.vmall.com/portal/activity/index.html?isShowLayout=false&pageId=101123464\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"企业商用\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.vmall.com/portal/activity/index.html?isShowLayout=false&pageId=101125613\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"O2O采购\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.vmall.com/portal/activity/index.html?isShowLayout=false&pageId=101125614\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"保修政策\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://consumer.huawei.com/cn/support/warranty-policy/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"退换货政策\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.vmall.com/portal/activity/index.html?isShowLayout=false&pageId=101123440\",\"newTabFlag\":\"1\"}],\"totalRows\":5},\"DA069834\":{\"dataInfos\":[{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"华为集团\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.huawei.com/cn/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"华为消费者业务\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://consumer.huawei.com/cn/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"HarmonyOS\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://consumer.huawei.com/cn/harmonyos-6/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"HarmonyOS 开发者\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://developer.huawei.com/consumer/cn/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"华为云\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.huaweicloud.com/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"华为企业业务\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://e.huawei.com/cn/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"华为应用市场\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://appgallery.huawei.com/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"华为终端云空间\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://cloud.huawei.com/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"华为零售店\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://consumer.huawei.com/cn/retail/\",\"newTabFlag\":\"1\"}],\"totalRows\":9},\"DA069833\":{\"dataInfos\":[{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"优购码\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.vmall.com/bpreact/priority\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"以旧换新\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.vmall.com/portal/activity/index.html?isShowLayout=false&pn=yijiuhuanxinPC\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"教育优惠\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.vmall.com/portal/activity/index.html?isShowLayout=false&pn=educationcenterpc\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"补购服务\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://www.vmall.com/bpreact/serviceProduct/common\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"维修服务\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://consumer.huawei.com/cn/support/break-fix/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"上门安装\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://consumer.huawei.com/cn/support/install/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"问题排查\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://consumer.huawei.com/cn/support/get-solutions/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"防伪查询\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://consumer.huawei.com/cn/support/discriminate/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"服务点查询\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://consumer.huawei.com/cn/support/service-center/\",\"newTabFlag\":\"1\"},{\"customImage\":false,\"dataType\":\"link\",\"linkName\":\"维修备件价格\",\"linkUrlWap\":\"\",\"linkUrlWeb\":\"https://consumer.huawei.com/cn/support/sparepart-price/\",\"newTabFlag\":\"1\"}],\"totalRows\":10},\"DA069",
+    "score": 9
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/querySystemConfig?lang=zh_CN&country=CN&portal=1&version=1&systemConfigKeys=[\"web_toCardRnPrdDetail_prdList\",\"wap_toCardRnPrdDetail_prdList\",\"cp_new_message_center_switch\",\"rn_product_component_300_size_enable\",\"3rd_app_not_pullup_cid_list\",\"uniPrdURL_switch\",\"uniPrdURL_car_switch\",\"rn_web_image_component_resize_enable\",\"RnProduct_newStyle_openAllFlag\",\"RnProduct_newStyle_dislayPrds\",\"RnProduct_protectPrice\",\"is_open_rn_coupon_use\",\"is_web_open_apm\",\"vmallH5_toOldPrdDetail_ruleList\",\"rn_degrade_enable\",\"VMALL_PROMPT_MESSAGE_CONFIG\",\"VMALL_PROMPT_MESSAGE_TIMESTAMP\",\"rn_riskcode_check\",\"APP_CACHE_ENABLE\",\"ATK_CACHE_CDN_PATH\",\"rn_dap_compress_enable\",\"rn_options_list\",\"rn_web_ftl_sms_rn\",\"as_switch_to_rn_url\",\"rn_web_ftl_address_rn\",\"product_querySbomDetail_switch\",\"USER_FTL_TO_RN\",\"web_user_to_rn_switch\",\"rn_wap_ua_list\",\"product_wap_host\",\"product_web_host\",\"ApkDownloadUrl\",\"mall_client_linehome\",\"RN_DISABLE_PRELOAD_PRODUCT_INTERFACE\",\"B2C_QUERY_ORDER_TYPES\",\"COUNT_SUB_PORTAL_LIST_2\",\"RN_RECENTSCAN_GPS_DISABLE\",\"RN_MP_TO_H5_CONFIG\",\"risk_ars_fullpath\",\"rn_ai_word_speed\",\"rn_pic_reverse_color_disable\",\"isCarouselBarDisable\",\"RN_CDN_WEBP_DISABLE\",\"RN_LAZYLOAD_IMAGE_DISABLE\",\"RN_NEW_GRID_LAYOUT_ENABLE\",\"MS_RN_NEW_GRID_LAYOUT_ENABLE\"]",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 8973,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "success",
+      "systemConfigInfos"
+    ],
+    "preview": "{\"code\":\"0\",\"success\":true,\"systemConfigInfos\":{\"uniPrdURL_car_switch\":{\"systemConfigKey\":\"uniPrdURL_car_switch\",\"systemConfigValue\":\"0\"},\"RN_RECENTSCAN_GPS_DISABLE\":{\"systemConfigKey\":\"RN_RECENTSCAN_GPS_DISABLE\",\"systemConfigValue\":\"0\"},\"RN_LAZYLOAD_IMAGE_DISABLE\":{\"systemConfigKey\":\"RN_LAZYLOAD_IMAGE_DISABLE\",\"systemConfigValue\":\"0\"},\"rn_options_list\":{\"systemConfigKey\":\"rn_options_list\",\"systemConfigValue\":\"{\\\"mp\\\": \\\"1\\\",\\\"web\\\": \\\"1\\\"}\"},\"web_toCardRnPrdDetail_prdList\":{\"systemConfigKey\":\"web_toCardRnPrdDetail_prdList\",\"systemConfigValue\":\"10086606990582,10086117401353,10086771881248,10086870159150,10086977505244,10086890275169,10086474708518,10086283921739,10086037451564,10086614536373,10086939545468,10086284474731,10086557926903,10086441374812,10086091767181,10086284474731,10086614536373,10086846550524,10086593603104,10086820900502,10086639638262,10086266413345,10086207508644,10086076436616,10086689123293,10086271211728,10086497906717,10086441374812,10086099425818,10086520088052,10086147261328,10086061397518,10086833144269,10086352907080,10086677627389,10086221470718,10086242359206,10086449856108,10086290820132,10086720832039,10086139867907,10086649139491,10086213464505,10086978745540,10086217893896,10086877880039,10086675901262,10086443357750,10086987456133,10086305923901,10086113348632,10086949699739,10086042157369,10086145889539,10086809549210,10086311499371,10086780915505,10086835196695,10086730828718,10086803248070,10086470610745,10086302771102,10086969127191,10086197711933,10086176593770,10086682986133,10086173772896,10086051200739,10086443901844,10086951701468,10086256574101,10086410087895,10086472820994,10086070509545,10086324386808,10086033950270,10086973399927,10086149014181,10086044975668,10086396652596,10086271662197,10086336019024,10086582823780,10086345437384,10086633470683,10086173987714,10086426234177,10086798315049,10086633470683,10086173987714,10086610132600,10086538166235,10086033643794,10086788088549,10086058605873,10086058605873,10086683105129,10086893994408,10086847245614,10086599233280,10086658457319,10086714472605,10086482271604,10086123857360,10086535666880,10086988672178,10086316370889,10086287720888,10086221890053,10086798520815,10086727433772,10086916821106,10086831671821,10086972946741,10086890543977,10086639468296,10086471330352,10086312263309,10086771637452,10086684130379,10086835599472,10086730952077,10086911320191,10086946160326,10086928146900,10086831429489,10086578219693,10086172887626,10086476062556,10086143114219\"},\"isCarouselBarDisable\":{\"systemConfigKey\":\"isCarouselBarDisable\",\"systemConfigValue\":\"0\"},\"cp_new_message_center_switch\":{\"systemConfigKey\":\"cp_new_message_center_switch\",\"systemConfigValue\":\"1\"},\"rn_dap_compress_enable\":{\"systemConfigKey\":\"rn_dap_compress_enable\",\"systemConfigValue\":\"1\"},\"rn_ai_word_speed\":{\"systemConfigKey\":\"rn_ai_word_speed\",\"systemConfigValue\":\"60\"},\"uniPrdURL_switch\":{\"systemConfigKey\":\"uniPrdURL_switch\",\"systemConfigValue\":\"0\"},\"is_open_rn_coupon_use\":{\"systemConfigKey\":\"is_open_rn_coupon_use\",\"systemConfigValue\":\"1\"},\"rn_wap_ua_list\":{\"systemConfigKey\":\"rn_wap_ua_list\",\"systemConfigValue\":\"[\\\"SalesAdvisor-APK\\\"]\"},\"USER_FTL_TO_RN\":{\"systemConfigKey\":\"USER_FTL_TO_RN\",\"systemConfigValue\":\"true\"},\"rn_pic_reverse_color_disable\":{\"systemConfigKey\":\"rn_pic_reverse_color_disable\",\"systemConfigValue\":\"1\"},\"rn_web_ftl_sms_rn\":{\"systemConfigKey\":\"rn_web_ftl_sms_rn\",\"systemConfigValue\":\"1\"},\"VMALL_PROMPT_MESSAGE_TIMESTAMP\":{\"systemConfigKey\":\"VMALL_PROMPT_MESSAGE_TIMESTAMP\",\"systemConfigValue\":\"1790075573718\"},\"RnProduct_protectPrice\":{\"systemConfigKey\":\"RnProduct_protectPrice\",\"systemConfigValue\":\"0\"},\"MS_RN_NEW_GRID_LAYOUT_ENABLE\":{\"systemConfigKey\":\"MS_RN_NEW_GRID_LAYOUT_ENABLE\",\"systemConfigValue\":\"{\\\"app\\\":12608100,\\\"h5\\\":1}\"},\"RN_MP_TO_H5_CONFIG\":{\"systemConfigKey\":\"RN_MP_TO_H5_CONFIG\",\"systemConfigValue\":\"{\\\"12607\\\":{\\\"enable\\\":true,\\\"whiteList\\\":[],\\\"blackList\\\":[],\\\"mpMode\\\":true,\\\"searchEnable\\\":false},\\\"12608\\\":{\\\"enable\\\":true,\\\"whiteList\\\":[\\\"ydjk",
+    "score": 6
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/content/getPageInfoListAsync?pageId=301&lang=zh_CN&country=CN&portal=1",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 630469,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "pageInfos",
+      "success"
+    ],
+    "preview": "{\"code\":\"0\",\"pageInfos\":[{\"cards\":[{\"attribute\":{\"buyIconShow\":\"false\",\"commentCountShow\":\"false\",\"imgProportion\":\"\",\"mutiTagTagShow\":\"false\",\"originPriceShow\":\"false\",\"outOfStockTagShow\":\"false\",\"prodTagShow\":\"false\",\"promotionShow\":\"false\",\"promotionTagShow\":\"false\"},\"cardId\":\"1761\",\"cardType\":\"ad\",\"configInfo\":\"{\\\"more\\\":\\\"1\\\",\\\"bgBox\\\":\\\"false\\\",\\\"close\\\":\\\"1\\\",\\\"guide\\\":\\\"\\\",\\\"scene\\\":\\\"topMenu\\\",\\\"resize\\\":\\\"\\\",\\\"isFixed\\\":\\\"1\\\",\\\"cardName\\\":\\\"顶部广告位\\\",\\\"iconShow\\\":\\\"false\\\",\\\"portType\\\":\\\"2\\\",\\\"showCart\\\":\\\"true\\\",\\\"subtitle\\\":\\\"true\\\",\\\"cardTitle\\\":\\\"\\\",\\\"crowPrice\\\":\\\"true\\\",\\\"iconTexts\\\":[],\\\"imgNormal\\\":\\\"\\\",\\\"mainTitle\\\":\\\"true\\\",\\\"subTabSet\\\":[],\\\"titleShow\\\":\\\"false\\\",\\\"videoShow\\\":\\\"0\\\",\\\"adCardShow\\\":true,\\\"adLogoShow\\\":\\\"0\\\",\\\"bottonShow\\\":\\\"true\\\",\\\"layoutType\\\":\\\"OneColumnLayout\\\",\\\"showSearch\\\":\\\"true\\\",\\\"sourceShow\\\":\\\"false\\\",\\\"subCardIdx\\\":0,\\\"buyIconShow\\\":\\\"false\\\",\\\"contentShow\\\":\\\"false\\\",\\\"dynamicSort\\\":\\\"0\\\",\\\"guideStatus\\\":\\\"1\\\",\\\"imgDarkMode\\\":\\\"\\\",\\\"moreUrlType\\\":\\\"1\\\",\\\"padCImgProp\\\":\\\"\\\",\\\"padVImgProp\\\":\\\"\\\",\\\"prodTagShow\\\":\\\"false\\\",\\\"progressBar\\\":\\\"true\\\",\\\"showSetting\\\":\\\"1\\\",\\\"translation\\\":\\\"\\\",\\\"bottomNavSet\\\":[],\\\"cardTitleSub\\\":\\\"\\\",\\\"countDownWay\\\":\\\"cycleByDay\\\",\\\"imgNormalSub\\\":\\\"\\\",\\\"liveCardShow\\\":true,\\\"prodCardShow\\\":true,\\\"showCategory\\\":\\\"false\\\",\\\"subTitleShow\\\":\\\"true\\\",\\\"titleShowSub\\\":\\\"true\\\",\\\"topicTagShow\\\":\\\"true\\\",\\\"voteIconShow\\\":\\\"false\\\",\\\"countDownText\\\":\\\"\\\",\\\"imgProportion\\\":\\\"\\\",\\\"leftIconTexts\\\":[],\\\"moreActionUrl\\\":\\\"\\\",\\\"prodSellPoint\\\":\\\"false\\\",\\\"promotionShow\\\":\\\"false\\\",\\\"remainingDays\\\":\\\"true\\\",\\\"rowsPerScreen\\\":\\\"1\\\",\\\"separatorShow\\\":\\\"false\\\",\\\"shareIconShow\\\":\\\"false\\\",\\\"showCountDown\\\":true,\\\"titleLocation\\\":\\\"alignLeft\\\",\\\"topicCardShow\\\":false,\\\"userClickProd\\\":\\\"0\\\",\\\"actionIconShow\\\":\\\"false\\\",\\\"adaptationRule\\\":\\\"proportionalScaling\\\",\\\"carouselPicNum\\\":\\\"1\\\",\\\"dataSourceList\\\":[{}],\\\"mutiTagTagShow\\\":\\\"false\\\",\\\"rightIconTexts\\\":[],\\\"userAvatarShow\\\":\\\"true\\\",\\\"viewAmountShow\\\":\\\"false\\\",\\\"winnerListShow\\\":\\\"true\\\",\\\"activityTagShow\\\":\\\"true\\\",\\\"crowdTestStatus\\\":\\\"true\\\",\\\"discountTagShow\\\":\\\"true\\\",\\\"fillScreenWidth\\\":\\\"true\\\",\\\"groupBuyNumShow\\\":\\\"true\\\",\\\"originPriceShow\\\":\\\"false\\\",\\\"pcImgProportion\\\":\\\"3840:180\\\",\\\"productNameShow\\\":\\\"true\\\",\\\"publishTimeShow\\\":\\\"false\\\",\\\"supportedNumber\\\":\\\"true\\\",\\\"targetCrowdShow\\\":\\\"false\\\",\\\"topSubTitleHide\\\":\\\"true\\\",\\\"commentCountShow\\\":\\\"false\\\",\\\"moreActionApkUrl\\\":\\\"\\\",\\\"moreActionAppUrl\\\":\\\"\\\",\\\"moreActionWapUrl\\\":\\\"\\\",\\\"moreActionWebUrl\\\":\\\"\\\",\\\"outherSourceList\\\":[{\\\"dataSourceCode\\\":\\\",DB025263\\\"}],\\\"pcDataSourceList\\\":[{\\\"dataSourceCode\\\":\\\"DB025263\\\",\\\"dataSourceType\\\":\\\"ad\\\"}],\\\"personalizedSort\\\":\\\"0\\\",\\\"promotionTagShow\\\":\\\"false\\\",\\\"subscribeNumShow\\\":\\\"true\\\",\\\"subscribeTagShow\\\":\\\"true\\\",\\\"OutOfStockTagShow\\\":\\\"false\\\",\\\"capsuleTagCardShow\\\":false,\\\"padCDataSourceList\\\":[{}],\\\"padVDataSourceList\\\":[{}],\\\"shortVideoCardShow\\\":true,\\\"showBannerCategory\\\":\\\"true\\\",\\\"showPersonalCenter\\\":\\\"true\\\",\\\"targetCrowdGroupId\\\":\\\"\\\",\\\"longPicTextCardShow\\\":true,\\\"moreActionAppletUrl\\\":\\\"\\\",\\\"rightDataSourceList\\\":[{}],\\\"otherAreaClickSwitch\\\":\\\"true\\\",\\\"separatorIntervalNum\\\":\\\"1\\\",\\\"targetCrowdGroupName\\\":\\\"\\\",\\\"prodCollectionCardShow\\\":true,\\\"targetCrowdShowToGroup\\\":\\\"true\\\",\\\"guideVerticalScreenShow\\\":\\\"true\\\",\\\"titleVerticalScreenShow\\\":\\\"true\\\",\\\"originPriceStrikethroughShow\\\":\\\"false\\\",\\\"productListVerticalScreenShow\\\":\\\"true\\\",\\\"targetCrowdIncludeNotLoggedIn\\\":\\\"true\\\"}\",\"dataSourceList\":[],\"groupId\":\"\",\"layout\":{\"cardTitle\":\"\",\"layoutType\":\"OneColumnLayout\",\"more\":\"1\",\"moreActionUrl\":\"\",\"moreUrlType\":\"1\",\"rowsPerScreen\":\"1\",\"titleShow\":\"false\"},\"padCDataSourceList\":[],\"padVDataSourceList\":[],\"pageId\":301,\"pcDataSourceList\":[{\"ads\":{\"configInfo\":\"{\\\"hasVideo\\\": \\\"0\\\", \\\"recommendScene\\\": \\\"\\\"}\",\"dataInfos\":[],\"dataType\":\"8\",\"defaultPageSize\":50},\"dataSourceCode\":\"DB025263\",\"dataSourceType\":\"ad\"}],\"publishFlag\":\"1\",\"resSiteCode\":\"r_TopAreaPC\",\"resSiteName\":\"顶部横通\",\"rightDataSourceList\":",
+    "score": 6
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/queryAdvertisement?portal=1&country=CN&lang=zh_CN&placeholder=%5B%20%22index_header_big%22%20%5D",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 151533,
+    "isJson": true,
+    "topKeys": [
+      "advertisementInfos",
+      "code",
+      "success"
+    ],
+    "preview": "{\"advertisementInfos\":{\"rush_buy_pc_right_code\":{\"content\":\"<p><br/></p>\",\"description\":\"抢购活动PC侧抢购主页右上方二维码\",\"id\":28,\"placeholder\":\"rush_buy_pc_right_code\",\"templateId\":\"default\",\"title\":\"抢购活动PC侧抢购主页右上方二维码\",\"updateDate\":1438222656000},\"index_right\":{\"content\":\"<div><img style=\\\"float:none;\\\" src=\\\"https://res.vmallres.com/pimages//sale/2014-12/20141215203932746.jpg\\\" title=\\\"pro1.jpg\\\" /><p><img src=\\\"https://res.vmallres.com/pimages//sale/2014-12/20141215203932938.jpg\\\" style=\\\"float:none;\\\" title=\\\"pro2.jpg\\\" /></p><p><img src=\\\"https://res.vmallres.com/pimages//sale/2014-12/2014121520393381.jpg\\\" style=\\\"float:none;\\\" title=\\\"pro3.jpg\\\" /></p><p><img src=\\\"https://res.vmallres.com/pimages//sale/2014-12/20141215203933204.jpg\\\" style=\\\"float:none;\\\" title=\\\"pro4.jpg\\\" /></p><p><img src=\\\"https://res.vmallres.com/pimages//sale/2014-12/20141215203933328.jpg\\\" style=\\\"float:none;\\\" title=\\\"pro5.jpg\\\" /></p><p><img src=\\\"https://res.vmallres.com/pimages//sale/2014-12/20141215203933481.jpg\\\" style=\\\"float:none;\\\" title=\\\"pro6.jpg\\\" /></p><p><img src=\\\"https://res.vmallres.com/pimages//sale/2014-12/20141215203933654.jpg\\\" style=\\\"float:none;\\\" title=\\\"pro7.jpg\\\" /></p><p><img src=\\\"https://res.vmallres.com/pimages//sale/2014-12/20141215203933788.jpg\\\" style=\\\"float:none;\\\" title=\\\"pro8.jpg\\\" /></p><p><img src=\\\"https://res.vmallres.com/pimages//sale/2014-12/20141215203933904.jpg\\\" style=\\\"float:none;\\\" title=\\\"pro9.jpg\\\" /></p> <a title=\\\"华为加盟店申请\\\" href=\\\"/notice-175\\\" target=\\\"_blank\\\"><img src=\\\"https://res.vmallres.com/pimages//sale/2013-07/20130708111735537.jpg\\\" /></a></div><div class=\\\"hr-20\\\"></div><div><a title=\\\"天翼云卡\\\" href=\\\"/contract\\\" target=\\\"_blank\\\"><img src=\\\"https://res.vmallres.com/pimages//sale/2013-10/20131010095903956.jpg\\\" /></a></div><div class=\\\"hr-20\\\"></div><div><a title=\\\"PAD\\\" href=\\\"/product/563.html#0,10\\\" target=\\\"_blank\\\"><img src=\\\"https://res.vmallres.com/pimages//sale/2013-08/20130820142851677.jpg\\\" /></a></div><div class=\\\"hr-20\\\"></div><div><a title=\\\"华为网盘\\\" href=\\\"/notice-198\\\" target=\\\"_blank\\\"><img src=\\\"https://res.vmallres.com/pimages//sale/2013-08/20130813093855687.png\\\" /></a></div><div class=\\\"hr-20\\\"></div><div><a title=\\\"E5 Lan\\\" href=\\\"/product/371.html#382,7\\\" target=\\\"_blank\\\"><img src=\\\"https://res.vmallres.com/pimages//sale/2013-10/20131016093121389.jpg\\\" /></a></div>\",\"description\":\"首页右下侧广告\",\"id\":4,\"placeholder\":\"index_right\",\"templateId\":\"default\",\"title\":\"首页右侧广告[新](不要修改)\",\"updateDate\":1418647292000},\"app_index_slider_V2\":{\"content\":\"{\\\"scrollAds\\\":[{\\\"adPrdUrl\\\":\\\"https://m.vmall.com/portal/activity/index.html?pn=phones&amp;callapp=no\\\",\\\"adPicUrl\\\":\\\"https://res.vmallres.com/pimages//pages/picImages/56856357755615365865.jpg\\\",\\\"adPicUrl4wbp\\\":\\\"https://res.vmallres.com/pimages//pages/picImages/56856357755615365865.webp\\\",\\\"reportClickToBI\\\":{\\\"click events\\\":\\\"主站APP首焦第1帧\\\"}},{\\\"adPrdUrl\\\":\\\"https://m.vmall.com/portal/activity/index.html?pn=zhcxaito&amp;callapp=no\\\",\\\"adPicUrl\\\":\\\"https://res.vmallres.com/pimages//pages/picImages/15341457755615414351.webp\\\",\\\"adPicUrl4wbp\\\":\\\"https://res.vmallres.com/pimages//pages/picImages/15341457755615414351.webp\\\",\\\"reportClickToBI\\\":{\\\"click events\\\":\\\"主站APP首焦第2帧\\\"}},{\\\"adPrdUrl\\\":\\\"https://m.vmall.com/portal/activity/index.html?pn=yundongjk&amp;callapp=no\\\",\\\"adPicUrl\\\":\\\"https://res.vmallres.com/pimages//pages/picImages/65539257755615293556.jpg\\\",\\\"adPicUrl4wbp\\\":\\\"https://res.vmallres.com/pimages//pages/picImages/65539257755615293556.webp\\\",\\\"reportClickToBI\\\":{\\\"click events\\\":\\\"主站APP首焦第3帧\\\"}}]}\",\"description\":\"客户端新版本首页轮播图V2\",\"id\":281,\"placeholder\":\"app_index_slider_V2\",\"templateId\":\"default\",\"title\":\"APP304首焦0701\",\"updateDate\":1655775422000},\"app_index_slider_V1\":{\"content\":\"{\\\"scrollAds\\\":[{\\\"adPrdUrl\\\":\\\"vmall://com.vmall.client/home/activity?pn=harmonyosconnect\\\",\\\"adPicUrl\\\":\\\"https://res.vmallres.com/pimages//pages/picImages/29564726224612746592.jpg\\\",\\\"reportClickToBI\\\":{\\\"click events\\\":\\\"主站APP首焦第1帧\\\"}}]}\",\"description\":\"客户端新版本",
+    "score": 6
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/sg/content/queryHwAds",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 27,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "success"
+    ],
+    "preview": "{\"code\":\"0\",\"success\":true}",
+    "score": 6
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/queryTemplate?portal=1&country=CN&lang=zh_CN&version=1&placeholder=%5B%22web_footer_aboutmall_new%22%2C%22region_select%22%2C%5D",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 3783,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "success",
+      "templateMapping"
+    ],
+    "preview": "{\"code\":\"0\",\"success\":true,\"templateMapping\":{\"web_footer_aboutmall_new\":{\"code\":\"web_footer_aboutmall_new\",\"content\":\"'[{&quot;icon_name&quot;:&quot;ic_appicon_vmall&quot;,&quot;link&quot;:&quot;&quot;,&quot;qr_code&quot;:&quot;https://res.vmallres.com/uomcdn/CN/cms/202609/8478cf879f3542088976f7c913b808b2.jpg&quot;},{&quot;icon_name&quot;:&quot;ic_wechat_mp&quot;,&quot;link&quot;:&quot;&quot;,&quot;qr_code&quot;:&quot;https://res.vmallres.com/uomcdn/CN/cms/202609/23a1a0074c2f4bb1bb6a10df5ad594cc.png&quot;},{&quot;icon_name&quot;:&quot;ic_wechat&quot;,&quot;link&quot;:&quot;&quot;,&quot;qr_code&quot;:&quot;https://res.vmallres.com/uomcdn/CN/cms/202609/50cecd191eb2455596b384c814646710.jpg&quot;},{&quot;icon_name&quot;:&quot;ic_toutiao_border&quot;,&quot;link&quot;:&quot;https://www.toutiao.com/c/user/52373534151/#mid=52586950033&quot;,&quot;qr_code&quot;:&quot;&quot;},{&quot;icon_name&quot;:&quot;ic_sina&quot;,&quot;link&quot;:&quot;https://weibo.com/shophuawei&quot;,&quot;qr_code&quot;:&quot;&quot;},{&quot;icon_name&quot;:&quot;ic_baidu&quot;,&quot;link&quot;:&quot;https://author.baidu.com/home/1587993495688621&quot;,&quot;qr_code&quot;:&quot;&quot;}]'\",\"description\":\"页脚关于vmall、微信、头条等配置\",\"id\":1669},\"region_select\":{\"code\":\"region_select\",\"content\":\"<div class=\\\"box-content\\\">\\r\\n\\t<div class=\\\"box-lan-choose\\\">\\r\\n\\t\\t\\t\\t\\t\\t<dl>\\r\\n\\t\\t\\t\\t<dt>HUAWEI</dt>\\r\\n\\t\\t\\t\\t<dd class=\\\"box-button\\\">\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/ru/?utm_source=vmall&amp;utm_medium=header\\\">Russia</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/fr/?utm_source=vmall&amp;utm_medium=header\\\">France</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/de/offer/?utm_source=vmall&amp;utm_medium=header\\\">Germany</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/it/?utm_source=vmall&amp;utm_medium=header\\\">Italy</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/es/?utm_source=vmall&amp;utm_medium=header\\\">Spain</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/uk/?utm_source=vmall&amp;utm_medium=header\\\">United Kingdom</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://shop.huawei.com/tr/?utm_source=vmall&amp;utm_medium=header\\\">Turkey</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/cz/\\\">Czech</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://shop.huawei.com/pl/?utm_source=vmall&amp;utm_medium=header\\\">Poland</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://shop.huawei.com/my/?utm_source=vmall&amp;utm_medium=header\\\">Malaysia</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/sa-en\\\">Saudi Arabia</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://shop.huawei.com/ae/?utm_source=vmall&amp;utm_medium=header\\\">United Arab Emirates</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://shop.huawei.com/mx/?utm_source=vmall&amp;utm_medium=header\\\">Mexico</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/za/\\\">South Africa </a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/ph/\\\">Philippines</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/th/\\\">Thailand</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/jp/\\\">Japan</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/co/\\\">Colombia </a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/cl/\\\">Chile</a>\\r\\n\\t\\t\\t\\t\\t\\t<a class=\\\"box-choose\\\" href=\\\"https://consumer.huawei.com/eg/\\\">Egypt</a>\\r\\n\\t\\t\\t\\t</dd>\\r\\n\\t\\t\\t</dl>\\r\\n\\t</div>\\r\\n</div>\",\"description\":\"全球导航\",\"id\":519}}}",
+    "score": 6
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/v1/queryCart",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 235,
+    "isJson": true,
+    "topKeys": [
+      "cartInfo",
+      "code",
+      "success"
+    ],
+    "preview": "{\"cartInfo\":{\"couponDeduct\":0,\"effectiveCoupons\":[],\"invalidCoupons\":[],\"originalTotalNumber\":0,\"smartHomeDetail\":{},\"totalNumber\":0,\"usedCouponInfos\":[],\"usedVipRights\":0,\"vipCouponDeduct\":0,\"vipDiscount\":0},\"code\":\"0\",\"success\":true}",
+    "score": 6
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/queryTemplate?placeholder=review_agreement_complaint_content&portal=1&country=CN&lang=zh_CN",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 990,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "success",
+      "templateMapping"
+    ],
+    "preview": "{\"code\":\"0\",\"success\":true,\"templateMapping\":{\"review_agreement_complaint_content\":{\"code\":\"review_agreement_complaint_content\",\"content\":\"<p><span>本功能仅供反映当前内容中有违反网络信息<strong>内容生态治理</strong>相关规定的有关情况，其他<strong>与内容生态治理</strong>无关的问题（如商品售后问题等）<strong>并非本功能的受理范围</strong>，在此反馈将无法得到及时受理，为不耽误您的宝贵时间，请<strong>联系华为商城在线客服或拨打</strong></span><strong><span style=\\\"font-family: 等线;\\\">950805</span></strong><span>进行反馈。</span></p> <p><span>为核实您所提交的信息，平台需获取您的用户</span><span style=\\\"font-family: 等线;\\\">ID</span><span>、设备</span><span style=\\\"font-family: 等线;\\\">ID</span><span>等信息，使用本功能即表示您<strong>同意平台获取您的上述信息</strong>供平台核实您所提交的投诉</span><span style=\\\"font-family: 等线;\\\">/</span><span>举报信息。此外，平台可能还将按需与您取得联系，使用本功能即表示您<strong>同意并主动提供您的手机或邮箱等联系方式</strong>供平台在需要时与您取得联系以进一步核实您提交的信息。</span></p> <p><span>为保障您的隐私安全，<strong>请勿提交含有您个人信息</strong>（联系方式除外）<strong>的文字、图片或文件资料</strong>。</span></p> <p><span>您需对提交信息的真实性负责，确保提交信息的真实有效，不得有诬陷、诽谤等行为，否则可能需承担相应法律责任。</span></p>\",\"description\":\"终端BG总编室投诉举报中心阅读协议\",\"id\":1261}}}",
+    "score": 6
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/content/getTemplateInfoAB?tid=ec2c8498ca83cc46d1cb2a7ce018f317&lang=zh_CN&portal=1&country=CN",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 1090,
+    "isJson": true,
+    "topKeys": [
+      "categoryListOrderRule",
+      "code",
+      "configInfo",
+      "configStrategyList",
+      "experimentPages",
+      "preLoadPicDataList",
+      "preLoadProdDataList",
+      "strategyInfoList",
+      "success",
+      "tabInfos",
+      "templateId",
+      "templateName",
+      "templateType"
+    ],
+    "preview": "{\"categoryListOrderRule\":\"0#1#2#3#4\",\"code\":\"0\",\"configInfo\":\"{\\\"qingmingMode\\\": \\\"N\\\"}\",\"configStrategyList\":[],\"experimentPages\":[{\"pageId\":101142059},{\"pageId\":101142788},{\"pageId\":101152109},{\"pageId\":101153086},{\"pageId\":401068344,\"pn\":\"phonestab\"}],\"preLoadPicDataList\":[\"DB070950\",\"DB070545\",\"DB080801\"],\"preLoadProdDataList\":[\"DA068511\",\"DA067661\"],\"strategyInfoList\":[],\"success\":true,\"tabInfos\":[{\"iconDefaultOverflow\":false,\"iconSelectedOverflow\":false,\"nameShow\":true,\"relatedPage\":\"101\",\"relatedPageType\":\"1\",\"strategyName\":\"\",\"tabId\":1083,\"tabName\":\"i18n_yyy\",\"tabType\":\"smarthome\",\"templateId\":37},{\"iconDefaultOverflow\":false,\"iconSelectedOverflow\":false,\"nameShow\":true,\"relatedPage\":\"301\",\"relatedPageType\":\"1\",\"strategyName\":\"\",\"tabId\":1111,\"tabName\":\"i18n_yyy\",\"tabType\":\"homepage\",\"templateId\":37},{\"iconDefaultOverflow\":false,\"iconSelectedOverflow\":false,\"nameShow\":true,\"relatedPage\":\"401001097\",\"relatedPageType\":\"1\",\"strategyName\":\"\",\"tabId\":1541,\"tabName\":\"发现\",\"tabType\":\"personal_center\",\"templateId\":37}],\"templateId\":37,\"templateName\":\"PC模板\",\"templateType\":\"2\"}",
+    "score": 5
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/content/getTemplateInfoAB?tid=51631b234a620446394ab2a4f20bbe3d&lang=zh_CN&portal=1&country=CN",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 1090,
+    "isJson": true,
+    "topKeys": [
+      "categoryListOrderRule",
+      "code",
+      "configInfo",
+      "configStrategyList",
+      "experimentPages",
+      "preLoadPicDataList",
+      "preLoadProdDataList",
+      "strategyInfoList",
+      "success",
+      "tabInfos",
+      "templateId",
+      "templateName",
+      "templateType"
+    ],
+    "preview": "{\"categoryListOrderRule\":\"0#1#2#3#4\",\"code\":\"0\",\"configInfo\":\"{\\\"qingmingMode\\\": \\\"N\\\"}\",\"configStrategyList\":[],\"experimentPages\":[{\"pageId\":101142059},{\"pageId\":101142788},{\"pageId\":101152109},{\"pageId\":101153086},{\"pageId\":401068344,\"pn\":\"phonestab\"}],\"preLoadPicDataList\":[\"DB070950\",\"DB070545\",\"DB080801\"],\"preLoadProdDataList\":[\"DA068511\",\"DA067661\"],\"strategyInfoList\":[],\"success\":true,\"tabInfos\":[{\"iconDefaultOverflow\":false,\"iconSelectedOverflow\":false,\"nameShow\":true,\"relatedPage\":\"101\",\"relatedPageType\":\"1\",\"strategyName\":\"\",\"tabId\":1083,\"tabName\":\"i18n_yyy\",\"tabType\":\"smarthome\",\"templateId\":37},{\"iconDefaultOverflow\":false,\"iconSelectedOverflow\":false,\"nameShow\":true,\"relatedPage\":\"301\",\"relatedPageType\":\"1\",\"strategyName\":\"\",\"tabId\":1111,\"tabName\":\"i18n_yyy\",\"tabType\":\"homepage\",\"templateId\":37},{\"iconDefaultOverflow\":false,\"iconSelectedOverflow\":false,\"nameShow\":true,\"relatedPage\":\"401001097\",\"relatedPageType\":\"1\",\"strategyName\":\"\",\"tabId\":1541,\"tabName\":\"发现\",\"tabType\":\"personal_center\",\"templateId\":37}],\"templateId\":37,\"templateName\":\"PC模板\",\"templateType\":\"2\"}",
+    "score": 5
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/cart/v1/getTotalNum.json?saleChannel=1001&salePortal=3",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 49,
+    "isJson": true,
+    "topKeys": [
+      "data",
+      "info",
+      "resultCode"
+    ],
+    "preview": "{\"data\":0,\"info\":\"success\",\"resultCode\":\"200000\"}",
+    "score": 5
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/sg/content/getGlobalDataSource?lang=zh_CN&country=CN&portal=1&version=1&subType=webFooter",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 4214,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "dataSource",
+      "success"
+    ],
+    "preview": "{\"code\":\"0\",\"dataSource\":{\"DT000676\":{\"dataInfos\":[{\"categoryId\":38656,\"categoryName\":\"页尾链接\",\"categoryType\":\"1\",\"configInfo\":\"{\\\"sceneCode\\\": \\\"\\\", \\\"sceneName\\\": \\\"\\\", \\\"dataSourceList\\\": [{\\\"dataSourceCode\\\": \\\"DA069830\\\", \\\"dataSourceType\\\": \\\"prod\\\"}]}\",\"moreUrlType\":\"1\",\"actionUrlWeb\":\"\",\"actionUrlWap\":\"\",\"newTabFlag\":\"0\",\"orderNum\":1,\"dataSourceCode\":\"DT000676\",\"dataType\":\"0\",\"subCategoryList\":[{\"categoryId\":38657,\"categoryName\":\"常见问题\",\"categoryType\":\"2\",\"categoryParentId\":38656,\"configInfo\":\"{\\\"sceneCode\\\": \\\"\\\", \\\"sceneName\\\": \\\"\\\", \\\"dataSourceList\\\": [{\\\"dataSourceCode\\\": \\\"DA069831\\\", \\\"dataSourceType\\\": \\\"prod\\\"}]}\",\"moreUrlType\":\"1\",\"actionUrlWeb\":\"\",\"actionUrlWap\":\"\",\"newTabFlag\":\"0\",\"orderNum\":1,\"dataSourceCode\":\"DT000676\",\"dataType\":\"0\",\"categoryDesc\":\"\"},{\"categoryId\":38659,\"categoryName\":\"购买支持\",\"categoryType\":\"2\",\"categoryParentId\":38656,\"configInfo\":\"{\\\"sceneCode\\\": \\\"\\\", \\\"sceneName\\\": \\\"\\\", \\\"dataSourceList\\\": [{\\\"dataSourceCode\\\": \\\"DA069833\\\", \\\"dataSourceType\\\": \\\"prod\\\"}]}\",\"moreUrlType\":\"1\",\"actionUrlWeb\":\"\",\"actionUrlWap\":\"\",\"newTabFlag\":\"0\",\"orderNum\":2,\"dataSourceCode\":\"DT000676\",\"dataType\":\"0\",\"categoryDesc\":\"\"},{\"categoryId\":38660,\"categoryName\":\"友情链接\",\"categoryType\":\"2\",\"categoryParentId\":38656,\"configInfo\":\"{\\\"sceneCode\\\": \\\"\\\", \\\"sceneName\\\": \\\"\\\", \\\"dataSourceList\\\": [{\\\"dataSourceCode\\\": \\\"DA069834\\\", \\\"dataSourceType\\\": \\\"prod\\\"}]}\",\"moreUrlType\":\"1\",\"actionUrlWeb\":\"\",\"actionUrlWap\":\"\",\"newTabFlag\":\"0\",\"orderNum\":3,\"dataSourceCode\":\"DT000676\",\"dataType\":\"0\",\"categoryDesc\":\"\"},{\"categoryId\":38661,\"categoryName\":\"关于我们\",\"categoryType\":\"2\",\"categoryParentId\":38656,\"configInfo\":\"{\\\"sceneCode\\\": \\\"\\\", \\\"sceneName\\\": \\\"\\\", \\\"dataSourceList\\\": [{\\\"dataSourceCode\\\": \\\"DA069835\\\", \\\"dataSourceType\\\": \\\"prod\\\"}]}\",\"moreUrlType\":\"1\",\"actionUrlWeb\":\"\",\"actionUrlWap\":\"\",\"newTabFlag\":\"0\",\"orderNum\":4,\"dataSourceCode\":\"DT000676\",\"dataType\":\"0\",\"categoryDesc\":\"\"}],\"categoryDesc\":\"\"},{\"categoryId\":38662,\"categoryName\":\"资质证照左侧\",\"categoryType\":\"1\",\"configInfo\":\"{\\\"sceneCode\\\": \\\"\\\", \\\"sceneName\\\": \\\"\\\", \\\"dataSourceList\\\": [{\\\"dataSourceCode\\\": \\\"DA069836\\\", \\\"dataSourceType\\\": \\\"prod\\\"}]}\",\"moreUrlType\":\"1\",\"actionUrlWeb\":\"\",\"actionUrlWap\":\"\",\"newTabFlag\":\"0\",\"orderNum\":2,\"dataSourceCode\":\"DT000676\",\"dataType\":\"0\",\"subCategoryList\":[{\"categoryId\":38663,\"categoryName\":\"第一行\",\"categoryType\":\"2\",\"categoryParentId\":38662,\"configInfo\":\"{\\\"sceneCode\\\": \\\"\\\", \\\"sceneName\\\": \\\"\\\", \\\"dataSourceList\\\": [{\\\"dataSourceCode\\\": \\\"DA069837\\\", \\\"dataSourceType\\\": \\\"prod\\\"}]}\",\"moreUrlType\":\"1\",\"actionUrlWeb\":\"\",\"actionUrlWap\":\"\",\"newTabFlag\":\"0\",\"orderNum\":1,\"dataSourceCode\":\"DT000676\",\"dataType\":\"0\",\"categoryDesc\":\"\"},{\"categoryId\":38664,\"categoryName\":\"第二行\",\"categoryType\":\"2\",\"categoryParentId\":38662,\"configInfo\":\"{\\\"sceneCode\\\": \\\"\\\", \\\"sceneName\\\": \\\"\\\", \\\"dataSourceList\\\": [{\\\"dataSourceCode\\\": \\\"DA069838\\\", \\\"dataSourceType\\\": \\\"prod\\\"}]}\",\"moreUrlType\":\"1\",\"actionUrlWeb\":\"\",\"actionUrlWap\":\"\",\"newTabFlag\":\"0\",\"orderNum\":2,\"dataSourceCode\":\"DT000676\",\"dataType\":\"0\",\"categoryDesc\":\"\"},{\"categoryId\":38665,\"categoryName\":\"第三行\",\"categoryType\":\"2\",\"categoryParentId\":38662,\"configInfo\":\"{\\\"sceneCode\\\": \\\"\\\", \\\"sceneName\\\": \\\"\\\", \\\"dataSourceList\\\": [{\\\"dataSourceCode\\\": \\\"DA069839\\\", \\\"dataSourceType\\\": \\\"prod\\\"}]}\",\"moreUrlType\":\"1\",\"actionUrlWeb\":\"\",\"actionUrlWap\":\"\",\"newTabFlag\":\"0\",\"orderNum\":3,\"dataSourceCode\":\"DT000676\",\"dataType\":\"0\",\"categoryDesc\":\"\"},{\"categoryId\":38666,\"categoryName\":\"第四行\",\"categoryType\":\"2\",\"categoryParentId\":38662,\"configInfo\":\"{\\\"sceneCode\\\": \\\"\\\", \\\"sceneName\\\": \\\"\\\", \\\"dataSourceList\\\": [{\\\"dataSourceCode\\\": \\\"DA069840\\\", \\\"dataSourceType\\\": \\\"prod\\\"}]}\",\"moreUrlType\":\"1\",\"actionUrlWeb\":\"\",\"actionUrlWap\":\"\",\"newTabFlag\":\"0\",\"orderNum\":4,\"dataSourceCode\":\"DT000676\",\"dataType\":\"0\",\"categoryDesc\":\"\"},{\"categoryId\":38667,\"categoryName\":\"第五行\",\"categoryType\":\"2\",\"categoryParentId\":38662,\"configInfo\":\"{\\\"sceneCode\\\": \\\"\\\", \\\"sceneName\\\": \\\"\\\", \\\"dataSourceList\\\": [{\\\"dataSourceCode\\\": \\\"DA069841\\\", \\\"d",
+    "score": 5
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/serverTime.json",
+    "status": 200,
+    "contentType": "application/json;charset=utf-8",
+    "bytes": 75,
+    "isJson": true,
+    "topKeys": [
+      "success",
+      "serverTime",
+      "serverTimeMs"
+    ],
+    "preview": "{\"success\" : true, \"serverTime\" :1791270982, \"serverTimeMs\" :1791270982728}",
+    "score": 2
+  },
+  {
+    "via": "xhr",
+    "url": "https://fss-cdn.vmall.com/gd_bs_atk/atkFssCdn/tipInfo.json?1790075573718",
+    "status": 200,
+    "contentType": "application/json",
+    "bytes": 2800,
+    "isJson": true,
+    "topKeys": [
+      "cpWeb",
+      "carRn",
+      "msRn",
+      "mp",
+      "bpCartRn",
+      "bpRn",
+      "apk",
+      "cpWap",
+      "ohApk"
+    ],
+    "preview": "{\"cpWeb\":{\"zh_CN\":{\"page_live_noLiveProgram\":\"正在努力加载中，请重进直播间试试\"}},\"carRn\":{\"zh_CN\":{\"systemBusy\":\"当前参与人数较多，请稍后再试。\",\"loginFalied\":\"登录过期，请重新登录\",\"network_poor\":\"当前参与人数较多，请稍后再试。\",\"pay_intention_money_failed\":\"网络连接不稳定，请稍后再试或联系客服。\",\"data_load_wrong_error\":\"当前参与人数较多，请稍后再试。\",\"jump_customer_failed\":\"网络连接不稳定，请稍后再试。\",\"captchaPhotoFail\":\"未能完成图形验证，请重新验证。\",\"get_verify_code_failed\":\"未能获取验证码，请稍后再试。\",\"carErr_selectConfigErr\":\"当前商品已下架，请返回修改配置\",\"common_load_error\":\"当前参与人数较多，请稍后再试。\",\"carErr_notValidStoreGroup\":\"网络连接不稳定，请稍后再试或联系客服。\",\"networkError\":\"当前参与人数较多，请稍后再试。\",\"locating_failed_to_choose\":\"未能获取位置信息，请手动选择门店。\",\"carErr_customerServiceForPayment\":\"当前商品活动发生变化，请联系客服。\",\"book_failed\":\"网络连接不稳定，请稍后再试或联系客服。\",\"errorNetwork\":\"当前参与人数较多，请稍后再试。\",\"verify_failed\":\"验证码不正确或失效，请重新输入。\",\"getCaptchaCodeFail\":\"未能获取验证码，请稍后再试。\",\"data_load_error\":\"当前参与人数较多，请稍后再试。\",\"tryAgainLater\":\"当前参与人数较多，请稍后再试。\",\"carErr_priceOrDiscountErr\":\"当前商品活动发生变化，请联系客服\",\"system_busy_later_try\":\"当前参与人数较多，请稍后再试。\",\"netBusy\":\"当前参与人数较多，请稍后再试。\",\"carErr_customerServiceForAmoumt\":\"订单金额超出正常范围，请联系客服\",\"getCaptchaPthotFail\":\"未能获取图形验证码，请稍后再试。\"}},\"msRn\":{\"zh_CN\":{\"systemBusy\":\"当前参与人数较多，请稍后再试。\",\"toHimaAndroidStore\":\"因您本次支付金额较高，无法支付。请前往华为商城 App 端：“我的”>“我的订单”>“待付款”页面继续进行支付。\",\"try_again_late\":\"您下单的商品销售火爆，请稍后再试。\",\"network_poor\":\"当前参与人数较多，请稍后再试。\",\"toAppPay\":\"因您本次支付金额较高，无法支付。请前往华为商城 App 端：“我的”>“我的订单”>“待付款”页面继续进行支付。\",\"errorNetwork\":\"当前参与人数较多，请稍后再试。\",\"data_load_wrong_error\":\"当前参与人数较多，请稍后再试。\",\"toAitoIosStore\":\"因您本次支付金额较高，无法支付。请前往华为商城 App 端：“我的”>“我的订单”>“待付款”页面继续进行支付。\",\"toHmStore\":\"因您本次支付金额较高，当前华为商城 App 版本过低无法支付。请前往应用市场更新至最新版本后进行支付。\",\"complete_config\":\"您的订单可选配置\",\"toIosStore\":\"因您本次支付金额较高，当前华为商城 App 版本过低无法支付。请前往 App Store 更新至最新版本后进行支付。\",\"toAitoAndroidStore\":\"因您本次支付金额较高，无法支付。请前往华为商城 App 端：“我的”>“我的订单”>“待付款”页面继续进行支付。\",\"toHimaIosStore\":\"因您本次支付金额较高，无法支付。请前往华为商城 App 端：“我的”>“我的订单”>“待付款”页面继续进行支付。\",\"data_load_error\":\"当前参与人数较多，请稍后再试。\",\"tryAgainLater\":\"当前参与人数较多，请稍后再试。\",\"system_busy_later_try\":\"当前参与人数较多，请稍后再试。\",\"toApkStore\":\"因您本次支付金额较高，当前华为商城 App 版本过低无法支付。请前往“关于商城”界面，点击“检查更新”更新至最新版本后进行支付。\",\"toHimaHmStore\":\"因您本次支付金额较高，无法支付。请前往华为商城 App 端：“我的”>“我的订单”>“待付款”页面继续进行支付。\",\"toAitoHmStore\":\"因您本次支付金额较高，无法支付。请前往华为商城 App 端：“我的”>“我的订单”>“待付款”页面继续进行支付。\",\"confirm_config_and_pay\":\"您的订单尚未选择配置，请选择后支付定金。\",\"common_load_error\":\"当前参与人数较多，请稍后再试。\",\"vmall_app\":\"华为商城 App\",\"networkError\":\"当前参与人数较多，请稍后再试。\",\"netBusy\":\"当前参与人数较多，请稍后再试。\"}},\"mp\":{\"zh_CN\":{\"order.getOrderFail\":\"当前订单查询量过大，请稍后再试。\"}},\"bpCartRn\":{\"zh_CN\":{\"SNAuth_gotoUpdate\":\"下载并安装\"}},\"bpRn\":{\"zh_CN\":{\"govReceive_tips\":\"根据收货地址匹配国补，详细地址请精确到楼栋门牌号\"}},\"apk\":{\"zh_CN\":{\"live_not_start\":\"正在努力加载中，请重进直播间试试\",\"try_again_later\":\" \",\"system_busy\":\"网络连接不稳定，请稍后再试或联系客服\",\"question_privacy_read\":\"我已阅读并同意%s\"}},\"cpWap\":{\"zh_CN\":{\"page_live_noLiveProgram\":\"正在努力加载中，请重进直播间试试\"}},\"ohApk\":{\"zh_CN\":{\"live_not_start\":\"正在努力加载中，请重进直播间试试\",\"nps_read\":\"我已阅读并同意%s\"}}}",
+    "score": 2
+  },
+  {
+    "via": "xhr",
+    "url": "https://fss-cdn.vmall.com/gd_bs_atk/atkFssCdn/cacheUrl.json",
+    "status": 200,
+    "contentType": "application/json",
+    "bytes": 28331,
+    "isJson": true,
+    "topKeys": [
+      "preLoadApiUrls",
+      "strategies",
+      "systemConfig"
+    ],
+    "preview": "{\"preLoadApiUrls\":[{\"portal\":[\"3\",\"10\"],\"url\":\"https://openapi.vmall.com/mcp/queryTemplate?country={}&lang={}&portal={}&version=1&placeholder=[\\\"apk_prdDetail_disclaimer\\\",\\\"apk_consignedPrdDetail_disclaimer\\\",\\\"PRD_EXTENDS_USERS\\\",\\\"vmall_vpro_logo\\\",\\\"vmall_not_vpro_logo\\\",\\\"app_prdDetail_topPush\\\",\\\"review_agreement_complaint_content\\\"]\"},{\"portal\":[\"1\"],\"url\":\"https://openapi.vmall.com/mcp/queryTemplate?portal={}&country={}&lang={}&placeholder=review_agreement_complaint_content\"}],\"strategies\":[{\"beginVersion\":\"12403200\",\"cacheCycle\":60,\"cacheVersion\":\"20240327220000\",\"category\":\"BusinessBaseData|PersonalBaseData|UserDefaultAddress\",\"encrypted\":true,\"forceSync\":false,\"mode\":\"local\",\"persistent\":false,\"url\":\"https://openapi.vmall.com/mcp/address/getDefaultAddressList?portal=3&lang={}&country={}&version={}\"},{\"beginVersion\":\"12403200\",\"cacheCycle\":60,\"cacheVersion\":\"20240327220000\",\"category\":\"BusinessBaseData|PersonalBaseData|UserDefaultAddress\",\"encrypted\":true,\"forceSync\":false,\"mode\":\"local\",\"persistent\":false,\"url\":\"https://openapi.vmall.com/mcp/address/getDefaultAddressList?portal=10&lang={}&country={}&version={}\"},{\"beginVersion\":\"12403200\",\"cacheCycle\":120,\"cacheVersion\":\"20240327220000\",\"category\":\"BusinessBaseData|PersonalBaseData|UserInfo\",\"encrypted\":true,\"forceSync\":false,\"mode\":\"local\",\"persistent\":false,\"url\":\"https://openapi.vmall.com/mcp/queryUserInfo?portal=3&lang={}&country={}&version={}\"},{\"beginVersion\":\"12403200\",\"cacheCycle\":120,\"cacheVersion\":\"20240327220000\",\"category\":\"BusinessBaseData|PersonalBaseData|UserInfo\",\"encrypted\":true,\"forceSync\":false,\"mode\":\"local\",\"persistent\":false,\"url\":\"https://openapi.vmall.com/mcp/queryUserInfo?portal=10&lang={}&country={}&version={}\"},{\"beginVersion\":\"12411200\",\"cacheCycle\":86400,\"cacheVersion\":\"20241114220000\",\"category\":\"BusinessBaseData|SystemBaseData|HotCity\",\"encrypted\":false,\"forceSync\":false,\"mode\":\"local\",\"persistent\":true,\"url\":\"https://openapi.vmall.com/addr/v1/region/getHotCity.json\"},{\"beginVersion\":\"12411200\",\"cacheCycle\":86400,\"cacheVersion\":\"20241114220000\",\"category\":\"BusinessBaseData|SystemBaseData|RegionTree\",\"encrypted\":false,\"forceSync\":false,\"mode\":\"local\",\"persistent\":true,\"url\":\"https://openapi.vmall.com/mcp/address/getRegionTree?leafRegionId={}&portal=3&lang={}&country={}&version={}\"},{\"beginVersion\":\"12411200\",\"cacheCycle\":86400,\"cacheVersion\":\"20241114220000\",\"category\":\"BusinessBaseData|SystemBaseData|RegionTree\",\"encrypted\":false,\"forceSync\":false,\"mode\":\"local\",\"persistent\":true,\"url\":\"https://openapi.vmall.com/mcp/address/getRegionTree?leafRegionId={}&portal=1&lang={}&country={}\"},{\"beginVersion\":\"12411200\",\"cacheCycle\":86400,\"cacheVersion\":\"20241114220000\",\"category\":\"BusinessBaseData|SystemBaseData|RegionTree\",\"encrypted\":false,\"forceSync\":false,\"mode\":\"local\",\"persistent\":true,\"url\":\"https://openapi.vmall.com/mcp/address/getRegionTree?leafRegionId={}&portal=2&lang={}&country={}\"},{\"beginVersion\":\"12411200\",\"cacheCycle\":86400,\"cacheVersion\":\"20241114220000\",\"category\":\"BusinessBaseData|SystemBaseData|RegionTree\",\"encrypted\":false,\"forceSync\":false,\"mode\":\"local\",\"persistent\":true,\"url\":\"https://openapi.vmall.com/mcp/address/getRegionTree?leafRegionId={}&portal=10&lang={}&country={}&version={}\"},{\"beginVersion\":\"12405200\",\"cacheCycle\":1200,\"cacheVersion\":\"20240409220000\",\"category\":\"TransactionProcessData|ShoppingCartData|ShopingCart\",\"encrypted\":false,\"forceSync\":false,\"mode\":\"local\",\"persistent\":false,\"url\":\"https://openapi.vmall.com/mcp/queryCart?portal=3&lang={}&country={}&version={}\"},{\"beginVersion\":\"12405200\",\"cacheCycle\":1200,\"cacheVersion\":\"20240409220000\",\"category\":\"TransactionProcessData|ShoppingCartData|ShopingCart\",\"encrypted\":false,\"forceSync\":false,\"mode\":\"local\",\"persistent\":false,\"url\":\"https://openapi.vmall.com/mcp/queryCart?portal=10&lang={}&country={}&version={}\"},{\"beginVersion\":\"12405200\",\"cacheCycle\":1200,\"cacheVersion\":\"20240409220000\",\"category\":\"TransactionProcessData|ShoppingCartData|ShopingCartNum\",\"encr",
+    "score": 2
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/csrftoken.js",
+    "status": 200,
+    "contentType": "text/javascript;charset=utf-8",
+    "bytes": 560,
+    "isJson": false,
+    "topKeys": null,
+    "preview": "func getToken() {\n    String msg = \"this just create js error\";\n\tif (typeof String.prototype.endsWith != 'function')\n        String.prototype.endsWith = function(suffix) {\n            return this.indexOf(suffix, this.length - suffix.length) !== -1;\n        };\n    }\n\tvar url = document.domain;\n\tvar wDomain = \".vmall.com;.hicloud.com;.vmall.cn\";\n\tvar wds = wDomain.split(\";\");\n\n\tfor(var i = 0;i<wds.length; i++) {\n\t\tvar wd = wds[i];\n\t\tvar isDomain = url.endsWith(wd);\n\n\t\tif (isDomain) {\n\t\t\tcsrftoken = \"wIgIDgHV5NOvkIBElNa0mpBIuXarNKJew6Sk\";\n\t\t\tbreak;\n\t\t}\n\t}\n}",
+    "score": 0
+  },
+  {
+    "via": "xhr",
+    "url": "https://openapi.vmall.com/mcp/queryTemplate?portal=1&country=CN&lang=zh_CN&placeholder=%5B%22web_top_shortcut%22%2C%22region_select%22%2C%22index_shortcut_mob_download%22%2C%22index_shortcut_web_nav%22%2C%22vmall_vpro_logo%22%5D&version=1",
+    "status": 200,
+    "contentType": "application/json; charset=UTF-8",
+    "bytes": 17874,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "success",
+      "templateMapping"
+    ],
+    "preview": "{\"code\":\"0\",\"success\":true,\"templateMapping\":{\"web_top_shortcut\":{\"code\":\"web_top_shortcut\",\"content\":\"<ul>     <li>         <a href=\\\"https://www.vmall.com\\\">首页</a>     </li>     <li>         <a href=\\\"https://consumer.huawei.com/cn/\\\" target=\\\"_blank\\\">消费者业务网站</a>     </li>     <li>         <a class=\\\"js-priorityCode\\\" href=\\\"https://www.vmall.com/priority\\\" rel=\\\"nofollow\\\">优购码</a>     </li>     <li>         <a href=\\\"https://company.vmall.com/#/home\\\" target=\\\"_blank\\\">企业商用</a>     </li>     <li>         <a class=\\\"js-select-region\\\" href=\\\"javascript:;\\\">Select Region</a>     </li>     <li>         <div class=\\\"s-dropdown\\\">             <div class=\\\"h\\\">                 <a class=\\\"icon-dropdown\\\">更多精彩</a>                </div>             <div class=\\\"b\\\">                 <div class=\\\"dropdown-more w-119\\\">                     <dl>                         <dt>                             <a href=\\\"https://consumer.huawei.com/cn/harmonyos-6/\\\" target=\\\"_blank\\\">HarmonyOS</a>                         </dt>                         <dt>                             <a href=\\\"https://appgallery.huawei.com/\\\" target=\\\"_blank\\\">应用市场</a>                         </dt>                         <dt>                             <a href=\\\"https://cloud.huawei.com\\\" target=\\\"_blank\\\">华为终端云空间</a>                         </dt>                         <dt>                             <a href=\\\"https://developer.huawei.com/consumer/cn/\\\" target=\\\"_blank\\\">开发者联盟</a>                         </dt>                     </dl>                 </div>             </div>         </div>     </li> </ul>\",\"description\":\"页头\",\"id\":1440},\"index_shortcut_web_nav\":{\"code\":\"index_shortcut_web_nav\",\"content\":\"<p></p> <div class=\\\"dropdown-navs-icon\\\"><a href=\\\"https://www.vmall.com\\\"><span style=\\\"font-size: 0;\\\"> </span>商城首页</a></div> <p></p> <p></p> <div class=\\\"fl\\\" style=\\\"width: 185.0px;margin-top: 22.0px;margin-bottom: 20.0px;\\\">     <div class=\\\"bold f16 black\\\" style=\\\"margin-bottom: 8.0px;\\\">频道</div>     <div>         <div class=\\\"fl\\\" style=\\\"width: 80.0px;overflow: hidden;margin-bottom: 4.0px;\\\"><a href=\\\"https://www.vmall.com/portal/activity/index.html?pn=zhbgpc\\\" rel=\\\"noopener\\\" target=\\\"_blank\\\">智慧办公</a></div>         <div class=\\\"fl\\\" style=\\\"width: 80.0px;overflow: hidden;margin-bottom: 4.0px;\\\"><a href=\\\"https://www.vmall.com/portal/activity/index.html?pn=zhinengjiajupc\\\" rel=\\\"noopener\\\" target=\\\"_blank\\\">鸿蒙智家</a></div>         <div class=\\\"fl\\\" style=\\\"width: 80.0px;overflow: hidden;margin-bottom: 4.0px;\\\"><a href=\\\"https://www.vmall.com/portal/activity/index.html?isShowLayout=false&amp;pn=hmzxpc\\\" rel=\\\"noopener\\\" target=\\\"_blank\\\">鸿蒙智行</a></div>         <div class=\\\"fl\\\" style=\\\"width: 80.0px;overflow: hidden;margin-bottom: 4.0px;\\\"><a href=\\\"https://www.vmall.com/portal/activity/index.html?pn=phonespc\\\" rel=\\\"noopener\\\" target=\\\"_blank\\\">华为手机</a></div>         <div class=\\\"fl\\\" style=\\\"width: 80.0px;overflow: hidden;margin-bottom: 4.0px;\\\"><a href=\\\"https://www.vmall.com/portal/activity/index.html?isShowLayout=false&amp;pn=yingyinyulePC\\\" rel=\\\"noopener\\\" target=\\\"_blank\\\">影音娱乐</a></div>         <div class=\\\"fl\\\" style=\\\"width: 80.0px;overflow: hidden;margin-bottom: 4.0px;\\\"><a href=\\\"https://www.vmall.com/portal/activity/index.html?pn=yundongjkpc\\\" rel=\\\"noopener\\\" target=\\\"_blank\\\">运动健康</a>         </div>         <div class=\\\"fl\\\" style=\\\"width: 80.0px;overflow: hidden;margin-bottom: 4.0px;\\\"><a href=\\\"https://www.vmall.com/portal/activity/index.html?isShowLayout=false&amp;pn=educationcenterpc\\\" rel=\\\"noopener\\\" target=\\\"_blank\\\">教育优惠</a></div>     </div> </div> <div class=\\\"fl\\\" style=\\\"width: 185.0px;margin-top: 22.0px;margin-bottom: 20.0px;\\\">     <div class=\\\"bold f16 black\\\" style=\\\"margin-bottom: 8.0px;\\\">产品</div>     <div>         <div class=\\\"fl\\\" style=\\\"width: 80.0px;overflow: hidden;margin-bottom: 4.0px;\\\"><a href=\\\"https://www.vmall.com/portal/category/?categoryParams=%7B%22targetRoute%22%3A%22CategoryList%22%2C%22routeParams",
+    "score": 0
+  },
+  {
+    "via": "xhr",
+    "url": "https://dap.vmall.com/dap/batchReport",
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8",
+    "bytes": 29,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "desc"
+    ],
+    "preview": "{\"code\":\"0\",\"desc\":\"success\"}",
+    "score": -4
+  },
+  {
+    "via": "xhr",
+    "url": "https://dap.vmall.com/dap/batchReport",
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8",
+    "bytes": 29,
+    "isJson": true,
+    "topKeys": [
+      "code",
+      "desc"
+    ],
+    "preview": "{\"code\":\"0\",\"desc\":\"success\"}",
+    "score": -4
+  }
+]

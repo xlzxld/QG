@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>全能抢购工作台 · OmniGrab Studio</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#141925; --panel2:#1a2130; --panel3:#202941;
+    --border:#28324a; --border2:#37456a;
+    --fg:#e8edf6; --dim:#94a3b8; --dim2:#64748b;
+    --green:#34d399; --greenBg:rgba(52,211,153,.12);
+    --red:#f87171; --redBg:rgba(248,113,113,.12);
+    --amber:#fbbf24; --amberBg:rgba(251,191,36,.12);
+    --blue:#60a5fa; --blueBg:rgba(96,165,250,.12);
+    --purple:#c084fc; --purpleBg:rgba(192,132,252,.12);
+    --radius:14px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin:0; padding:0; width:100%; height:100%;
+    background:var(--bg); color:var(--fg);
+    font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+    overflow:hidden;
+  }
+  code, .mono { font-family:ui-monospace,Consolas,monospace; }
+
+  /* ── 整体布局：左侧边栏 + 右主区 ── */
+  .layout { display:flex; width:100vw; height:100vh; overflow:hidden; }
+
+  /* ── 侧边栏 ── */
+  aside {
+    width:220px; background:var(--panel); border-right:1px solid var(--border);
+    display:flex; flex-direction:column; flex-shrink:0; transition:width .2s ease;
+    z-index:30; user-select:none;
+  }
+  aside.collapsed { width:64px; }
+
+  .brand-box {
+    padding:14px 16px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .brand-title {
+    display:flex; align-items:center; gap:9px; font-weight:700;
+    font-size:15px; letter-spacing:.3px; color:var(--fg); white-space:nowrap;
+    overflow:hidden;
+  }
+  .brand-title .logo { font-size:18px; }
+  aside.collapsed .brand-title span { display:none; }
+  .btn-collapse {
+    background:transparent; border:none; color:var(--dim); cursor:pointer;
+    padding:4px 6px; border-radius:6px; font-size:12px;
+  }
+  .btn-collapse:hover { background:var(--panel2); color:var(--fg); }
+
+  .nav-scroll { flex:1; overflow-y:auto; overflow-x:hidden; padding:12px 8px; }
+  .nav-group-title {
+    font-size:11px; font-weight:600; text-transform:uppercase; color:var(--dim2);
+    padding:8px 10px 4px; letter-spacing:.5px; white-space:nowrap;
+  }
+  aside.collapsed .nav-group-title { display:none; }
+
+  .nav-item {
+    display:flex; align-items:center; gap:10px; padding:9px 12px;
+    border-radius:10px; cursor:pointer; margin-bottom:4px;
+    color:var(--dim); text-decoration:none; transition:all .12s;
+    position:relative; white-space:nowrap;
+  }
+  .nav-item:hover { background:var(--panel2); color:var(--fg); }
+  .nav-item.active {
+    background:var(--panel3); color:#fff; font-weight:600;
+    box-shadow:inset 0 0 0 1px var(--border2);
+  }
+  .nav-item.active::before {
+    content:''; position:absolute; left:0; top:8px; bottom:8px; width:3.5px;
+    border-radius:0 3px 3px 0; background:var(--blue);
+  }
+  .nav-item .icon { font-size:16px; flex-shrink:0; text-align:center; width:20px; }
+  .nav-item .label { flex:1; overflow:hidden; text-overflow:ellipsis; }
+  .nav-item .badge {
+    font-size:10px; padding:2px 6px; border-radius:10px;
+    border:1px solid var(--border); color:var(--dim2); background:var(--panel);
+  }
+  aside.collapsed .nav-item .label,
+  aside.collapsed .nav-item .badge { display:none; }
+
+  .add-platform-btn {
+    margin:10px 4px; padding:8px 10px; border:1px dashed var(--border2);
+    border-radius:10px; font-size:12px; color:var(--dim); text-align:center;
+    cursor:pointer; transition:all .15s; display:flex; align-items:center;
+    justify-content:center; gap:6px;
+  }
+  .add-platform-btn:hover {
+    border-color:var(--blue); color:var(--blue); background:rgba(96,165,250,.06);
+  }
+  aside.collapsed .add-platform-btn span { display:none; }
+
+  /* ── 底部状态小注 ── */
+  .aside-footer {
+    padding:12px 14px; border-top:1px solid var(--border);
+    font-size:11px; color:var(--dim2); display:flex; align-items:center;
+    justify-content:space-between;
+  }
+  aside.collapsed .aside-footer span { display:none; }
+
+  /* ── 右侧主容器 ── */
+  main {
+    flex:1; display:flex; flex-direction:column; min-width:0;
+    height:100vh; overflow:hidden; background:var(--bg);
+  }
+
+  /* ── 顶栏 ── */
+  header {
+    height:54px; min-height:54px; background:rgba(11,14,20,.95);
+    backdrop-filter:blur(10px); border-bottom:1px solid var(--border);
+    display:flex; align-items:center; padding:0 20px; gap:14px;
+    z-index:20;
+  }
+  .current-view-info { display:flex; align-items:center; gap:10px; min-width:0; }
+  .view-icon { font-size:18px; }
+  .view-name { font-size:15px; font-weight:700; white-space:nowrap; }
+  .view-desc { font-size:12px; color:var(--dim2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .spacer { flex:1; }
+
+  /* 状态指示灯群组 */
+  .lamps { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .lamp {
+    display:inline-flex; align-items:center; gap:6px; font-size:11.5px;
+    padding:4px 10px; border-radius:20px; background:var(--panel2);
+    border:1px solid var(--border); color:var(--dim); white-space:nowrap;
+  }
+  .lamp b { color:var(--fg); font-weight:600; }
+  .lamp .dot { width:7px; height:7px; border-radius:50%; background:var(--dim2); }
+  .lamp.ok { color:var(--green); border-color:rgba(52,211,153,.35); background:var(--greenBg); }
+  .lamp.ok .dot { background:var(--green); box-shadow:0 0 6px var(--green); }
+  .lamp.warn { color:var(--amber); border-color:rgba(251,191,36,.35); background:var(--amberBg); }
+  .lamp.warn .dot { background:var(--amber); box-shadow:0 0 6px var(--amber); }
+  .lamp.err { color:var(--red); border-color:rgba(248,113,113,.35); background:var(--redBg); }
+  .lamp.err .dot { background:var(--red); box-shadow:0 0 6px var(--red); }
+  .lamp.blue { color:var(--blue); border-color:rgba(96,165,250,.35); background:var(--blueBg); }
+  .lamp.blue .dot { background:var(--blue); }
+
+  /* 顶栏右侧快捷按钮 */
+  .hdr-btns { display:flex; align-items:center; gap:6px; margin-left:6px; }
+  .btn-icon {
+    background:var(--panel2); border:1px solid var(--border); color:var(--dim);
+    padding:6px 10px; border-radius:8px; cursor:pointer; font-size:12px;
+    display:inline-flex; align-items:center; gap:5px; transition:all .12s;
+  }
+  .btn-icon:hover { background:var(--panel3); color:var(--fg); border-color:var(--border2); }
+
+  /* ── 内容视口 (嵌入 iframe) ── */
+  .viewport-container {
+    flex:1; width:100%; height:calc(100vh - 54px);
+    position:relative; overflow:hidden; background:var(--bg);
+  }
+  iframe.app-frame {
+    width:100%; height:100%; border:none; display:block;
+    background:var(--bg);
+  }
+
+  /* ── 弹窗 Modal ── */
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.75); backdrop-filter:blur(4px);
+    display:none; align-items:center; justify-content:center; z-index:100;
+  }
+  .modal-overlay.show { display:flex; }
+  .modal {
+    background:var(--panel); border:1px solid var(--border2); border-radius:var(--radius);
+    width:480px; max-width:92vw; padding:22px; box-shadow:0 12px 40px rgba(0,0,0,.6);
+  }
+  .modal-hd { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  .modal-hd h3 { margin:0; font-size:16px; font-weight:700; }
+  .modal-close { background:transparent; border:none; color:var(--dim); font-size:16px; cursor:pointer; }
+  .mf { margin-bottom:12px; }
+  .mf label { display:block; font-size:12px; color:var(--dim); margin-bottom:4px; }
+  .mf input {
+    width:100%; background:var(--bg); border:1px solid var(--border); color:var(--fg);
+    border-radius:8px; padding:8px 10px; font-size:13px;
+  }
+  .modal-ft { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
+  .btn-primary { background:var(--green); border:none; color:#06281c; font-weight:700; padding:8px 16px; border-radius:8px; cursor:pointer; }
+  .btn-sec { background:var(--panel2); border:1px solid var(--border); color:var(--fg); padding:8px 16px; border-radius:8px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- ════════ 左侧边栏 ════════ -->
+  <aside id="sidebar">
+    <div class="brand-box">
+      <div class="brand-title">
+        <span class="logo">⚡</span>
+        <span>全能工作台</span>
+      </div>
+      <button class="btn-collapse" id="btnToggleCollapse" title="折叠/展开侧边栏">◀</button>
+    </div>
+
+    <div class="nav-scroll">
+      <div class="nav-group-title">抢购平台</div>
+      <div id="platformNavList">
+        <!-- 由 manifest.json 动态渲染 -->
+      </div>
+
+      <div class="add-platform-btn" id="btnOpenAddModal" title="在清单中登记新平台">
+        <span>+</span> <span>登记新平台</span>
+      </div>
+
+      <div class="nav-group-title" style="margin-top:12px;">工具与排班</div>
+      <div id="toolNavList">
+        <!-- 由 manifest.json 动态渲染 -->
+      </div>
+    </div>
+
+    <div class="aside-footer">
+      <span>OmniGrab v1.0</span>
+      <span id="bridgeFootStat" style="color:var(--green);">● 在线</span>
+    </div>
+  </aside>
+
+  <!-- ════════ 右侧主工作区 ════════ -->
+  <main>
+    <header>
+      <div class="current-view-info">
+        <span class="view-icon" id="curViewIcon">📱</span>
+        <div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="view-name" id="curViewName">华为商城</span>
+            <span class="lamp" id="curViewBadge" style="font-size:10px; padding:2px 7px;">官方版</span>
+          </div>
+          <div class="view-desc" id="curViewDesc">VMall 手机/平板/穿戴设备多槽位真点击秒杀</div>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <!-- 顶栏状态指示灯 (系统级 + 平台同步) -->
+      <div class="lamps">
+        <!-- 系统宿主公共灯 -->
+        <span class="lamp ok" id="lampBridge"><span class="dot"></span>服务 3100</span>
+        <!-- 平台子视图通过 postMessage 动态同步的灯 -->
+        <span class="lamp" id="lampSubDry"><span class="dot"></span><span id="txtSubDry">演练中</span></span>
+        <span class="lamp" id="lampSubDriver"><span class="dot"></span><span id="txtSubDriver">驱动空闲</span></span>
+        <span class="lamp" id="lampSubCountdown"><span class="dot"></span><span id="txtSubCountdown">开售:未设定</span></span>
+      </div>
+
+      <div class="hdr-btns">
+        <button class="btn-icon" id="btnOpenExternal" title="在独立浏览器标签页打开当前页面">↗ 独占窗口</button>
+        <button class="btn-icon" id="btnReloadFrame" title="重载当前子页面">🔄 刷新</button>
+      </div>
+    </header>
+
+    <!-- 容器，100% 贴合，双滚动条彻底消除 -->
+    <div class="viewport-container">
+      <iframe id="mainFrame" class="app-frame" src="/console-huawei"></iframe>
+    </div>
+  </main>
+</div>
+
+<!-- ════════ 登记新平台弹窗 ════════ -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-hd">
+      <h3>➕ 登记新抢购平台 (加清单行)</h3>
+      <button class="modal-close" id="btnCloseModal">✕</button>
+    </div>
+    <div class="mf">
+      <label>平台 ID (英文标识，如 jd, damai)</label>
+      <input type="text" id="inpPlatId" placeholder="showstart" />
+    </div>
+    <div class="mf">
+      <label>平台显示名称</label>
+      <input type="text" id="inpPlatName" placeholder="大麦票务" />
+    </div>
+    <div class="mf">
+      <label>图标 (Emoji)</label>
+      <input type="text" id="inpPlatIcon" value="🎟️" />
+    </div>
+    <div class="mf">
+      <label>控制台入口 URL</label>
+      <input type="text" id="inpPlatEntry" placeholder="/console-damai" />
+    </div>
+    <div class="mf">
+      <label>一句话特点说明</label>
+      <input type="text" id="inpPlatDesc" placeholder="演唱会/戏剧抢票排队与实名观演人多选" />
+    </div>
+    <div class="modal-ft">
+      <button class="btn-sec" id="btnCancelAdd">取消</button>
+      <button class="btn-primary" id="btnConfirmAdd">写入应用清单</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let MANIFEST = null;
+  let currentActiveId = 'huawei';
+  const $ = (id) => document.getElementById(id);
+
+  // 1. 获取并渲染应用清单
+  async function loadManifest() {
+    try {
+      const res = await fetch('/api/manifest');
+      MANIFEST = await res.json();
+      renderNavigation();
+    } catch (e) {
+      console.error('加载清单失败，使用降级本地清单', e);
+      MANIFEST = {
+        platforms: [
+          { id: 'huawei', name: '华为商城', icon: '📱', badge: '官方版', desc: 'VMall 手机/平板多槽位真点击', entryUrl: '/console-huawei' },
+          { id: 'showstart', name: '秀动票务', icon: '🎸', badge: '专属页', desc: 'Livehouse 演出排队、观演人锁定', entryUrl: '/console-showstart' },
+          { id: 'apple', name: '苹果预约', icon: '🍎', badge: '专属页', desc: 'Apple Store 线下直营店现货补货与取货预约', entryUrl: '/console-apple' }
+        ],
+        tools: [
+          { id: 'tasks', name: '任务排班', icon: '⏱️', desc: '跨平台开售时刻表与全局提醒', entryUrl: '/tools/tasks' },
+          { id: 'accounts', name: '槽位与账号', icon: '👤', desc: '多账号独立环境与登录态', entryUrl: '/tools/accounts' },
+          { id: 'guide', name: '使用指引', icon: '📖', desc: '全平台抢购避坑守则', entryUrl: '/tools/guide' }
+        ]
+      };
+      renderNavigation();
+    }
+  }
+
+  function renderNavigation() {
+    // 渲染平台列表
+    const pContainer = $('platformNavList');
+    pContainer.innerHTML = '';
+    (MANIFEST.platforms || []).forEach(p => {
+      const el = document.createElement('div');
+      el.className = `nav-item ${p.id === currentActiveId ? 'active' : ''}`;
+      el.innerHTML = `
+        <span class="icon">${p.icon || '📱'}</span>
+        <span class="label">${p.name}</span>
+        ${p.badge ? `<span class="badge">${p.badge}</span>` : ''}
+      `;
+      el.onclick = () => switchView(p);
+      pContainer.appendChild(el);
+    });
+
+    // 渲染工具列表
+    const tContainer = $('toolNavList');
+    tContainer.innerHTML = '';
+    (MANIFEST.tools || []).forEach(t => {
+      const el = document.createElement('div');
+      el.className = `nav-item ${t.id === currentActiveId ? 'active' : ''}`;
+      el.innerHTML = `
+        <span class="icon">${t.icon || '🔧'}</span>
+        <span class="label">${t.name}</span>
+      `;
+      el.onclick = () => switchView(t);
+      tContainer.appendChild(el);
+    });
+  }
+
+  // 2. 切换活动视图
+  function switchView(item) {
+    currentActiveId = item.id;
+    $('curViewIcon').textContent = item.icon || '📱';
+    $('curViewName').textContent = item.name;
+    $('curViewDesc').textContent = item.desc || '';
+    $('curViewBadge').textContent = item.badge || '工具';
+
+    // 重置子状态灯（等待新页面同步）
+    resetSubLamps();
+
+    const frame = $('mainFrame');
+    if (frame.src !== item.entryUrl && !frame.src.endsWith(item.entryUrl)) {
+      frame.src = item.entryUrl;
+    }
+    renderNavigation();
+  }
+
+  function resetSubLamps() {
+    $('lampSubDry').className = 'lamp';
+    $('txtSubDry').textContent = '待同步';
+    $('lampSubDriver').className = 'lamp';
+    $('txtSubDriver').textContent = '驱动检测中';
+    $('lampSubCountdown').className = 'lamp';
+    $('txtSubCountdown').textContent = '倒计时检测中';
+  }
+
+  // 3. 接收 iframe postMessage 状态同步广播
+  window.addEventListener('message', (e) => {
+    const msg = e.data;
+    if (!msg || msg.type !== 'PLATFORM_STATUS_SYNC') return;
+    const d = msg.data;
+    if (!d) return;
+
+    // 演练灯
+    if (d.dryRun) {
+      $('lampSubDry').className = 'lamp ' + (d.dryRun.active ? 'ok' : 'err');
+      $('txtSubDry').textContent = d.dryRun.text || (d.dryRun.active ? '演练中' : '真抢下单');
+    }
+    // 驱动灯
+    if (d.driver) {
+      $('lampSubDriver').className = 'lamp ' + (d.driver.running ? 'warn' : '');
+      $('txtSubDriver').textContent = d.driver.text || (d.driver.running ? '驱动运行中' : '驱动就绪');
+    }
+    // 倒计时灯
+    if (d.countdown) {
+      const txt = d.countdown.text || '未设定';
+      $('lampSubCountdown').className = 'lamp ' + (txt.includes('分') || txt.includes(':') ? 'warn' : '');
+      $('txtSubCountdown').textContent = '开售:' + txt;
+    }
+  });
+
+  // 4. 控制栏按钮交互
+  $('btnToggleCollapse').onclick = () => {
+    $('sidebar').classList.toggle('collapsed');
+    $('btnToggleCollapse').textContent = $('sidebar').classList.contains('collapsed') ? '▶' : '◀';
+  };
+
+  $('btnReloadFrame').onclick = () => {
+    $('mainFrame').contentWindow?.location.reload();
+  };
+
+  $('btnOpenExternal').onclick = () => {
+    window.open($('mainFrame').src, '_blank');
+  };
+
+  // 5. 登记新平台弹窗交互
+  $('btnOpenAddModal').onclick = () => $('addModal').classList.add('show');
+  $('btnCloseModal').onclick = () => $('addModal').classList.remove('show');
+  $('btnCancelAdd').onclick = () => $('addModal').classList.remove('show');
+
+  $('btnConfirmAdd').onclick = async () => {
+    const id = $('inpPlatId').value.trim();
+    const name = $('inpPlatName').value.trim();
+    const icon = $('inpPlatIcon').value.trim() || '📦';
+    const entryUrl = $('inpPlatEntry').value.trim();
+    const desc = $('inpPlatDesc').value.trim();
+
+    if (!id || !name || !entryUrl) {
+      alert('请完整填写平台 ID、名称与入口 URL');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/manifest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add_platform',
+          platform: { id, name, icon, badge: '新增', desc, entryUrl }
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        $('addModal').classList.remove('show');
+        await loadManifest();
+        alert(`平台「${name}」已成功登记并写入清单！侧边栏已刷新。`);
+      } else {
+        alert('登记失败：' + (data.error || '未知错误'));
+      }
+    } catch (e) {
+      alert('网络提交异常：' + e.message);
+    }
+  };
+
+  // 启动时初始化
+  loadManifest();
+</script>
+</body>
+</html>
