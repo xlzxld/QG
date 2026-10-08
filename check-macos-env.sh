@@ -207,10 +207,23 @@ elif [ "$ERR_COUNT" -eq 0 ]; then
     echo -e "  若已安装 Chrome 与 Node，插上手机并开启 USB 调试后即可正常运行！"
     echo -e "  双击运行 ${CYAN}tools/mobile/prepare-device.command${RESET} 即可一键整备手机。"
 else
-    echo -e "${RED}${BOLD}✘ 检测到 $ERR_COUNT 项缺失！请按以下命令一键补全环境：${RESET}"
+    echo -e "${RED}${BOLD}✘ 检测到 $ERR_COUNT 项缺失！请按以下命令补全环境：${RESET}"
     echo ""
-    echo -e "${BOLD}一键补全依赖命令 (在 Mac 终端复制执行)：${RESET}"
-    FIX_CMD="brew install node android-platform-tools && brew install --cask google-chrome && npm install"
+    echo -e "${BOLD}针对性修复命令 (在 Mac 终端复制执行)：${RESET}"
+    FIX_CMD=""
+    if ! command -v node >/dev/null 2>&1; then
+        FIX_CMD="brew install node"
+    fi
+    if ! command -v adb >/dev/null 2>&1; then
+        FIX_CMD="${FIX_CMD:+$FIX_CMD && }brew install android-platform-tools"
+    fi
+    if [ ! -f "$CHROME_PATH" ] && [ ! -f "$ALT_CHROME_PATH" ]; then
+        FIX_CMD="${FIX_CMD:+$FIX_CMD && }brew install --cask google-chrome"
+    fi
+    if [ ! -d "node_modules" ]; then
+        FIX_CMD="${FIX_CMD:+$FIX_CMD && }npm install"
+    fi
+    [ -z "$FIX_CMD" ] && FIX_CMD="npm install"
     echo -e "  ${CYAN}${BOLD}${FIX_CMD}${RESET}"
     echo ""
 fi
