@@ -133,7 +133,10 @@ function runCapture(cmd, args, timeoutMs = 8000) {
   });
 }
 
-/** 返回监听指定端口的 PID 集合（跨平台）。失败时返回空集合（不谎报）。 */
+/** 返回监听指定端口的 PID 集合（跨平台）。失败时返回空集合（不谎报）。
+ *  ★ macOS/Linux 必须加 `-sTCP:LISTEN`：裸 `lsof -ti :port` 会把**持有该端口连接**的进程
+ *    （手机长轮询的 ESTABLISHED、adb reverse 的出站连接等）也当"占用者"——
+ *    2026-10-10 实证：中枢已停但手机连接未断，导致启动永远误报"端口被占"。 */
 async function listeningPids(port) {
   const pids = new Set();
   if (process.platform === 'win32') {
@@ -143,7 +146,7 @@ async function listeningPids(port) {
       if (m && Number(m[1]) === port) pids.add(m[2]);
     }
   } else {
-    const out = await runCapture('lsof', ['-ti', `:${port}`]);
+    const out = await runCapture('lsof', ['-nP', '-iTCP:' + port, '-sTCP:LISTEN', '-t']);
     for (const pid of out.trim().split(/\s+/)) {
       if (pid && !isNaN(Number(pid))) pids.add(pid);
     }
@@ -178,16 +181,69 @@ async function healthPid() {
 
 /** 判断某个 PID 的命令行是否就是 device-hub（PID 文件兜底前的身份核对）。无法核对返回 null。 */
 async function looksLikeHub(pid) {
-  const out = await runCapture(
-    'powershell',
-    ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`],
-    8000,
-  );
+  if (process.platform === 'win32') {
+    const out = await runCapture(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`],
+      8000,
+    );
+    if (!out) return null;
+    return /device-hub\.mjs/i.test(out);
+  }
+  const out = await runCapture('ps', ['-p', String(pid), '-o', 'command='], 5000);
   if (!out) return null;
   return /device-hub\.mjs/i.test(out);
 }
 
+/** 把"确定是中枢"的进程全部结束（TERM → 等待 → KILL）。返回是否全部结束。 */
+async function killHubs(pids) {
+  for (const p of pids) {
+    try {
+      process.kill(Number(p), 'SIGTERM');
+      console.log(`${C.yellow}·${C.reset} 结束中枢进程 PID ${p}…`);
+    } catch (e) {
+      console.log(`${C.dim}  （PID ${p} 信号发送失败：${e.code || e.message}）${C.reset}`);
+    }
+  }
+  // 等 SIGTERM 生效（中枢会在 1.2s 内强制退出，见 device-hub 的信号处理）
+  for (let i = 0; i < 10; i++) {
+    await new Promise((r) => setTimeout(r, 400));
+    const rest = [];
+    for (const p of pids) if (pidAlive(Number(p))) rest.push(p);
+    if (!rest.length) return true;
+  }
+  for (const p of pids) {
+    try {
+      process.kill(Number(p), 'SIGKILL');
+      console.log(`${C.yellow}·${C.reset} 强杀 PID ${p}…`);
+    } catch {
+      /* 可能已退出 */
+    }
+  }
+  await new Promise((r) => setTimeout(r, 800));
+  return [...pids].every((p) => !pidAlive(Number(p)));
+}
+
 /* ============================ 启动 ============================ */
+
+/** 启动前的端口自愈: 占用者若全部核对为 device-hub 残留 → 自动清掉再启动; 有外人 → 报错 */
+async function clearPortForStart() {
+  const busy = await listeningPids(PORT);
+  if (!busy.size) return true;
+  const targets = new Set();
+  for (const l of busy) {
+    if (await looksLikeHub(l)) targets.add(String(l));
+  }
+  if (targets.size && targets.size === busy.size) {
+    console.log(`${C.yellow}·${C.reset} 端口 ${PORT} 被残留的中枢进程占用（PID ${[...targets].join(', ')}）→ 自动清理…`);
+    if ((await killHubs(targets)) && !(await listeningPids(PORT)).size) return true;
+    console.log(`${C.red}✘ 清理失败，无法启动。${C.reset}`);
+    return false;
+  }
+  console.log(`${C.red}✘ 端口 ${PORT} 已被其它进程占用${C.reset}（PID ${[...busy].join(', ')}），中枢无法启动。`);
+  console.log(`  ${C.dim}处理：确认占用者身份后手动处理（它不是本中枢的残留进程）。${C.reset}`);
+  return false;
+}
 
 async function startHub() {
   title('启动设备中枢 (:3120)');
@@ -199,12 +255,7 @@ async function startHub() {
     return true;
   }
 
-  const busy = await listeningPids(PORT);
-  if (busy.size) {
-    console.log(`${C.red}✘ 端口 ${PORT} 已被其它进程占用${C.reset}（PID ${[...busy].join(', ')}），中枢无法启动。`);
-    console.log(`  ${C.dim}处理：先到「服务启停」菜单里停一下手机中枢，再重新启动。${C.reset}`);
-    return false;
-  }
+  if (!(await clearPortForStart())) return false;
 
   if (!fs.existsSync(HUB_SCRIPT)) {
     console.log(`${C.red}✘ 找不到中枢脚本：${HUB_SCRIPT}${C.reset}`);
@@ -272,12 +323,7 @@ async function startHubBackground() {
     return true;
   }
 
-  const busy = await listeningPids(PORT);
-  if (busy.size) {
-    console.log(`${C.red}✘ 端口 ${PORT} 已被其它进程占用${C.reset}（PID ${[...busy].join(', ')}），中枢无法启动。`);
-    console.log(`  ${C.dim}处理：先到「服务启停」菜单里停一下手机中枢，再重新启动。${C.reset}`);
-    return false;
-  }
+  if (!(await clearPortForStart())) return false;
 
   if (!fs.existsSync(HUB_SCRIPT)) {
     console.log(`${C.red}✘ 找不到中枢脚本：${HUB_SCRIPT}${C.reset}`);
@@ -342,30 +388,28 @@ async function stopHub() {
   if (!alive) {
     const stale = readPid();
     clearPidFile();
+    // ★ 终态以"端口 LISTEN"为准：/health 无响应但仍有监听 = 半死状态, 也要清
+    const listeners = await listeningPids(PORT);
+    if (listeners.size) {
+      console.log(`${C.yellow}·${C.reset} /health 无响应, 但端口仍有 ${listeners.size} 个监听者, 逐一核对并清理…`);
+      return await stopByListeners(listeners);
+    }
     console.log(`${C.dim}设备中枢本来就没在运行。${C.reset}`);
     if (stale) console.log(`${C.dim}（已顺手清理残留的 device-hub.pid，写的是 PID ${stale}）${C.reset}`);
     return true;
   }
 
-  // 找出中枢 PID：① /health 自报（最可靠）② 谁在监听 3120 ③ PID 文件（需身份核对）
-  let pid = await healthPid();
-  let how = '/health 自报';
-  if (!pid) {
-    const listeners = await listeningPids(PORT);
-    const first = [...listeners][0];
-    if (first) {
-      pid = Number(first);
-      how = 'netstat 端口嗅探';
-    }
-  }
-  if (!pid) {
+  // 收集全部目标：① /health 自报 ② 端口 LISTEN 全集 ③ PID 文件（需身份核对）
+  const targets = new Set();
+  const hp = await healthPid();
+  if (hp) targets.add(String(hp));
+  for (const l of await listeningPids(PORT)) targets.add(String(l));
+  if (!targets.size) {
     const filePid = readPid();
     if (filePid && pidAlive(filePid)) {
       const match = await looksLikeHub(filePid);
-      if (match === true) {
-        pid = filePid;
-        how = 'PID 文件';
-      } else {
+      if (match === true) targets.add(String(filePid));
+      else {
         console.log(
           `${C.yellow}·${C.reset} 发现存活进程 PID ${filePid}（来自 PID 文件），但${match === false ? '它不是 device-hub' : '无法核对它的身份'} → 不贸然结束它。`,
         );
@@ -373,38 +417,44 @@ async function stopHub() {
     }
   }
 
-  if (!pid) {
-    clearPidFile();
+  clearPidFile();
+
+  if (!targets.size) {
     console.log(`${C.red}✘ 停止失败：找不到中枢进程（3120 有人在听，但定位不到它的 PID）${C.reset}`);
     console.log(`  ${C.dim}请手动关闭那个运行中的中枢窗口（或在窗口里按 Ctrl+C）后重试。${C.reset}`);
     return false;
   }
 
-  console.log(`${C.yellow}·${C.reset} 结束中枢进程 PID ${pid}（${how}）…`);
-  try {
-    process.kill(pid);
-  } catch (e) {
-    console.log(`${C.dim}  （信号发送失败：${e.code || e.message}）${C.reset}`);
-  }
-  let stopped = await waitHubDown(4000);
-  if (!stopped) {
-    try {
-      process.kill(pid, 'SIGKILL');
-      console.log(`${C.yellow}·${C.reset} 强杀 PID ${pid}…`);
-    } catch {
-      /* 可能已退出 */
-    }
-    stopped = await waitHubDown(3000);
-  }
-
-  clearPidFile();
-
-  if (!stopped) {
-    console.log(`${C.red}✘ 停止失败：3120 端口仍被占用${C.reset}`);
+  const ok = await killHubs(targets);
+  const stillUp = await hubAlive(900) || (await listeningPids(PORT)).size > 0;
+  if (!ok || stillUp) {
+    console.log(`${C.red}✘ 停止失败：3120 仍被占用${C.reset}`);
     console.log(`  ${C.dim}请手动关闭那个运行中的中枢窗口（或在窗口里按 Ctrl+C）后重试。${C.reset}`);
     return false;
   }
-  console.log(`${C.green}✔${C.reset} 设备中枢已停止（PID ${pid}）。`);
+  console.log(`${C.green}✔${C.reset} 设备中枢已停止（PID ${[...targets].join(', ')}）。`);
+  return true;
+}
+
+/** 按端口监听者清理（/health 已无响应的"半死"场景）：只杀核对过身份的 device-hub */
+async function stopByListeners(listeners) {
+  const targets = new Set();
+  for (const l of listeners) {
+    const match = await looksLikeHub(l);
+    if (match === true) targets.add(String(l));
+    else console.log(`${C.dim}  （PID ${l} ${match === false ? '不是 device-hub，跳过' : '身份无法核对，跳过'}）${C.reset}`);
+  }
+  if (!targets.size) {
+    console.log(`${C.red}✘ 清理失败：监听者中没有 device-hub，需手动处理。${C.reset}`);
+    return false;
+  }
+  const ok = await killHubs(targets);
+  const stillUp = (await listeningPids(PORT)).size > 0;
+  if (!ok || stillUp) {
+    console.log(`${C.red}✘ 清理失败：3120 仍被占用${C.reset}`);
+    return false;
+  }
+  console.log(`${C.green}✔${C.reset} 已清理残留中枢（PID ${[...targets].join(', ')}）。`);
   return true;
 }
 

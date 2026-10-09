@@ -1643,5 +1643,13 @@ server.listen(PORT, HOST, () => {
   log(`==================================================================`);
 });
 
-process.on('SIGINT', () => { removePidFile(); server.close(() => process.exit(0)); });
-process.on('SIGTERM', () => { removePidFile(); server.close(() => process.exit(0)); });
+/* ---- 体面退出 (2026-10-10 修复僵尸进程): 有挂起的长轮询连接时, server.close 的回调
+ *      永远不会触发 → 进程僵死、端口显示被占。主动断掉全部连接 + 1.2s 兜底强退。 ---- */
+function gracefulShutdown() {
+  removePidFile();
+  try { server.close(); } catch (e) { /* 忽略 */ }
+  try { if (typeof server.closeAllConnections === 'function') server.closeAllConnections(); } catch (e) { /* 忽略 */ }
+  setTimeout(() => process.exit(0), 1200);
+}
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
