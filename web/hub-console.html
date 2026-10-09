@@ -494,7 +494,11 @@ async function copyText(text, tip) {
 async function api(path, opts) {
   const res = await fetch(path, Object.assign({ cache: 'no-store' }, opts));
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  if (!res.ok) {
+    const e = new Error(data.error || ('HTTP ' + res.status));
+    e.body = data;   // 失败时也带回完整响应 (步骤列表等), 调用方渲染用
+    throw e;
+  }
   return data;
 }
 
@@ -628,18 +632,19 @@ async function connectDevice() {
   const btn = $('btn-connect');
   btn.disabled = true; btn.textContent = '⏳ 正在一键连接…';
   $('connect-steps').innerHTML = '';
+  let r;
   try {
-    const r = await api('/api/device/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    $('connect-steps').innerHTML = (r.steps || []).map(s =>
-      `<div class="cs ${s.ok ? 'ok' : 'bad'}">${esc(s.name)}${s.detail ? ' — ' + esc(s.detail) : ''}</div>`).join('');
-    if (r.ok) toast('设备连接成功', '手机 Agent 已上线, 可以开始演练', 'success', 6000);
-    else toast('连接未完成', r.error || '请查看步骤详情', 'error', 8000);
+    r = await api('/api/device/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   } catch (e) {
-    toast('一键连接失败', e.message, 'error', 8000);
-  } finally {
-    btn.disabled = false; btn.textContent = '⚡ 一键连接设备 (全自动)';
-    refreshDevices();
+    r = e.body || { ok: false, error: e.message, steps: [] };   // 失败也要渲染步骤
   }
+  const stepsHtml = (r.steps || []).map(s =>
+    `<div class="cs ${s.ok ? 'ok' : 'bad'}">${esc(s.name)}${s.detail ? ' — ' + esc(s.detail) : ''}</div>`).join('');
+  if (stepsHtml) $('connect-steps').innerHTML = stepsHtml;
+  if (r.ok) toast('设备连接成功', '手机 Agent 已上线, 可以开始演练', 'success', 6000);
+  else toast('连接未完成', r.error || '', 'error', 8000);
+  btn.disabled = false; btn.textContent = '⚡ 一键连接设备 (全自动)';
+  refreshDevices();
 }
 
 /**
@@ -654,30 +659,33 @@ async function updateScript() {
   const okGo = await confirmModal('📦 更新手机脚本并重启 Agent?',
     viaWifi
       ? '当前 Wi-Fi 通道：手机会自己从电脑下载最新脚本、覆盖本地文件，然后自动重启。\n（前提手机能连到中枢；最多 4 秒开始下载）'
-      : '当前 USB 通道：电脑直接把最新脚本推给手机并重启 Agent。',
+      : '当前 USB 通道：电脑推送最新脚本 → 让 Agent 自己换引擎重启（不碰无障碍）。',
     viaWifi ? '开始更新 (Wi-Fi)' : '开始更新 (USB)');
   if (!okGo) return;
   btn.disabled = true; btn.textContent = '⏳ 正在推送并重启…';
   $('connect-steps').innerHTML = '';
+  let r;
   try {
-    const r = await api(viaWifi ? '/api/device/update-script-lan' : '/api/device/update-script',
+    r = await api(viaWifi ? '/api/device/update-script-lan' : '/api/device/update-script',
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    if (viaWifi) {
-      toast('⬇ 已下发更新指令', (r.note || '手机将自行下载并重启') + (r.localSize ? '（电脑端 ' + (r.localSize / 1024).toFixed(1) + ' KB）' : ''), 'success', 9000);
-      $('connect-steps').innerHTML = '<div class="cs ok">Wi-Fi 自更新 — 指令已随心跳下发，手机将下载覆盖并自动重启</div>';
-    } else {
-      $('connect-steps').innerHTML = (r.steps || []).map(s =>
-        `<div class="cs ${s.ok ? 'ok' : 'bad'}">${esc(s.name)}${s.detail ? ' — ' + esc(s.detail) : ''}</div>`).join('');
-      if (r.ok) toast('脚本已更新', 'Agent 已使用最新脚本重启', 'success');
-      else toast('更新未完成', r.error || '', 'error');
-    }
   } catch (e) {
-    // ★ 用户裁决 (2026-10-10): USB 通道失败**不降级** WiFi, 如实报错由用户决策
-    toast('更新脚本失败', e.message, 'error');
-  } finally {
-    btn.disabled = false; btn.textContent = '📦 更新手机脚本并重启 Agent';
-    refreshDevices();
+    r = e.body || { ok: false, error: e.message, steps: [] };   // 失败也要把步骤渲染出来
   }
+  const stepsHtml = (r.steps || []).map(s =>
+    `<div class="cs ${s.ok ? 'ok' : 'bad'}">${esc(s.name)}${s.detail ? ' — ' + esc(s.detail) : ''}</div>`).join('');
+  if (stepsHtml) {
+    $('connect-steps').innerHTML = stepsHtml;
+    $('connect-steps').style.display = '';
+  }
+  if (r.ok) {
+    if (viaWifi) toast('⬇ 已下发更新指令', (r.note || '手机将自行下载并重启') + (r.localSize ? '（电脑端 ' + (r.localSize / 1024).toFixed(1) + ' KB）' : ''), 'success', 9000);
+    else toast('脚本已更新', 'Agent 已使用最新脚本重启', 'success');
+  } else {
+    toast('更新未完成', r.error || '', 'error', 9000);
+  }
+  btn.disabled = false; btn.textContent = '📦 更新手机脚本并重启 Agent';
+  refreshDevices();
+  if (viaWifi) setTimeout(refreshDevices, 10000);
 }
 
 /* ==================== 探针库与表单 ==================== */
