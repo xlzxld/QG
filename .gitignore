@@ -44,3 +44,7 @@ Thumbs.db
 desktop.ini
 .DS_Store
 data/grab/device-events.jsonl
+
+# ── Python 产物 ──
+__pycache__/
+*.pyc
