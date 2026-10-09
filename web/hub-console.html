@@ -672,18 +672,11 @@ async function updateScript() {
       else toast('更新未完成', r.error || '', 'error');
     }
   } catch (e) {
+    // ★ 用户裁决 (2026-10-10): USB 通道失败**不降级** WiFi, 如实报错由用户决策
     toast('更新脚本失败', e.message, 'error');
-    // USB 推送失败时自动回落 Wi-Fi 自更新 (fallback)
-    if (!viaWifi && chanState.wifi) {
-      try {
-        const r2 = await api('/api/device/update-script-lan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-        toast('USB 推送失败, 已改走 Wi-Fi 自更新', r2.note || '手机将自行下载并重启', 'warn', 9000);
-      } catch (e2) { toast('Wi-Fi 自更新也失败', e2.message, 'error'); }
-    }
   } finally {
     btn.disabled = false; btn.textContent = '📦 更新手机脚本并重启 Agent';
     refreshDevices();
-    if (viaWifi) setTimeout(refreshDevices, 10000);
   }
 }
 

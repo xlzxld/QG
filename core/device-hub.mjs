@@ -594,7 +594,50 @@ function settleCancelled(entry, taskId, evidence) {
 }
 
 /* ============ 一键设备连接 (核心流程) ============ */
+
+/* ★ 手机上实际装的是哪个 AutoJs 系应用, 动态探测 (2026-10-10 修复):
+ *   之前写死 org.autojs.autojs6 + Usher 服务类 —— 而用户手机装的是 AutoX.js v7
+ *   (org.autojs.autoxjs.v7 / com.stardust.autojs...AccessibilityService)。
+ *   后果: am start 拉不起 → 一键连接失败; settings put 写入**不存在的组件** →
+ *   整个 enabled_accessibility_services 列表被覆盖 → 无障碍被"关"。 */
+const AUTOJS_CANDIDATES = [
+  { pkg: 'org.autojs.autoxjs.v7', acc: 'com.stardust.autojs.core.accessibility.AccessibilityService', launch: 'org.autojs.autojs.external.open.RunIntentActivity', name: 'AutoX.js v7' },
+  { pkg: 'org.autojs.autojs6', acc: 'org.autojs.autojs.core.accessibility.AccessibilityServiceUsher', launch: 'org.autojs.autojs.external.open.RunIntentActivity', name: 'AutoJs6' },
+  { pkg: 'org.autojs.autoxjs', acc: 'com.stardust.autojs.core.accessibility.AccessibilityService', launch: 'org.autojs.autojs.external.open.RunIntentActivity', name: 'AutoX.js v6' },
+  { pkg: 'com.stardust.autojs', acc: 'com.stardust.autojs.core.accessibility.AccessibilityService', launch: 'org.autojs.autojs.external.open.RunIntentActivity', name: 'AutoX.js' },
+];
+
+async function detectAutoJs(serial) {
+  for (const c of AUTOJS_CANDIDATES) {
+    try {
+      const out = runAdb(`adb -s ${serial} shell pm list packages ${c.pkg}`, 3000) || '';
+      if (out.includes(`package:${c.pkg}`)) return c;
+    } catch (e) { /* 试下一个 */ }
+  }
+  return null;
+}
+
+let connectFlowBusy = false;   // 互斥: 手动一键连接 / 更新脚本 / USB 自动连接 不允许并发跑
+
 async function connectDeviceFlow(options = {}) {
+  // 手动触发: 等自动流程跑完再上 (最多 20s); 自动触发: 忙时直接让路
+  if (connectFlowBusy) {
+    if (options.auto) return { ok: false, steps: [], error: '连接流程执行中, 自动连接让路' };
+    for (let i = 0; i < 40; i++) {
+      await sleep(500);
+      if (!connectFlowBusy) break;
+    }
+    if (connectFlowBusy) return { ok: false, steps: [], error: '上一次连接流程仍在执行, 请稍候再试' };
+  }
+  connectFlowBusy = true;
+  try {
+    return await connectDeviceFlowInner(options);
+  } finally {
+    connectFlowBusy = false;
+  }
+}
+
+async function connectDeviceFlowInner(options = {}) {
   const steps = [];
   const step = (name, ok, detail = '') => {
     steps.push({ name, ok, detail });
@@ -608,6 +651,16 @@ async function connectDeviceFlow(options = {}) {
     return { ok: false, steps, error: '未检测到 USB 连接的 Android 设备' };
   }
   const serial = adbList[0].serial;
+
+  // 1.5 探测实际安装的自动化应用 —— **探测失败不拦路**: 部分厂商 shell 对管道输出有怪癖
+  //     (本机实证: vivo 的 pm list packages 管道会丢内容, 但 pm path 查得到) → 回退默认 AutoJs6
+  let app = await detectAutoJs(serial);
+  if (app) {
+    step('检测自动化应用', true, `${app.name} (${app.pkg})`);
+  } else {
+    app = AUTOJS_CANDIDATES[0];
+    step('检测自动化应用', true, `未探测到 (厂商 shell 输出怪癖?) → 按默认 ${app.name} 继续, 拉起失败会自动换备选`);
+  }
 
   // 2. 端口反向代理
   try {
@@ -647,26 +700,46 @@ async function connectDeviceFlow(options = {}) {
   }
 
   // 6. (重启模式) 停止旧 Agent 并恢复无障碍
+  //    ★ 2026-10-10: 只有「明确要求重启」(更新脚本) 或 Agent 不在线时才动 Agent ——
+  //    在线状态下的一键连接绝不打断它 (用户实证: 在线时重连 = 断 agent + 无障碍被抹)。
   const agentWasOnline = [...devices.values()].some(d => Date.now() - d.lastSeen < 20000);
-  if (options.restart || agentWasOnline) {
+  const wantRestart = options.restart === true || !agentWasOnline;
+  if (wantRestart) {
+    // ★ 无障碍快照恢复: force-stop 会解除绑定; 回写 = **原样恢复快照** (不强加、不覆盖别的服务)。
+    //    快照为空说明无障碍本来就关着 → 保持不动, 绝不替用户编造服务列表。
+    let accSnapshot = '';
+    try { accSnapshot = (runAdb(`adb -s ${serial} shell settings get secure enabled_accessibility_services`, 2000) || '').trim(); } catch (e) { /* 忽略 */ }
+    if (accSnapshot === 'null') accSnapshot = '';
     try {
-      runAdb(`adb -s ${serial} shell am force-stop ${AUTOJS_PKG}`, 3000);
+      runAdb(`adb -s ${serial} shell am force-stop ${app.pkg}`, 3000);
       await sleep(800);
-      // force-stop 会清掉无障碍绑定, 必须立即恢复
-      runAdb(`adb -s ${serial} shell "settings put secure enabled_accessibility_services ${AUTOJS_PKG}/${AUTOJS_ACC_SERVICE}; settings put secure accessibility_enabled 1"`, 3000);
-      step('重启 Agent (恢复无障碍服务)', true);
+      if (accSnapshot) {
+        runAdb(`adb -s ${serial} shell settings put secure enabled_accessibility_services ${accSnapshot}`, 3000);
+        runAdb(`adb -s ${serial} shell settings put secure accessibility_enabled 1`, 3000);
+        step(`重启 ${app.name} (无障碍按快照恢复)`, true, accSnapshot.slice(0, 60));
+      } else {
+        step(`重启 ${app.name}`, true, '无障碍原本未启用, 保持不动');
+      }
     } catch (e) {
-      step('重启 Agent', false, e.message);
+      step(`重启 ${app.name} (恢复无障碍服务)`, false, e.message);
     }
-  }
 
-  // 7. 拉起 Agent 运行
-  try {
-    runAdb(`adb -s ${serial} shell am start -n ${AUTOJS_PKG}/org.autojs.autojs.external.open.RunIntentActivity -a android.intent.action.VIEW -d "file:///sdcard/qg-agent/main.js" -t "application/x-javascript"`, 4000);
-    step('拉起 AutoJs6 运行 Agent', true);
-  } catch (e) {
-    step('拉起 AutoJs6 运行 Agent', false, e.message);
-    return { ok: false, steps, error: '无法启动手机端脚本 (请确认手机已安装 AutoJs6)' };
+    // 7. 拉起 Agent 运行 (逐个候选试到成功为止)
+    let launched = null;
+    for (const cand of [app, ...AUTOJS_CANDIDATES.filter((c) => c.pkg !== app.pkg)]) {
+      try {
+        const out = runAdb(`adb -s ${serial} shell am start -n ${cand.pkg}/${cand.launch} -a android.intent.action.VIEW -d "file:///sdcard/qg-agent/main.js" -t "application/x-javascript"`, 4000) || '';
+        if (/Error|does not exist|not found|Exception/i.test(out)) continue;
+        launched = cand;
+        break;
+      } catch (e) { /* 试下一个 */ }
+    }
+    if (!step(`拉起 ${launched ? launched.name : '自动化应用'} 运行 Agent`, !!launched, launched ? launched.pkg : '全部候选都拉起失败')) {
+      return { ok: false, steps, error: '无法启动手机端脚本 (请确认手机已安装 AutoJs6/AutoX)' };
+    }
+    if (launched.pkg !== app.pkg) app = launched;   // 实际拉起者获胜 (后续日志口径对齐)
+  } else {
+    step('Agent 已在线', true, '跳过重启 (非破坏式连接, 不打断在跑的任务)');
   }
 
   // 8. 等待 Agent 注册上线 (最长 15s)
@@ -681,7 +754,7 @@ async function connectDeviceFlow(options = {}) {
   }
   step('Agent 注册上线', online, online ? '手机已连接控制台' : '15 秒内未收到 Agent 上线心跳');
 
-  return { ok: online, steps, error: online ? null : 'Agent 未能上线 (可能无障碍服务未授权, 请在手机上检查 AutoJs6)' };
+  return { ok: online, steps, error: online ? null : 'Agent 未能上线 (可能无障碍服务未授权, 请在手机上检查)' };
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
