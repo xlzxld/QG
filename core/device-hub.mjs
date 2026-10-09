@@ -79,18 +79,43 @@ function scanAdbDevices() {
 
 // 后台周期探测: 维持 adb reverse 隧道与设备缓存 (hub 重启 / 手机重插 USB 后自动恢复,
 // 不依赖浏览器控制台是否打开; async 执行避免阻塞事件循环)
-setInterval(() => {
-  execAsync('adb devices -l', { timeout: 2000, windowsHide: true }, (err, stdout) => {
-    if (err) { cachedAdbDevices = []; lastAdbScanTime = Date.now(); return; }
-    const list = parseAdbDevices(stdout);
-    lastAdbScanTime = Date.now();
-    cachedAdbDevices = list;
-    for (const d of list) {
-      execAsync(`adb -s ${d.serial} reverse tcp:${PORT} tcp:${PORT}`, { timeout: 1500, windowsHide: true }, () => {});
-    }
-    if (list.length) log(`[USB 隧道] 已自动维持 ${list.length} 台设备的 tcp:${PORT} 反向代理`);
-  });
-}, 5000).unref();
+//
+// ★ 自适应节奏：adb 正常时每 5 秒一轮（抢购场景要的就是手机掉线后快速自愈）；
+//   问不到 adb（没装 / 不在 PATH）时退避为每 60 秒试一次，避免每 5 秒白跑一次；
+//   装好 adb 后重启中枢，节奏自动恢复正常。
+let adbPollMs = 5000;
+let adbPollState = 'ok'; // 'ok' | 'no-adb'
+const scheduleAdbPoll = () => {
+  setTimeout(() => {
+    execAsync('adb devices -l', { timeout: 2000, windowsHide: true }, (err, stdout) => {
+      if (err) {
+        cachedAdbDevices = [];
+        lastAdbScanTime = Date.now();
+        if (adbPollState !== 'no-adb') {
+          adbPollState = 'no-adb';
+          adbPollMs = 60000;
+          log('[设备探测] 未找到 adb（或执行失败）：探测降频为每 60 秒一次；装好 adb 后重启中枢即可恢复正常节奏');
+        }
+        scheduleAdbPoll();
+        return;
+      }
+      if (adbPollState !== 'ok') {
+        adbPollState = 'ok';
+        adbPollMs = 5000;
+        log('[设备探测] adb 已恢复正常，探测节奏恢复为每 5 秒一次');
+      }
+      const list = parseAdbDevices(stdout);
+      lastAdbScanTime = Date.now();
+      cachedAdbDevices = list;
+      for (const d of list) {
+        execAsync(`adb -s ${d.serial} reverse tcp:${PORT} tcp:${PORT}`, { timeout: 1500, windowsHide: true }, () => {});
+      }
+      if (list.length) log(`[USB 隧道] 已自动维持 ${list.length} 台设备的 tcp:${PORT} 反向代理`);
+      scheduleAdbPoll();
+    });
+  }, adbPollMs).unref();
+};
+scheduleAdbPoll();
 
 if (!fs.existsSync(GRAB_DIR)) fs.mkdirSync(GRAB_DIR, { recursive: true });
 
