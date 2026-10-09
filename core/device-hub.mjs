@@ -1459,6 +1459,7 @@ const server = http.createServer(async (req, res) => {
           hammer: !!ig.hammer,
           button: validXY(ig.button),
           submit: validXY(ig.submit),
+          popup: validXY(ig.popup),   // 「继续尝试」弹窗按钮 (2026-10-10; 缺省由手机端按提交锚点推算)
           calibScreen: calib,
           rateMin,
           rateMax: Math.max(rateMin, clampInt(ig.rateMax, 1, 20, 12)),   // 硬上限 20 击/秒
@@ -1470,9 +1471,10 @@ const server = http.createServer(async (req, res) => {
           gapMaxMs: Math.max(gapMin, clampInt(ig.gapMaxMs, 0, 2000, 85)),
           pressMinMs: pressMin,
           pressMaxMs: Math.max(pressMin, clampInt(ig.pressMaxMs, 0, 400, 56)),
-          jitterPx: clampInt(ig.jitterPx, 0, 24, 3),
-          jitterXPx: clampInt(ig.jitterXPx !== undefined ? ig.jitterXPx : ig.jitterPx, 0, 24, 3),
-          jitterYPx: clampInt(ig.jitterYPx !== undefined ? ig.jitterYPx : ig.jitterPx, 0, 24, 3),
+          // 抖动上限 = 统一锚点三键交集的几何余量 (X ±100 / Y ±40, 2026-10-10 实测); 超界必出按钮
+          jitterPx: clampInt(ig.jitterPx, 0, 100, 3),
+          jitterXPx: clampInt(ig.jitterXPx !== undefined ? ig.jitterXPx : ig.jitterPx, 0, 100, 3),
+          jitterYPx: clampInt(ig.jitterYPx !== undefined ? ig.jitterYPx : ig.jitterPx, 0, 40, 3),
           autoRefresh: !!ig.autoRefresh,   // 开售前自动刷新 (默认关)
           firstTapTries: clampInt(ig.firstTapTries, 1, 5, 3),
           firstTapTimeoutMs: clampInt(ig.firstTapTimeoutMs, 200, 3000, 700),

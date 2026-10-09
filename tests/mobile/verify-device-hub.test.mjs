@@ -337,7 +337,7 @@ describe('Device Hub (:3129) API 自动化验证', () => {
       taskId, mode: 'grab',
       target: { name: 'grab透传测试', itemId: '1085142029424', expectKeywords: ['薛之谦', '  ', '贵阳', 'x'.repeat(30)] },
       timing: { fireAtEpochMs: Date.now() + 120000, highFreqLeadMs: 99999 },
-      grab: { dryRun: true, button: { x: 682, y: 2305 }, submit: { x: -1, y: 0 }, maxChainMs: 1, evilField: 'x' }
+      grab: { dryRun: true, button: { x: 682, y: 2305 }, submit: { x: -1, y: 0 }, popup: { x: 540, y: 1382 }, maxChainMs: 1, evilField: 'x' }
     });
     expect(r4.status).toBe(200);
     const d4 = await r4.json();
@@ -345,6 +345,7 @@ describe('Device Hub (:3129) API 自动化验证', () => {
     expect(d4.task.grab.dryRun).toBe(true);
     expect(d4.task.grab.button).toEqual({ x: 682, y: 2305 });
     expect(d4.task.grab.submit).toBe(null);            // 非法坐标被丢弃, 不兜底
+    expect(d4.task.grab.popup).toEqual({ x: 540, y: 1382 }); // 弹窗按钮坐标透传 (2026-10-10)
     expect(d4.task.grab.maxChainMs).toBe(3000);        // clamp 下限
     expect(d4.task.grab.evilField).toBeUndefined();    // 未知字段丢弃
     expect(d4.task.timing.highFreqLeadMs).toBe(10000); // clamp 上限

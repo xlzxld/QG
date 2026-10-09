@@ -394,8 +394,12 @@
             <div><label>彩排连点时长 (ms)</label><input id="grab-reh-ms" type="number" value="4000" min="1000" max="60000"></div>
           </div>
           <div class="frow">
-            <div><label>主按钮坐标 (留空=自动锚定)</label><input id="grab-btn-xy" placeholder="682,2305"></div>
-            <div><label>提交坐标 (留空=同主按钮)</label><input id="grab-sub-xy" placeholder="682,2305"></div>
+            <div><label>主按钮坐标 (1080×2400 标定)</label><input id="grab-btn-xy" placeholder="841,2310"></div>
+            <div><label>提交坐标 (默认同主按钮)</label><input id="grab-sub-xy" placeholder="841,2310"></div>
+          </div>
+          <div class="frow">
+            <div><label>弹窗「继续尝试」坐标 (留空=按提交坐标推算)</label><input id="grab-popup-xy" placeholder="540,1382"></div>
+            <div><label>抖动幅度上限 (锚点实测)</label><div class="hint" style="margin-top:6px">三按钮交集给出：<b>X ±100 / Y ±40 px</b>（超过必出按钮）；推荐 X 20~40 / Y 8~16。弹窗按钮（兜底坐标）抖动内置 <b>X ±80 / Y ±20</b>（跨设备推算取交集，已避开「返回重新选购」），优先点节点中心、无需手调。</div></div>
           </div>
           <div class="hint" id="grab-calib-hint">标定分辨率：未连接设备</div>
         </details>
@@ -1242,7 +1246,7 @@ async function grabOpenItem() {
 const GRAB_SAVE_KEY = 'qg.grab.params.v1';
 const GRAB_FIELDS = ['grab-link', 'grab-keywords', 'grab-exec', 'grab-time', 'grab-reh-time', 'grab-lead',
   'grab-rate-min', 'grab-rate-max', 'grab-jitter-x', 'grab-jitter-y', 'grab-ft-tries', 'grab-ft-timeout',
-  'grab-chain-ms', 'grab-reh-ms', 'grab-btn-xy', 'grab-sub-xy'];
+  'grab-chain-ms', 'grab-reh-ms', 'grab-btn-xy', 'grab-sub-xy', 'grab-popup-xy'];
 const GRAB_CHECKS = ['grab-autorefresh'];   // 复选框单独存 checked
 
 function saveGrabParams() {
@@ -1280,7 +1284,7 @@ function resetGrabParams() {
     'grab-link': '', 'grab-keywords': '', 'grab-exec': 'live', 'grab-time': '', 'grab-reh-time': '',
     'grab-lead': '1000', 'grab-rate-min': '8', 'grab-rate-max': '12', 'grab-jitter-x': '3', 'grab-jitter-y': '3',
     'grab-ft-tries': '3', 'grab-ft-timeout': '700', 'grab-chain-ms': '12000', 'grab-reh-ms': '4000',
-    'grab-btn-xy': '', 'grab-sub-xy': '',
+    'grab-btn-xy': '', 'grab-sub-xy': '', 'grab-popup-xy': '',
   };
   for (const id of Object.keys(opts)) { const el = $(id); if (el) el.value = opts[id]; }
   if ($('grab-autorefresh')) $('grab-autorefresh').checked = false;
@@ -1426,6 +1430,7 @@ async function grabArm() {
   const ftTries = numVal('grab-ft-tries', 1, 5, 3);
   const btnXY = parseXY($('grab-btn-xy').value);
   const subXY = parseXY($('grab-sub-xy').value);
+  const popupXY = parseXY($('grab-popup-xy').value);
   const keywords = $('grab-keywords').value.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 6);
   const item = catalog.find(x => String(x.itemId || '') === String(itemId));
   const rate = `目标 ${rateMin}~${rateMax} 击/秒 → 预估真实 ${cad.estPerSec} 击/秒`;
@@ -1440,7 +1445,9 @@ async function grabArm() {
     `目标: ${item?.name || ('商品 ' + itemId)}\n商品ID: ${itemId}\n时间: ${ft}\n方式: ${execText}\n`
     + `连点节拍: ${rate} (间隔 ${cad.gapMin}~${cad.gapMax}ms, 按压 ${cad.pressMin}~${cad.pressMax}ms, 抖动 X${jitterX}px / Y${jitterY}px)\n`
     + `首击: 中枢预置 + 最多 ${ftTries} 发重试\n`
-    + `保底坐标: ${btnXY ? (btnXY.x + ',' + btnXY.y) : '自动锚定'} @ ${targetScreen ? (targetScreen.w + '×' + targetScreen.h) : '未知分辨率'}\n`
+    + `统一锚点: ${btnXY ? (btnXY.x + ',' + btnXY.y) : '自动锚定'} @ ${targetScreen ? (targetScreen.w + '×' + targetScreen.h) : '未知分辨率'}`
+    + ` — 一个点通吃 立即预订/确定/立即提交 (抖动上限 X±100/Y±40, 当前 X±${Math.min(jitterX,100)}/Y±${Math.min(jitterY,40)})\n`
+    + `弹窗连击: 「继续尝试」在首次点击 300ms 后由侧车高频处置 (与主链并行互不影响, 合计 ≤20 击/秒)\n`
     + chanLine + '\n\n'
     + (dryRun ? '彩排会真实点击按钮区域 + 连点, 但不会点提交。' : '到点后将真实点击, 连点到提交订单!'),
     dryRun ? '🟢 开始彩排' : '🚀 抢购 (真实抢购)');
@@ -1462,7 +1469,7 @@ async function grabArm() {
     },
     timing: { fireAtEpochMs: fireAt, highFreqLeadMs: lead },
     grab: {
-      dryRun, hammer, button: btnXY, submit: subXY, calibScreen: targetScreen,
+      dryRun, hammer, button: btnXY, submit: subXY, popup: popupXY, calibScreen: targetScreen,
       gapMinMs: cad.gapMin, gapMaxMs: cad.gapMax,
       pressMinMs: cad.pressMin, pressMaxMs: cad.pressMax,
       jitterPx: Math.max(jitterX, jitterY), jitterXPx: jitterX, jitterYPx: jitterY,

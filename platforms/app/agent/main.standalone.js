@@ -1,7 +1,7 @@
 /**
  * =====================================================================
  * QG-Agent 移动端全功能免依赖抢购引擎 (AutoJs6 / AutoX 独立全功能单文件版)
- * 生成时间: 2026-10-09T12:40:40.094Z
+ * 生成时间: 2026-10-09T16:21:12.444Z
  * 零 require 依赖，兼容任何目录直接运行 (彻底根除 jvm-npm 相对路径抛错)
  * =====================================================================
  */
@@ -1622,6 +1622,39 @@ var CLICK_CFG = {
     firstTapTimeoutMs: 700            // 首击单发超时 (ms)
 };
 
+/* ===== 统一锚点与「继续尝试」弹窗按钮 (2026-10-10 三截图实测标定, 标定分辨率 1080×2400) =====
+ * 来源: 图2(SKU抽屉·确定) / 图3(确认页·立即提交) 程序化测边:
+ *   确定     x[668,1015] y[2244,2375] 中心(841,2309)  348×131
+ *   立即提交  x[628,1015] y[2245,2375] 中心(821,2310)  388×130
+ *   立即预订  (无截图; 旧标定点 682,2305 落在同一区域, 右缘对齐 1015, 按三键交集处理)
+ * 统一锚点 = 三键交集 x[668,1015]∩y[2250,2370] 的中心 → (841,2310)。
+ * 「继续尝试」弹窗按钮 (图4 来自另一台设备, 只能跨设备推算, 取两条路径的**交集**保证落点):
+ *   路径A 按提交键宽比例换算 → 中心 y≈1346, 按钮 y[1284,1408]
+ *   路径B 弹窗垂直居中(图4实测 712≈718✓) + 同宽高比换算 → 中心 y≈1418, 按钮 y[1355,1480]
+ *   两路径交集 y[1361,1402] → 取 y=1382 (再留 ±18 抖动余量); x 两路径都=屏幕中心(弹窗按钮居中) → x=540。
+ *   ⚠ 侧车优先点**节点中心**(无跨设备误差), 此坐标仅是节点读不到 bounds 时的兜底。 */
+var GRAB_POINTS = {
+    calib: { w: 1080, h: 2400 },
+    anchor: { x: 841, y: 2310 },       // 统一锚点: 一个点通吃 立即预订/确定/立即提交
+    jitterCap: { x: 100, y: 40 },      // 锚点抖动上限 (超过必出按钮; 推荐 X 20~40, Y 8~16)
+    popup: { x: 540, y: 1382, jitterX: 80, jitterY: 18, delayMs: 300, pollMs: 60 },
+    popupFromSubmit: { dx: -301, dy: -928 }   // 无 popup 配置时: 提交锚点 + 此偏移 推算弹窗按钮
+};
+
+/** 击发间距 (全局): 主链与弹窗侧车共用, 任意两击(不分流)间隔 ≥50ms → 合计 ≤20 击/秒 */
+var TAP_SPACING = { lastAt: 0 };
+function markTapFired() { TAP_SPACING.lastAt = now(); }
+function waitTapSlot(minGapMs) {
+    var gap = minGapMs || 50;
+    var wait = (TAP_SPACING.lastAt + gap) - now();
+    if (wait > 0) sleep(wait);
+    markTapFired();
+}
+
+/** 连点链旁路控制: 主链热路径只认这个布尔, 识别/看护全在侧车线程 */
+var CHAIN_CTL = { stop: false, stopReason: "", sidecarDone: false, popupClicks: 0 };
+function chainReset() { CHAIN_CTL.stop = false; CHAIN_CTL.stopReason = ""; CHAIN_CTL.sidecarDone = false; CHAIN_CTL.popupClicks = 0; }
+
 /**
  * 第三重兜底：页面文案扫描（2026-10-09 加入）
  * ================================================================
@@ -1723,6 +1756,103 @@ function applyClickCfg(g, rttMs) {
         CLICK_CFG.pressMinMs = cfgInt(g.pressMinMs, 0, 300, CLICK_CFG.pressMinMs);
         CLICK_CFG.pressMaxMs = Math.max(CLICK_CFG.pressMinMs, cfgInt(g.pressMaxMs, 0, 400, CLICK_CFG.pressMaxMs));
     }
+    // 抖动上限保护 (2026-10-10): 统一锚点的有效抖动空间 = 三按钮交集 (X ±100 / Y ±40), 超界必出按钮
+    CLICK_CFG.jitterXPx = Math.min(CLICK_CFG.jitterXPx, GRAB_POINTS.jitterCap.x);
+    CLICK_CFG.jitterYPx = Math.min(CLICK_CFG.jitterYPx, GRAB_POINTS.jitterCap.y);
+}
+
+/**
+ * 「继续尝试」弹窗按钮落点 (2026-10-10):
+ *   ① 控制台下发的 grab.popup (标定坐标) 最优先
+ *   ② 否则 提交锚点 + 实测偏移 (popupFromSubmit) 推算 —— 用户口径"根据立即提交坐标推算"
+ *   ③ 都没有 → 内置标定点 GRAB_POINTS.popup
+ * 全部经 scaleToDevice 适配真机分辨率。
+ */
+function popupPointFor(task) {
+    var p = task && task.grab && task.grab.popup;
+    if (p && p.x > 0 && p.y > 0) return scaleToDevice({ x: p.x, y: p.y }, task);
+    var base = (task && task.grab && task.grab.submit) ? task.grab.submit : GRAB_POINTS.anchor;
+    var cand = scaleToDevice({ x: base.x + GRAB_POINTS.popupFromSubmit.dx, y: base.y + GRAB_POINTS.popupFromSubmit.dy }, task);
+    if (cand && cand.x > 0 && cand.y > 0) return cand;
+    return scaleToDevice({ x: GRAB_POINTS.popup.x, y: GRAB_POINTS.popup.y }, task);
+}
+
+/**
+ * 连点链侧车线程 (2026-10-10 新增) —— 与主链并行、互不阻塞:
+ *   主链热路径 = 纯无脑击发 (零识别); 本线程负责两件"不赶时间"的事:
+ *   ① 「继续尝试」弹窗处置: 首次点击 300ms 后开始探测 (text=继续尝试), 命中即点
+ *      (优先节点中心, 取不到 bounds 才用推算坐标), 直到弹窗消失。弹窗不在时**一击不发**,
+ *      因此不会误碰确认页上的观演人行 —— 这是"两处同时高频、互不影响"的落地方式。
+ *   ② 终态看护 (每 ~600ms): 支付页/售罄/滑块/页面漂移 → 置 CHAIN_CTL.stop, 主链下一击前收工。
+ *   节拍: 与主链共享 TAP_SPACING (任意两击间隔 ≥50ms, 合计 ≤20 击/秒)。
+ */
+function startChainSidecar(task, anchor, tid, endAt) {
+    var popupPt = popupPointFor(task);
+    var lastWatch = 0;
+    var viewerTried = 0;
+    threads.start(function () {
+        var startedAt = now();
+        try {
+            Transport.sendEvent(tid, "sidecar_start", {
+                popupPoint: popupPt, delayMs: GRAB_POINTS.popup.delayMs, pollMs: GRAB_POINTS.popup.pollMs
+            });
+        } catch (eE) {}
+        while (now() < endAt && !CHAIN_CTL.sidecarDone) {
+            if (isCancelled(tid)) break;
+            // ① 弹窗处置 (首次点击 300ms 后才开始 —— 弹窗只会在点提交之后出现)
+            if (now() - startedAt >= GRAB_POINTS.popup.delayMs) {
+                var dlg = null;
+                try { dlg = text("继续尝试").findOnce(); } catch (eD) {}
+                if (dlg) {
+                    var px = 0, py = 0, via = "point";
+                    try {
+                        var b = dlg.bounds();
+                        if (b) { px = b.centerX(); py = b.centerY(); via = "node"; }
+                    } catch (eB) {}
+                    if (!(px > 0 && py > 0)) { px = popupPt.x; py = popupPt.y; via = "point"; }
+                    waitTapSlot(60);   // 与主链错开, 合计 ≤20 击/秒
+                    adbPress(jitterInt(px, via === "node" ? 12 : GRAB_POINTS.popup.jitterX),
+                             jitterInt(py, via === "node" ? 8 : GRAB_POINTS.popup.jitterY), 42);
+                    CHAIN_CTL.popupClicks++;
+                    if (CHAIN_CTL.popupClicks <= 3 || CHAIN_CTL.popupClicks % 5 === 0) {
+                        sendLog(tid, "[弹窗] 继续尝试 第" + CHAIN_CTL.popupClicks + " 击 (" + px + "," + py + " via=" + via + ")");
+                        try { Transport.sendEvent(tid, "popup_retry_click", { n: CHAIN_CTL.popupClicks, x: px, y: py, via: via }); } catch (eP) {}
+                    }
+                }
+            }
+            // ② 终态看护 (每 ~600ms; 识别不进主链热路径)
+            if (now() - lastWatch > 600) {
+                lastWatch = now();
+                try {
+                    if (safeTextMatches(/选择支付方式|微信支付|支付宝|待付款|订单提交成功|支付剩余时间|排队中/).exists()) {
+                        CHAIN_CTL.stop = true; CHAIN_CTL.stopReason = "ordered"; break;
+                    }
+                    var act = safeActivity();
+                    var onDetail = act.indexOf("ProjectDetailActivity") >= 0;
+                    if (!onDetail && !DamaiAdapter.isInSkuDrawer() && !DamaiAdapter.isInOrderConfirmPage()) {
+                        CHAIN_CTL.stop = true; CHAIN_CTL.stopReason = "page_shifted"; break;
+                    }
+                    if (onDetail && safeTextMatches(/已售罄|无票|缺货登记/).exists()) {
+                        CHAIN_CTL.stop = true; CHAIN_CTL.stopReason = "no_stock"; break;
+                    }
+                    if (id("cn.damai:id/puzzle-captcha-btn-icon").exists()) {
+                        CHAIN_CTL.stop = true; CHAIN_CTL.stopReason = "captcha"; break;
+                    }
+                    // 观演人装配兜底 (原连点链内的看护, 平移到侧车; 每任务最多试一次)
+                    if (viewerTried < 1 && DamaiAdapter.isInOrderConfirmPage() && safeTextMatches(/请选择.*位观演人|仅需选择.*位/).exists()) {
+                        viewerTried++;
+                        sendLog(tid, "[侧车] 检测到需选观演人, 尝试快速装配一次");
+                        var vs = [];
+                        if (task.target && task.target.viewers && task.target.viewers.length) vs = task.target.viewers;
+                        else if (task.target && task.target.viewer) vs = [task.target.viewer];
+                        DamaiAdapter.assembleViewers(vs, (task.target && task.target.count) || 1, tid);
+                    }
+                } catch (eW) {}
+            }
+            sleep(GRAB_POINTS.popup.pollMs);
+        }
+        CHAIN_CTL.sidecarDone = true;
+    });
 }
 
 /** 坐标按标定分辨率换算到本机 (保底坐标才是写死的; 自动锚定取实时容器中心, 与分辨率无关) */
@@ -3968,30 +4098,31 @@ var DamaiAdapter = {
         var end = now() + CLICK_CFG.chainMs;
         var clicks = 0;
         var endReason = "";
-        var captchaStrikes = 0;
-        var viewerTried = 0;
-        var lastCheck = 0;
         var failStreak = 0;
         var stamps = [];
         var peak = 0;
-        var jumpLogged = false;
-        var lastDetail = true;
-        sendStep(tid, "tap_chain", "start", "抖动连点 " + CLICK_CFG.chainMs + "ms (≤20 击/秒, 瞄准自动切换)");
+        // 2026-10-10 用户口径: **只有首击检测按钮变化; 连点链全程无脑高频, 不做任何识别判断**。
+        //   瞄准 = 统一锚点 (立即预订/确定/立即提交 三键交集中心, 一个点通吃三个按钮), 热路径零树读取;
+        //   识别全部挪去侧车线程 (弹窗处置 + 终态看护), 主链只认 CHAIN_CTL.stop 布尔。
+        var aim = { x: anchor.cx, y: anchor.cy };
+        if (grab.submit && !grab.button) {
+            var sp = scaleToDevice(grab.submit, task);
+            if (sp && sp.x > 0) aim = { x: sp.x, y: sp.y };
+        }
+        var jx = Math.min(CLICK_CFG.jitterXPx, GRAB_POINTS.jitterCap.x);
+        var jy = Math.min(CLICK_CFG.jitterYPx, GRAB_POINTS.jitterCap.y);
+        chainReset();
+        startChainSidecar(task, anchor, tid, end);
+        sendStep(tid, "tap_chain", "start", "无脑高频连点 " + CLICK_CFG.chainMs + "ms (锚点 " + aim.x + "," + aim.y
+            + " 抖动 ≤" + jx + "/" + jy + "px, 侧车盯弹窗+终态)");
         if (hammer) Transport.sendEvent(tid, "grab_blind_mode", { clicks: 0, reason: "配置为无脑高频模式" });
 
         while (now() < end) {
-            if (isCancelled(tid)) { sendStep(tid, "tap_chain", "failed", "手动终止"); return { cancelled: true, clicks: clicks }; }
+            if (isCancelled(tid)) { CHAIN_CTL.sidecarDone = true; sendStep(tid, "tap_chain", "failed", "手动终止"); return { cancelled: true, clicks: clicks }; }
+            if (CHAIN_CTL.stop) { endReason = CHAIN_CTL.stopReason; break; }
 
-            // 页面身份每 3 击核一次 (够用且便宜), 决定瞄哪里 —— 这就是原"两阶段"的全部差别
-            if (clicks % 3 === 0 || clicks === 0) lastDetail = DamaiAdapter.grabOnDetailPage();
-            if (!hammer && !lastDetail && !jumpLogged) {
-                jumpLogged = true;
-                Transport.sendEvent(tid, "jump_detected", { clicks: clicks, act: safeActivity() });
-                sendStep(tid, "tap_chain", "progress", "页面已跳转 (" + clicks + " 次连点), 转瞄确定/提交位");
-            }
-            var aim = (hammer || lastDetail) ? { x: anchor.cx, y: anchor.cy } : this.grabAimRefresh(anchor, task);
-
-            var okTap = humanTap(aim.x, aim.y);
+            var okTap = humanTap(aim.x, aim.y, jx, jy);
+            markTapFired();
             if (!okTap) {
                 failStreak++;
                 if (failStreak >= 3) { endReason = "adb_down"; break; }
@@ -4003,46 +4134,23 @@ var DamaiAdapter = {
             if (stamps.length > 40) stamps.shift();
             var pk = peakPerSec(stamps);
             if (pk > peak) peak = pk;
-
-            // 状态看护 (每 ~0.7s): 出支付页 / 售罄 / 滑块 / 观演人
-            if (now() - lastCheck > 700) {
-                lastCheck = now();
-                if (safeTextMatches(/选择支付方式|微信支付|支付宝|待付款|订单提交成功|支付剩余时间|排队中/).exists()) { endReason = "ordered"; break; }
-                var act = safeActivity();
-                var onDetail = act.indexOf("ProjectDetailActivity") >= 0;
-                if (!onDetail && !DamaiAdapter.isInSkuDrawer() && !DamaiAdapter.isInOrderConfirmPage()) { endReason = "page_shifted"; break; }
-                if (onDetail && safeTextMatches(/已售罄|无票|缺货登记/).exists()) { endReason = "no_stock"; break; }
-                try {
-                    if (id("cn.damai:id/puzzle-captcha-btn-icon").exists()) {
-                        captchaStrikes++;
-                        if (captchaStrikes >= 2) { endReason = "captcha"; break; }
-                        DamaiAdapter.checkCaptcha();
-                    }
-                } catch (eC) {}
-                try {
-                    if (viewerTried < 1 && DamaiAdapter.isInOrderConfirmPage() && safeTextMatches(/请选择.*位观演人|仅需选择.*位/).exists()) {
-                        viewerTried++;
-                        sendLog(tid, "[连点] 检测到需选观演人, 尝试快速装配一次");
-                        var vs = [];
-                        if (task.target && task.target.viewers && task.target.viewers.length) vs = task.target.viewers;
-                        else if (task.target && task.target.viewer) vs = [task.target.viewer];
-                        DamaiAdapter.assembleViewers(vs, (task.target && task.target.count) || 1, tid);
-                    }
-                } catch (eV) {}
-            }
             sleep(humanGapMs());
         }
+        CHAIN_CTL.sidecarDone = true;
         if (!endReason) endReason = "timeout";
-        Transport.sendEvent(tid, "submit_tap_loop", { stormClicks: clicks, totalClicks: clicks, endReason: endReason, peakPerSec: peak });
+        Transport.sendEvent(tid, "submit_tap_loop", {
+            stormClicks: clicks, totalClicks: clicks, endReason: endReason, peakPerSec: peak,
+            popupClicks: CHAIN_CTL.popupClicks, aim: aim, jitter: { x: jx, y: jy }
+        });
         if (endReason === "ordered") {
-            sendStep(tid, "tap_chain", "done", "已进入支付/成功页 (" + clicks + " 击, 峰值 " + peak + "/秒)");
+            sendStep(tid, "tap_chain", "done", "已进入支付/成功页 (" + clicks + " 击, 峰值 " + peak + "/秒, 弹窗补击 " + CHAIN_CTL.popupClicks + ")");
         } else if (endReason === "captcha") {
             sendStep(tid, "tap_chain", "failed", "出现滑块验证码, 需人工介入 (" + clicks + " 击)");
             try { device.vibrate(500); } catch (eVB) {}
         } else if (endReason === "no_stock") {
             sendStep(tid, "tap_chain", "failed", "已售罄/无票 (" + clicks + " 击)");
         } else {
-            sendStep(tid, "tap_chain", "failed", "连点结束: " + endReason + " (" + clicks + " 击, 峰值 " + peak + "/秒)");
+            sendStep(tid, "tap_chain", "failed", "连点结束: " + endReason + " (" + clicks + " 击, 峰值 " + peak + "/秒, 弹窗补击 " + CHAIN_CTL.popupClicks + ")");
         }
         return { cancelled: false, clicks: clicks, endReason: endReason, peakPerSec: peak };
     },
