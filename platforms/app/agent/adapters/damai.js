@@ -502,13 +502,14 @@ var LocalInjector = {
 };
 
 /** ADB 优先按击 (自绘控件只认 input 注入); 通道链:
- *  ① PC-ADB (USB, 最快) → ② 本地 Shizuku 注入 (免 PC, 同级能力) → ③ 手机无障碍手势 (最后兜底)。
+ *  ① PC-ADB (USB, 最快, 单发 50ms 预算 —— 超过即认为卡住) → ② 本地 Shizuku 注入 (免 PC, 同级能力)
+ *  → ③ 手机无障碍手势 (最后兜底)。
  *  pressMs>=30 时用"同点按压"模拟人类按压时长 */
 function adbPress(x, y, pressMs) {
     if (pressMs && pressMs >= 30) {
         // 抖动统一由调用方 (humanTap) 施加, 这里不再叠加, 否则 jitterPx 参数会失真
-        if (Transport.adbTapBurst({ x: x, y: y, count: 1, pressMs: pressMs, jitter: 0 })) return true;
-    } else if (Transport.adbTap(x, y)) {
+        if (Transport.adbTapBurst({ x: x, y: y, count: 1, pressMs: pressMs, jitter: 0, timeoutMs: CLICK_CFG.firstTapTimeoutMs })) return true;
+    } else if (Transport.adbTap(x, y, CLICK_CFG.firstTapTimeoutMs)) {
         return true;
     }
     // ② 本地 Shizuku 注入 (WiFi/无 USB 时的"自主点击"通道; 与 PC-ADB 同级, 自绘按钮有效)
@@ -543,8 +544,8 @@ var CLICK_CFG = {
     rehearsalMs: 4000,                // 彩排连点时长 (ms)
     watchHardCapMs: 60000,            // 盯梢兜底闸门 (ms, 1 分钟; 用户 2026-10-09 拍板): 只为防任务永久挂住, 不是"观察窗"
     autoRefresh: false,               // 【默认关】开售前自动刷新页面 (T-30s / T-12s 各一次), 解决"页面状态陈旧"
-    firstTapTries: 3,                 // 首击最多发几发
-    firstTapTimeoutMs: 700            // 首击单发超时 (ms)
+    firstTapTries: 1,                 // 首击 ADB 发数 (2026-10-10 用户口径: 默认不重试 —— 等超时票就没了)
+    firstTapTimeoutMs: 50             // 首击单发超时 (用户口径: 50ms; 正常往返 3~8ms, 超过即认为卡住 → 立即 Shizuku)
 };
 
 /* ===== 统一锚点与「继续尝试」弹窗按钮 (2026-10-10 三截图实测标定, 标定分辨率 1080×2400) =====
@@ -2886,7 +2887,8 @@ var DamaiAdapter = {
         var tries = 0;
         var cmdMs = 0;
         // 首击是全场最关键的一下 —— 网络抖动时不能默默降级成手机手势 (手势对自绘按钮无效)。
-        // ① PC-ADB: 先短超时出手; 打不通立刻重试 (最多 N 发)
+        // ① PC-ADB: 默认 1 发、单发 50ms 预算 (正常往返 3~8ms; 超时 = 中枢卡住 → 不等, 立即转本地)
+        // ② 本地 Shizuku 注入 (与 PC-ADB 同级, 自绘按钮有效; USB 不通/Wi-Fi/中枢卡顿时手机自主出膛)
         while (tries < CLICK_CFG.firstTapTries && !viaName) {
             tries++;
             var ts = now();
@@ -2989,7 +2991,7 @@ var DamaiAdapter = {
                 }
             }
             if (!rFirst) rFirst = this.emitFirstTap(anchor, tid, fireAt, offset, "rehearsal_deadline");
-            sendStep(tid, "first_tap", "done", "ΔT0 " + rFirst.deltaMs + "ms via=" + (rFirst.via ? "persist" : "gesture(告警)") + (rFirst.hubArmed ? " · 中枢预置" : " · 请求通道"));
+            sendStep(tid, "first_tap", "done", "ΔT0 " + rFirst.deltaMs + "ms via=" + (rFirst.viaName || (rFirst.via ? "persist" : "gesture")) + (rFirst.hubArmed ? " · 中枢预置" : " · 请求通道"));
 
             // ② 立刻接拟人连点 (固定锚点, 不做微瞄准/状态看护 —— 彩排不打提交)
             //    节拍: 抖动间隔, 硬上限 20 击/秒 (防超频风控)

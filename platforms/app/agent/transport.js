@@ -727,7 +727,7 @@ var Transport = {
                 gapMs: opts.gapMs || 0,
                 jitter: opts.jitter || 0,
                 pressMs: opts.pressMs || 0
-            }, { timeout: 2500 });
+            }, { timeout: opts.timeoutMs || 2500 });
             return !!(res && res.statusCode === 200);
         } catch (e) {
             return false;

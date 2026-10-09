@@ -1610,8 +1610,8 @@ const server = http.createServer(async (req, res) => {
           jitterXPx: clampInt(ig.jitterXPx !== undefined ? ig.jitterXPx : ig.jitterPx, 0, 100, 3),
           jitterYPx: clampInt(ig.jitterYPx !== undefined ? ig.jitterYPx : ig.jitterPx, 0, 40, 3),
           autoRefresh: !!ig.autoRefresh,   // 开售前自动刷新 (默认关)
-          firstTapTries: clampInt(ig.firstTapTries, 1, 5, 3),
-          firstTapTimeoutMs: clampInt(ig.firstTapTimeoutMs, 200, 3000, 700),
+          firstTapTries: clampInt(ig.firstTapTries, 1, 5, 1),   // 默认不重试 (2026-10-10 用户口径: 等超时票就没了)
+          firstTapTimeoutMs: clampInt(ig.firstTapTimeoutMs, 30, 3000, 50),   // 50ms 超过即认为卡住 → 立即 Shizuku
         };
       }
       const result = dispatchTask(task, body.deviceId);
