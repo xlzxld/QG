@@ -283,7 +283,15 @@ export async function ensureSlotWindow(slot, targetUrl, log) {
       //   的窗口标记为 hidden，并对 hidden 页面丢弃全部 CDP 输入事件——真点击
       //   因此"时灵时不灵"（窗口露着就灵，被盖住/在后台就死，10-08 probe 实证）。
       //   禁掉它之后窗口被盖也能正常点击，代价只是遮挡时多耗一点渲染 CPU。
-      '--disable-features=CalculateNativeWinOcclusion',
+      // ★ 2026-10-09 多页签抢购补充（verify-background-click.mjs 实测支撑）：
+      //   非活动页签默认吃三套降速——定时器节流（后台 1 分钟才醒一次的
+      //   IntensiveWakeUpThrottling 尤其致命：页面靠 setTimeout 解锁按钮，
+      //   后台页签能慢 60 秒）、渲染器降级、被遮挡窗口后台化。全部禁掉后，
+      //   后台页签的页面 JS 与前台同速，T0 解锁/开确认页不再因页签在后台而迟到。
+      '--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
       // 上次没正常退出（崩溃/强杀）也不弹「要恢复页面吗」恢复条（专用窗口不需要它）
       '--hide-crash-restore-bubble',
       targetUrl,

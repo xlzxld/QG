@@ -33,6 +33,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BUTTON_MODE_LABEL, deriveSkuStatus, deriveNextSale } from './sku-status.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
@@ -342,16 +343,11 @@ function extractFromNextData(pageProps) {
    *
    * 数值含义以页面渲染为准，这里只做映射；未识别的值原样透出，
    * 不硬套「可买/不可买」—— 宁可给原始值也不给错判断。
+   *
+   * ★ 注意（2026-10-09）：buyableNow/buyableText 只是 buttonMode 的**原始快照**，
+   *   与实时库存、抢购场次经常打架（详见 sku-status.mjs 头注释）。
+   *   统一结论在 addUnifiedSkuFields 里推导，写入 statusText / buyable / sessionState。
    */
-  const BUTTON_MODE_LABEL = {
-    1: { text: '现货可买', buyable: true },
-    2: { text: '即将开售', buyable: false },
-    3: { text: '现货可买', buyable: true },
-    9: { text: '缺货', buyable: false },
-    10: { text: '缺货', buyable: false },
-    29: { text: '抢购未开售', buyable: false },
-    31: { text: '预约中', buyable: false },
-  };
 
   // 逐个 SKU 组装
   const skus = [];
@@ -463,15 +459,21 @@ function extractFromNextData(pageProps) {
  * 平台原始字段一律保留（sbomCode / buttonMode / rushBuy…），
  * 便于排查和将来需要平台特有逻辑时使用。
  */
-function addUnifiedSkuFields(skus) {
+function addUnifiedSkuFields(skus, serverNowMs = null) {
   for (const s of skus) {
     s.skuId = s.sbomCode ?? null;
-    s.statusText = s.buyableText ?? null;
-    s.buyable = s.buyableNow ?? null;
     s.saleStartAt = s.rushBuy?.startTime ?? null;
     s.limitPerUser = s.rushBuy?.limitNum ?? s.limitedQuantity ?? null;
     s.stockQty = s.inventoryQty ?? null;
     s.stockCapped = s.inventoryCapped ?? false;
+    // ★ 统一状态推导（2026-10-09）：实时库存 > 抢购场次 > buttonMode 快照。
+    //   buyableNow/buyableText 保留 buttonMode 原始快照不动，供排查对照。
+    const d = deriveSkuStatus(s, serverNowMs);
+    s.statusText = d.statusText;
+    s.buyable = d.buyable;
+    s.sessionState = d.sessionState;
+    s.oos = d.oos;
+    s.statusSource = d.source;
   }
   return skus;
 }
@@ -644,8 +646,10 @@ async function collectProduct(page, product) {
   }
   if (rush.serverNow) next.serverNow = rush.serverNow;
 
-  // ★ 补统一字段（回填完才算得出，所以放这里）
-  addUnifiedSkuFields(next.skus);
+  // ★ 补统一字段（回填完才算得出，所以放这里）+ 商品级"下一次开售"汇总
+  const serverNowMs = rush.serverNow && Number.isFinite(rush.serverNow.ms) ? rush.serverNow.ms : null;
+  addUnifiedSkuFields(next.skus, serverNowMs);
+  next.nextSale = deriveNextSale(next.skus, serverNowMs);
 
   // URL 有效性：页面被重定向走了 / 文本异常短 / 与配置的商品编号不符
   const expectedPrdId = extractPrdId(product.url);
@@ -807,6 +811,8 @@ async function main() {
       currentSbomCode: d.currentSbomCode,
       currentSbomId: d.currentSbomId,
       serverNow: d.serverNow || null,
+      // ★ 下一次开售（SKU 场次汇总）：{ startTimeMs, startTime, endTimeMs, endTime, skuCodes } | null
+      nextSale: d.nextSale || null,
       // ★ 规格维度（面板上渲染成可勾选的表）
       specDimensions: d.specDimensions,
       // ★ 全部 SKU
@@ -818,11 +824,18 @@ async function main() {
     });
 
     const inStock = skus.filter((s) => (s.inventoryQty ?? 0) > 0).length;
-    const withRush = skus.filter((s) => s.rushBuy).length;
-    const buyable = skus.filter((s) => s.buyableNow).length;
+    const upcoming = skus.filter((s) => s.sessionState === 'upcoming');
+    const ended = skus.filter((s) => s.sessionState === 'ended');
+    const noSession = skus.filter((s) => s.sessionState === 'none');
+    const buyable = skus.filter((s) => s.buyable).length;
+    const oos = skus.filter((s) => s.oos).length;
     log(
       `  ✓ ${d.name || '(无标题)'}` +
-        `\n     SKU ${skus.length} 个　现售可买 ${buyable}　现货有货 ${inStock}　待抢购 ${withRush}` +
+        `\n     SKU ${skus.length} 个　可买 ${buyable}　有货 ${inStock}　缺货 ${oos}` +
+        `\n     待抢购(有未来场次) ${upcoming.length}` +
+        (d.nextSale ? `　下次开售 ${String(d.nextSale.startTime || '').slice(5, 16).replace('T', ' ')}（${d.nextSale.skuCodes.length} 个规格）` : '') +
+        (ended.length ? `　场次已结束 ${ended.length}` : '') +
+        (noSession.length ? `　有抢购标但无场次 ${noSession.length}（选了也抢不了）` : '') +
         `\n     规格维度：${d.specDimensions.map((x) => `${x.name}(${x.values.length})`).join('  ') || '无'}`,
     );
     for (const s of skus) {
@@ -836,14 +849,44 @@ async function main() {
               : `库存${s.inventoryQty}`;
       const rush = s.rushBuy
         ? `${String(s.rushBuy.startTime || '').slice(5, 16).replace('T', ' ')} 限购${s.rushBuy.limitNum}`
-        : '无场次';
+        : (s.isRushBuySku ? '在抢购名单但无场次' : '无场次');
       const attrs = Object.values(s.attrs || {}).join('/');
       log(
-        `       ${s.sbomCode}  ¥${String(s.price ?? '?').padStart(6)}  ${s.buyableText.padEnd(6)}  ${inv.padEnd(8)} ${rush.padEnd(22)} ${attrs || s.label.slice(0, 30)}`,
+        `       ${s.sbomCode}  ¥${String(s.price ?? '?').padStart(6)}  ${String(s.statusText || '未知').padEnd(6)}  ${inv.padEnd(8)} ${rush.padEnd(22)} ${attrs || s.label.slice(0, 30)}`,
       );
     }
 
     await page.waitForTimeout(1200 + Math.random() * 1500);
+  }
+
+  // ── ★ 自动勾选"待抢购"（2026-10-09，用户定稿：不需要手动去勾）──
+  //   规则：配置里该商品 skuIds 为空（= 没做过任何选择）且采集发现有"有未来场次"
+  //   的 SKU → 自动把待抢购清单写进配置的 skuIds。已手选过的商品绝不碰。
+  //   只有现货的商品（无任何场次）不动，保持"空 = 全部现货都算目标"的老语义。
+  {
+    let configDirty = false;
+    const rawConfig = loadJson(CONFIG_PATH, {});
+    const rawProducts = Array.isArray(rawConfig.products) ? rawConfig.products : [];
+    for (const p of products) {
+      if (!p.ok || !Array.isArray(p.skus)) continue;
+      const raw = rawProducts.find((x) => x && x.url === p.url);
+      if (!raw) continue;
+      const existing = Array.isArray(raw.skuIds) ? raw.skuIds.map(String).filter(Boolean)
+        : Array.isArray(raw.sbomCodes) ? raw.sbomCodes.map(String).filter(Boolean) : [];
+      if (existing.length) continue; // 手选过 = 尊重人的选择
+      const upcoming = p.skus.filter((s) => s.sessionState === 'upcoming').map((s) => s.sbomCode);
+      if (!upcoming.length) continue; // 没有场次可勾
+      raw.skuIds = upcoming;
+      configDirty = true;
+      log(`\n  ★ 「${p.configId || p.prdId}」自动勾选了 ${upcoming.length} 个待抢购规格（配置里原来没勾过，采集发现有未来场次）：`);
+      log(`    ${upcoming.join('、')}`);
+      log('    （想改就到控制台「商品与规格」里手动勾选保存，手动勾选永远优先）');
+    }
+    if (configDirty) {
+      rawConfig.products = rawProducts;
+      fs.writeFileSync(CONFIG_PATH, JSON.stringify(rawConfig, null, 2) + '\n', 'utf8');
+      log('\n  已把自动勾选写回 huawei.config.json。');
+    }
   }
 
   // ── 汇总落盘 ──
@@ -861,6 +904,18 @@ async function main() {
     for (const k of keptProducts) log(`  · ${k.configId || k.prdId || '(未命名)'}（${(k.skus || []).length} 个 SKU）`);
   }
 
+  // ★ 保留的旧商品也统一重算状态（2026-10-09）
+  //   局部采集（--only）时，没被重采的商品带着上次的字段原样保留——里面
+  //   statusText 还是旧口径（库存 0 显示"现货可买"那种）。推导是纯函数、
+  //   只依赖已存的 rushBuy.startTimeMs / inventoryQty，落盘前统一重算一遍，
+  //   场次是否已结束也能随墙钟正确翻转（上午的场次现在显示"已结束"）。
+  const deriveNowMs = (products.find((p) => p.ok && p.serverNow && Number.isFinite(p.serverNow.ms)) || {}).serverNow?.ms ?? null;
+  for (const p of finalProducts) {
+    if (!p || !p.ok || !Array.isArray(p.skus)) continue;
+    addUnifiedSkuFields(p.skus, deriveNowMs);
+    p.nextSale = deriveNextSale(p.skus, deriveNowMs);
+  }
+
   const okProducts = finalProducts.filter((p) => p.ok);
   const allSkus = okProducts.flatMap((p) => p.skus || []);
   const current = { products: finalProducts, skus: allSkus };
@@ -875,7 +930,7 @@ async function main() {
       '字段来源：__NEXT_DATA__ 的 mainData.current（规格名、价格、状态、参数）',
       '＋ 页面自身请求 querySkuInventoryV2（精确库存）与 queryRushbuyInfo（开售时间/限购/服务器时间）。',
       'selected=true 表示配置里把它列为抢购目标（skuIds）。',
-      '局部采集（--only）时，未参与本次采集的商品会原样保留上次结果。',
+      '局部采集（--only）时，未参与本次采集的商品会原样保留上次结果（状态字段按当前时间统一重算）。',
     ].join(''),
     platform: 'huawei',
     // 平台元信息：控制台照这个显示文案，不写死"华为"。
@@ -902,10 +957,18 @@ async function main() {
       totalProducts: finalProducts.length,
       skus: allSkus.length,
       buyableNow: allSkus.filter((s) => s.buyableNow).length,
+      // ★ 统一推导后的可买数（实时库存为 0 的一律不算可买，见 sku-status.mjs）
+      buyable: allSkus.filter((s) => s.buyable).length,
       inStock: allSkus.filter((s) => (s.inventoryQty ?? 0) > 0).length,
       outOfStock: allSkus.filter((s) => s.inventoryQty === 0).length,
+      oos: allSkus.filter((s) => s.oos).length,
       inventoryUnknown: allSkus.filter((s) => s.inventoryQty == null).length,
       withRushBuy: allSkus.filter((s) => s.rushBuy).length,
+      // ★ 场次分类（2026-10-09）：待抢购只算"有未来场次"的，结束/无场次不再混进来
+      rushUpcoming: allSkus.filter((s) => s.sessionState === 'upcoming').length,
+      rushLive: allSkus.filter((s) => s.sessionState === 'live').length,
+      rushEnded: allSkus.filter((s) => s.sessionState === 'ended').length,
+      rushNoSession: allSkus.filter((s) => s.sessionState === 'none').length,
       selected: allSkus.filter((s) => s.selected).length,
       restock: restock.length,
       blocked: blocked.length,
@@ -919,10 +982,17 @@ async function main() {
       'inventoryQty=0 表示缺货。**1000 是平台封顶哨兵值**，语义为「≥1000 或充足」，不是精确 1000 台；' +
       'inventoryCapped=true 即表示被截断。库存接口在 SSR 首屏不填，必须靠旁听 querySkuInventoryV2 拿到。' +
       '未开售的抢购 SKU 平台不查库存，inventoryQty 会是 null（inventoryUnknown 计数）—— ' +
-      '这类 SKU 的可购状态看 buyableText / buttonMode。',
+      '这类 SKU 的可购状态看 statusText / sessionState（统一推导字段）。' +
+      '★ 2026-10-09 修复：库存为 0 的 SKU 现在一律判「缺货」，不再被 buttonMode 的"现货可买"快照盖住' +
+      '（此前 Pura X View / Mate 90 Pro / Pura X Max 都有这种"快照说能买、实际没货"的 SKU）。',
     buyableNote:
-      'buyableText 由 base[sbomCode].buttonMode 映射而来：1=现货可买，29=抢购未开售，9=缺货，2=即将开售。' +
-      '未识别的 buttonMode 会原样显示为「未识别模式 X」，不硬套结论。',
+      'statusText/buyable 是统一推导字段（优先级：库存 0=缺货 > 抢购场次 > buttonMode 快照），' +
+      'buyableNow/buyableText 保留 buttonMode 原始快照供对照。' +
+      'sessionState: upcoming=有未来场次待抢 / live=活动窗口内 / ended=场次已结束 / none=在抢购名单但没有场次（抢不了）。',
+    nextSaleNote:
+      'products[].nextSale 是该商品"下一次开售"汇总（所有 SKU 场次里最近的一个未来 startTime）。' +
+      '"下一次开售待抢购的 SKU"= 该商品里 sessionState=upcoming 的 SKU；' +
+      'family.rushBuySkuCodes 是 SSR 静态名单（可能包含已结束/无场次的编号），不能当待抢名单用。',
     rushBuyNote:
       'startsInMs 以平台服务器时间 currentTime 为基准，不受本机时钟偏差影响 —— 倒计时必须用它。',
     specNote:

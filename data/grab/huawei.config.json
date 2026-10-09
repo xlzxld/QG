@@ -27,7 +27,11 @@
     "limits.fuseRefreshDelayMs": "保险丝：开售后按钮迟迟不出现，等这么久强制刷新一次页面（只刷一次）",
     "products[].skuIds": "要抢的 SKU 编号列表。留空 = 全部。在面板上勾选后自动写入",
     "limits.sessionPingMs": "★ 登录保活间隔（毫秒）：每隔这么久发一次轻请求，把商城的短命 Cookie 续上（实测约 15 分钟不活动就会掉线）。默认 480000 = 8 分钟，别大于 10 分钟",
-    "limits.preOpenSubmitLeadMs": "预开确认页的提交提前量（毫秒）：0 = 开售时刻一到就提交（最稳）；实测网络延迟后可调 50~150 让请求踩点到达",
+    "limits.multiTabFireMs": "★ 多页签：每个页签喊一次按钮内部入口的基准间隔（毫秒）。默认 300 ≈ 每秒 3 发（手速很快的真人）。实际间隔在此基础上随机 ±multiTabJitterPct%",
+    "limits.multiTabClickMs": "★ 多页签：每个页签点一次按钮坐标的基准间隔（毫秒）。默认 450。兜底通道，与喊话独立",
+    "limits.multiTabJitterPct": "★ 多页签：击发节奏抖动百分比。40 = 实际间隔在基准 ±40% 内随机——绝不匀速（固定节拍是机器人指纹），别设 0",
+    "limits.multiTabBreathMs": "★ 多页签：换气基准间隔（毫秒）。每页签每隔这么久（±随机）随机停一小手 0.2~0.8 秒，模拟人手停顿。0 = 关闭（不推荐）",
+    "limits.submitProbeMs": "★ 提交：确认订单页出现后探测「提交订单」按钮挂载的节拍（毫秒）。默认 60 = 按钮一出 60ms 内出手。越小越快，30 封顶",
     "limits.submitErrorRetryMax": "提交失败时的补发次数上限：只在页面明确说「提交失败/网络异常/活动未开始」时才补发，默认 2",
     "warmup.enabled": "★ 结算页预热：开售前自动用另一个现货商品的结算页把资源焐热，目标商品开售时结算页从冷加载约 5.8 秒变热加载约 0.5 秒",
     "monitor.scanMode": "回流检测方式：sku=切规格探测（默认，不刷新页面、每轮约 1.5 秒）；refresh=老办法整页刷新",
@@ -69,7 +73,20 @@
       "maxPrice": null,
       "quantity": 1,
       "saleAt": null,
-      "skuIds": []
+      "skuIds": [
+        "2601010640927",
+        "2601010640931",
+        "2601010640921",
+        "2601010640922",
+        "2601010640923",
+        "2601010640924",
+        "2601010640925",
+        "2601010640926",
+        "2601010640928",
+        "2601010640929",
+        "2601010640930",
+        "2601010640932"
+      ]
     },
     {
       "id": "HUAWEI Mate XT 2",
@@ -78,7 +95,17 @@
       "maxPrice": null,
       "quantity": 1,
       "saleAt": null,
-      "skuIds": []
+      "skuIds": [
+        "2601010635813",
+        "2601010635810",
+        "2601010635811",
+        "2601010635812",
+        "2601010635814",
+        "2601010635815",
+        "2601010635816",
+        "2601010635817",
+        "2601010635818"
+      ]
     },
     {
       "id": "HUAWEI Pura X View",
@@ -143,8 +170,12 @@
     "fuseRefreshDelayMs": 1000,
     "cdpBuyRetry": 3,
     "sessionPingMs": 480000,
-    "preOpenSubmitLeadMs": 0,
-    "submitErrorRetryMax": 2
+    "submitErrorRetryMax": 2,
+    "multiTabFireMs": 300,
+    "multiTabClickMs": 450,
+    "multiTabJitterPct": 40,
+    "multiTabBreathMs": 3000,
+    "submitProbeMs": 60
   },
   "humanHandoff": {
     "stopOnCaptcha": true,

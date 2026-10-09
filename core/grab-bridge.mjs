@@ -1294,6 +1294,7 @@ const server = http.createServer(async (req, res) => {
           limitedQuantity: prod.limitedQuantity,
           specDimensions: prod.specDimensions || [],
           serverNow: prod.serverNow || null,
+          nextSale: prod.nextSale || null,
         },
         skus: (prod.skus || []).map((s) => ({
           // ★ 统一字段（跨平台）：控制台只认这组
@@ -1303,6 +1304,7 @@ const server = http.createServer(async (req, res) => {
           price: s.price,
           statusText: s.statusText ?? s.buyableText ?? null,
           buyable: s.buyable ?? s.buyableNow ?? null,
+          sessionState: s.sessionState ?? null,
           saleStartAt: s.saleStartAt ?? s.rushBuy?.startTime ?? null,
           saleStartsInMs: s.rushBuy?.startsInMs ?? null,
           limitPerUser: s.limitPerUser ?? s.rushBuy?.limitNum ?? s.limitedQuantity ?? null,

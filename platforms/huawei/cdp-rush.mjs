@@ -238,7 +238,8 @@ const fastCheckExpr = (needText) => `(() => {
     if (!t || t.length > 12 || !BUY.some((k) => t.includes(k)) || !visible(hit)) return null;
     hit.scrollIntoView({ block: 'center', inline: 'center' });
     const r = hit.getBoundingClientRect();
-    return { label: t, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+    // w/h 给拟人击发用：点击点在按钮范围内随机散布，不总是钉在正中心
+    return { label: t, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), w: Math.round(r.width), h: Math.round(r.height) };
   };
   const NEED = ${needText ? 'true' : 'false'};
   let buy = null;
@@ -288,6 +289,73 @@ const fastCheckExpr = (needText) => `(() => {
 })()`;
 
 const extractPrdId = (url) => (String(url).match(/prdId=(\d+)/) || [])[1] || null;
+
+/* ── 多页签模式（2026-10-09，用户定稿方案）─────────────────────────────────
+ * 一个账号的专用窗口里，每个待抢 SKU 开一个页签，各页签各选各的规格；
+ * T0 前一瞬全部页签同时高频开火——不用盯按钮有没有刷新，按钮一刷新就
+ * 被打中。点击能在后台页签生效已实测（verify-background-click.mjs，8 项全过）：
+ *   · 非活动页签 / 最小化窗口 / 窗口失焦，CDP 输入全部落弹且 isTrusted=true；
+ *   · 顺序等待响应会掉进 Chrome 隐藏页签的"帧调度陷阱"（首条 mouseMoved
+ *     响应 ~5 秒），fire-and-forget 管线连发则 1 秒内全落弹——开火循环
+ *     一律不等响应；
+ *   · 后台页签里 window.open 照样开出确认订单页（userGesture 链路）。
+ * 开火 = 内部入口 Yo（10-08 实测当前 RNW 页面唯一有效触发）+ 坐标盲点兜底。
+ * 槽位配置：slots[].skuTabs = ["sbomCode", ...]（槽位自己的 sbomCode 永远是第 1 个页签）。
+ */
+const MULTI_TAB_MAX = 8;
+const isMultiTab = (slot) => Array.isArray(slot.skuTabs) && slot.skuTabs.filter(Boolean).length >= 1;
+/** 页签清单：槽位 sbomCode 永远第一，skuTabs 去重追在后面，封顶 MULTI_TAB_MAX */
+function multiTabCodes(slot) {
+  const rest = (slot.skuTabs || []).map(String).filter((c) => c && c !== String(slot.sbomCode));
+  return [String(slot.sbomCode), ...rest].slice(0, MULTI_TAB_MAX);
+}
+/** 在指定窗口新开一个页签（新版 Chrome 要求 PUT；失败退回 GET） */
+async function openTabAt(port, url) {
+  const t = await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' })
+    .then((r) => r.json()).catch(() => null)
+    || await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent(url)}`)
+      .then((r) => r.json()).catch(() => null);
+  if (!t || !t.id) throw new Error('开新页签失败');
+  return t;
+}
+/** pickInternalEntry 的多页签版：从任意一个页签会话的按钮闭包里取内部入口（Yo/goBuy） */
+async function pickInternalEntryOn(cdp) {
+  const r1 = await cdp.send('Runtime.evaluate', {
+    expression: `(() => {
+      const root = document.getElementById('prd-botnav-rightbtn');
+      if (!root) return null;
+      const host = root.querySelector('div[tabindex]') || root.querySelector('[tabindex]');
+      if (!host) return null;
+      const key = Object.keys(host).find((k) => /^__react(Fiber|InternalInstance)\\$/.test(k));
+      if (!key) return null;
+      let cur = host[key], hops = 0;
+      while (cur && hops < 25) {
+        const p = cur.memoizedProps;
+        if (p && typeof p.onPress === 'function') return { fn: p.onPress, hops };
+        cur = cur.return; hops++;
+      }
+      return null;
+    })()`,
+    returnByValue: false, objectGroup: 'internal-fire-multi',
+  }).catch(() => null);
+  if (!r1 || !r1.result || !r1.result.objectId) return { s: 'NO_ANCHOR' };
+  const outProps = await cdp.send('Runtime.getProperties', { objectId: r1.result.objectId, ownProperties: true });
+  const fnId = (outProps.result || []).find((v) => v.name === 'fn')?.value?.objectId;
+  if (!fnId) return { s: 'NO_ONPRESS' };
+  const p1 = await cdp.send('Runtime.getProperties', { objectId: fnId, ownProperties: false });
+  const scopesRef = (p1.internalProperties || []).find((x) => x.name === '[[Scopes]]');
+  if (!scopesRef || !scopesRef.value || !scopesRef.value.objectId) return { s: 'NO_SCOPES' };
+  const sl = await cdp.send('Runtime.getProperties', { objectId: scopesRef.value.objectId, ownProperties: true });
+  let yoId = null;
+  for (const sc of sl.result || []) {
+    if (!sc.value || !sc.value.objectId || !/Closure/.test(sc.value.description || '')) continue;
+    const vars = await cdp.send('Runtime.getProperties', { objectId: sc.value.objectId, ownProperties: true });
+    const scYo = (vars.result || []).find((v) => v.name === 'Yo' && v.value && v.value.objectId);
+    if (scYo) { yoId = scYo.value.objectId; break; }
+  }
+  if (!yoId) return { s: 'NO_ENTRY' };
+  return { s: 'OK', yoId };
+}
 
 // 登录态判据（readLoginState）已抽到 cdp-core.mjs，与体检共用同一份实现。
 // 为什么不用页面文案：见 cdp-core.mjs 里 SESSION_COOKIE_NAMES 上方的实测取证。
@@ -379,6 +447,25 @@ async function runSlot(slot, config) {
     log(`⛔ ${msg}`, 'warn');
     await report({ outcome: 'SKIPPED_NOT_IN_LIST', resultCode: 'SKU_NOT_IN_LIST', message: msg, targetId: product.id });
     return { ok: false, outcome: 'SKIPPED_NOT_IN_LIST' };
+  }
+
+  // ── 多页签模式分流（2026-10-09）：槽位配了 skuTabs = 一窗多页签齐射 ──
+  if (isMultiTab(slot)) {
+    let codes = multiTabCodes(slot);
+    if (wantSboms.length) {
+      const rejected = codes.filter((c) => !wantSboms.includes(c));
+      if (rejected.length) {
+        log(`⚠ 多页签里有 ${rejected.length} 个规格不在商品勾选清单里，剔除：${rejected.join('、')}`, 'warn');
+        codes = codes.filter((c) => wantSboms.includes(c));
+      }
+    }
+    if (codes.length < 2) {
+      const msg = `多页签模式至少要 2 个可用规格，当前只剩 ${codes.length} 个（skuTabs 配置或勾选清单问题），本槽位按错误处理不兜底`;
+      log(`⛔ ${msg}`, 'warn');
+      await report({ outcome: 'SKIPPED_NOT_IN_LIST', resultCode: 'MULTITAB_TOO_FEW', message: msg, targetId: product.id });
+      return { ok: false, outcome: 'SKIPPED_NOT_IN_LIST' };
+    }
+    return runSlotMultiTab(slot, config, product, codes);
   }
 
   const saleAtIso = slot.saleAt || product.saleAt || null;
@@ -715,11 +802,9 @@ async function runSlot(slot, config) {
     log(`开售触发点（换算到本地钟）：${fmtLocal(triggerLocalMs)}`);
   }
 
-  // 现货+定时：T0-60s 预开确认页，T0 只提交（热循环也要用）。
-  // ★ 2026-10-08 修复：声明必须放在首次使用之前——原声明在下方热循环区，
-  //   预开块上移后（19:50 修复）触发 TDZ 崩溃：ReferenceError: Cannot access
-  //   'preOpenedConfirm' before initialization（tsc TS2448 ×4 @ 651/654/659/661）。
-  let preOpenedConfirm = false;
+  // ★ 预开确认页逻辑已移除（2026-10-09 用户定稿）：预开只在"按钮已解锁"（现货+定时）
+  //   时才能成功——现货不需要抢；真要抢的场次按钮锁着，预开永远失败。纯负资产。
+  //   保留的只有跨商品预热（焐热缓存，真抢购唯一受益的部分）。
 
   if (triggerLocalMs && Date.now() < triggerLocalMs) {
     const ahead = triggerLocalMs - Date.now();
@@ -796,44 +881,15 @@ async function runSlot(slot, config) {
     log('就位：刷新商品页（拿最新状态）…');
     await cdp.send('Page.navigate', { url: targetUrl });
     await waitPageReady(1500);
-    // ★ 预开确认订单页——必须在 sleepUntil(T0-2s) 之前！2026-10-07 踩坑：放在睡眠后，
-    //    "距 T0 > 65s"的条件永远不成立，预开从未执行（19:45 轮实测）。
-    //    现货+定时：现在就开确认页（草稿，不提交），T0 只提交——把"立即购买→确认页
-    //    加载"的 3~5 秒挪出关键路径（成熟秒杀项目标准做法）。自门控：真定时商品按钮
-    //    锁定，开不出确认页 → 自动走回常规流程，对实战零影响。
-    if (Date.now() < triggerLocalMs - 65 * 1000) {
-      log('定时场景：T0-60s 预开确认订单页（草稿，不提交）——成功则 T0 直接提交。');
-      const pick = await pickInternalEntry().catch(() => null);
-      if (pick && pick.s === 'OK') {
-        await cdp.send('Runtime.callFunctionOn', {
-          objectId: pick.yoId,
-          functionDeclaration: 'function(){ try { this(); } catch (e) {} }',
-          returnByValue: true, userGesture: true,
-        }).catch(() => {});
-      } else {
-        const pos0 = await cdp.eval(buyExpr(true)).catch(() => null);
-        if (pos0) await trustedClick(cdp, pos0.x, pos0.y);
-      }
-      for (let i = 0; i < 20 && !preOpenedConfirm; i++) {
-        await sleep(500);
-        const ts = await listTabs(port).catch(() => []);
-        if (ts.some((t) => /orderConfirm/.test(t.url || ''))) { preOpenedConfirm = true; break; }
-        // 按钮迟迟没解锁（真定时商品）→ 别傻等，放弃预开走常规流程
-        const st0 = await state().catch(() => null);
-        if (st0 && st0.text && !/立即购买|立即申购|马上抢|立即抢购/.test(st0.text) && /开始|待开售|预售|开售/.test(st0.text)) break;
-      }
-      log(preOpenedConfirm
-        ? '✔ 确认订单页已预开（草稿就绪），T0 只提交。'
-        : '预开确认页未成功（按钮未解锁或页面未出）——走常规流程。', preOpenedConfirm ? 'ok' : 'warn');
-      E.ev('PREOPEN', preOpenedConfirm ? 'ok' : 'fail');
-    }
     // ── 跨商品预热（2026-10-08 实测验证，verify-warm-cross.mjs）─────────────
     // 纯定时商品按钮锁定、开不出自己的确认页 → 用另一个现货商品的确认页把
     // buy.vmall.com / www.vmall.com 的确认页静态资源焐热。实测：清缓存后预热商品
     // 挂载 852ms、紧随其后的目标商品挂载 501ms（对照冷启动 ~5.8s）。T0 点开目标
     // 确认页时直接吃到热缓存。预热确认页只是草稿：不提交、不关（关了缓存也在），
     // 且在下方 tabBaseline 捕获之前开好 → 绝不会被误当成购买成果页。
-    if (warmupCfg.enabled !== false && triggerLocalMs && !preOpenedConfirm
+    // （预开确认页逻辑已移除——2026-10-09 用户定稿：现货不需要抢、真抢的锁着开不出，
+    //   纯负资产；这里只保留对真抢购有用的焐缓存。）
+    if (warmupCfg.enabled !== false && triggerLocalMs
       && Date.now() < triggerLocalMs - 45 * 1000) {
       // 任何预热失败都不许影响抢购主流程；截止 T0-15s——宁可少焐一会儿也不吃热窗
       try { await openWarmupConfirm(triggerLocalMs - 15 * 1000); }
@@ -1750,31 +1806,10 @@ async function runSlot(slot, config) {
     // —— 高频轻量路径（T0 前热窗 + 开售后）：一轮一次 evaluate，锁定态微秒级 ——
     hotIter++;
     const postT0 = !triggerLocalMs || Date.now() >= triggerLocalMs;
-    // 预开确认页路径：提交时机对准 T0（不再沿用 T0-500ms 的点击提前量——
-    // 审计 P1-2：太早发会被服务器以"未开始"拒收且旧版失败不补发）。
-    // limits.preOpenSubmitLeadMs 默认 0 = 服务器钟 T0 一到就发（请求到达 ≈T0+网络延迟，
-    // 宁可晚到几十毫秒也不被拒）；实测网络延迟后可调到 50~150ms 让请求"踩点到达"。
-    const preOpenAct = !triggerLocalMs || Date.now() >= triggerLocalMs - (limits.preOpenSubmitLeadMs ?? 0);
-    if (preOpenAct && preOpenedConfirm) {
-      try {
-        const ts = await listTabs(port).catch(() => []);
-        const ct = ts.find((t) => /orderConfirm/.test(t.url || ''));
-        if (ct) {
-          log('到点：在预开的确认订单页上直接提交。');
-          const done = await finishConfirmed(ct, null);
-          if (done) return done;
-        }
-        preOpenedConfirm = false;
-        log('预开的确认页不可用，回落常规抢购流程。', 'warn');
-      } catch (e) {
-        preOpenedConfirm = false;
-        log(`预开页提交异常（${e.message}），回落常规抢购流程。`, 'warn');
-      }
-    }
     // A 方案：热窗内按节拍调页面内部入口（不 await——调用要快，确认页拾取交给
     // maybePickConfirm）。实测未解锁时调用零副作用（未开售 fire 页面毫无变化），
     // 所以从进热窗就开调——R1 提前解锁生效时这里直接收益；失败自动停用回落真点击。
-    if (internalArmed && canAct && !preOpenedConfirm && Date.now() - lastInternalAt >= Math.max(internalFireMs, hotMs)) {
+    if (internalArmed && canAct && Date.now() - lastInternalAt >= Math.max(internalFireMs, hotMs)) {
       lastInternalAt = Date.now();
       internalFire();
     }
@@ -1811,7 +1846,7 @@ async function runSlot(slot, config) {
         continue;
       }
     }
-    if (fc.buy && canAct && !preOpenedConfirm) {
+    if (fc.buy && canAct) {
       unlockSeen = true; E.ev('UNLOCK_SEEN', fc.buy.label); // 解锁信号：internal 从下一轮起 Yo/goBuy 交替（每轮只调一个，不会双开）
       const r = await clickBuyFlow(fc.buy);
       if (r && r.done) return r.done;
@@ -1884,6 +1919,712 @@ async function runSlot(slot, config) {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+ * 多页签模式：一窗 N 页签，每页签守一个规格，T0 齐射
+ * =====================================================================
+ * 时序：
+ *   开窗 → 逐规格开页签（复用已在该规格的标签）→ 每页签装拦截/核对已选
+ *   → 等登录 → 校时/定 T0（官方场次优先）→ 值守巡检（登录/风控/跑偏/保活）
+ *   → 就位刷新全部页签 → 跨商品预热一次（缓存全窗口共享）→ 缓存按钮坐标
+ *   → T0-500ms 起内部入口开火、T0 起坐标盲点（全部 fire-and-forget）
+ *   → 首个确认订单页出现：全部停火 → 演练即停 / 真模式提交订单。
+ *
+ * 后台生效依据（verify-background-click.mjs 8 项实测全过）：
+ *   非活动页签/最小化/失焦，输入照落且 isTrusted=true；顺序等待响应会踩
+ *   隐藏页签帧调度陷阱（首条 mouseMoved 响应 ~5s），管线连发 1s 内全落弹；
+ *   后台页签 window.open 照常开新标签。
+ */
+async function runSlotMultiTab(slot, config, product, codes) {
+  const log = logFor(slot.id);
+  const dryRun = config.dryRun !== false;
+  const stateRef = { last: { url: '', title: '', text: '' }, ua: '', log };
+  const report = await makeReporter(config, slot, stateRef);
+  const port = slot.port;
+  const prdId = String(slot.prdId);
+  const urlFor = (code) => `https://item.vmall.com/product/comdetail/index.html?prdId=${prdId}&sbomCode=${code}`;
+  const limits = config.limits || {};
+  // ── 多页签击发节奏（控制台「抢多快 → 多页签齐射的节奏」可调，2026-10-09）──
+  //   全部拟人化：基准间隔 ±随机抖动、点击点在按钮内散布、每隔一阵"换气"停一手。
+  //   默认值约等于"手速很快的真人"：每页签每秒约 3 发喊话 + 2 次点击。
+  const fireBaseMs = Math.max(80, limits.multiTabFireMs ?? 300);       // 内部入口开火基准间隔（每页签）
+  const clickBaseMs = Math.max(120, limits.multiTabClickMs ?? 450);    // 坐标点击基准间隔（每页签）
+  const jitterPct = Math.min(0.5, Math.max(0, (limits.multiTabJitterPct ?? 40) / 100)); // 节奏抖动 ±%
+  const breathBaseMs = Math.max(0, limits.multiTabBreathMs ?? 3000);   // 换气基准间隔（0 = 关闭换气）
+  const coordRefreshMs = 1500;                                         // 坐标重定位周期（不占开火节拍）
+  const warmupCfg = config.warmup || {};
+  const E = makeEvidence(`${slot.id}-x${codes.length}`);
+  E.ev('MULTITAB_START', `skus=${codes.join(',')} dryRun=${dryRun}`);
+  stateRef.log = log;
+
+  log(`多页签模式：${codes.length} 个页签各守一个规格（${codes.join('、')}）　模式=${dryRun ? '演练（dryRun）' : '真抢（会提交订单！）'}`);
+  // 配进页签的规格如果采集目录明确说"无场次/已结束/缺货"，提前打招呼（不拦，配置优先）
+  for (const c of codes) {
+    const cs = catalogSku(prdId, c);
+    if (cs && (cs.sessionState === 'none' || cs.sessionState === 'ended' || cs.oos === true)) {
+      log(`⚠ 页签规格 ${c} 采集状态是「${cs.statusText}」（${cs.statusSource}）——按配置保留，但本轮抢到的概率很低`, 'warn');
+    }
+  }
+
+  /* ── A. 窗口 + 页签就位 ── */
+  await ensureSlotWindow(slot, urlFor(codes[0]), log);
+  // 历史确认页草稿清掉（本次命中会弹新的）
+  for (const t of await listTabs(port).catch(() => [])) {
+    if (/orderConfirm/.test(t.url || '')) await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`).catch(() => {});
+  }
+  const planIntercept = { ...config, intercept: { ...((config.intercept) || {}), ...((slot.intercept) || {}) } };
+  const sessions = [];
+  const managedIds = new Set();
+  for (const [i, code] of codes.entries()) {
+    try {
+      let t = (await listTabs(port).catch(() => []))
+        .find((x) => x && x.id && !managedIds.has(x.id) && /comdetail/.test(x.url || '') && x.url.includes(code));
+      if (!t) t = await openTabAt(port, urlFor(code));
+      managedIds.add(t.id);
+      const cdp = new CDP(t.webSocketDebuggerUrl);
+      await cdp.connect();
+      await cdp.send('Runtime.enable');
+      await cdp.send('Page.enable');
+      await cdp.send('Network.enable', { maxResourceBufferSize: 10 * 1024 * 1024 }).catch(() => {});
+      // 每页签一份带标签的黑匣子视图（netlog/bodies 带 tab 字段，事件带 [code] 前缀）
+      const Et = {
+        ...E,
+        ev: (e, d) => E.ev(`[${code}] ${e}`, d),
+        net: (row) => E.net({ tab: code, ...row }),
+        body: (row) => E.body({ tab: code, ...row }),
+      };
+      attachNetRecorder(cdp, Et);
+      try { await installInterception(cdp, planIntercept, log); }
+      catch (e) { log(`页签 ${code} 拦截安装失败（${e.message}），该页签不改写。`, 'warn'); }
+      if (i === 0) stateRef.ua = await cdp.eval('navigator.userAgent').catch(() => '') || '';
+      sessions.push({
+        code, tab: t, cdp, E: Et, state: null, coords: null,
+        stop: false, dead: null, busy: false, missStreak: 0, internalDisabled: false,
+        fired: 0, clicked: 0,
+      });
+      log(`页签 ${i + 1}/${codes.length} 就绪：${code}`);
+    } catch (e) {
+      log(`⚠ 规格页签 ${code} 打不开（${e.message}），跳过它继续`, 'warn');
+    }
+  }
+  if (sessions.length < 2) {
+    const msg = `多页签模式可用页签不足 2 个（配置 ${codes.length} 个），按错误处理不兜底`;
+    log(`⛔ ${msg}`, 'warn');
+    await report({ outcome: 'FAILED', resultCode: 'MULTITAB_TOO_FEW', message: msg });
+    return { ok: false, outcome: 'MULTITAB_TOO_FEW' };
+  }
+  // 没被管理的 comdetail 残留标签关掉（与单页签模式同一规矩：窗口里只留工作标签）
+  for (const t of await listTabs(port).catch(() => [])) {
+    if (t && t.id && !managedIds.has(t.id) && /comdetail/.test(t.url || '')) {
+      await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`).catch(() => {});
+    }
+  }
+
+  /* ── B. 每页签：等加载完 + 已选规格核对（选错规格 = 抢错东西，拉不回就退役）── */
+  async function settleTab(s, settleMs = 2000) {
+    for (let i = 0; i < 60; i++) {
+      s.state = await s.cdp.eval(stateExpr).catch(() => null);
+      if (s.state && s.state.ready === 'complete' && s.state.text) break;
+      await sleep(500);
+    }
+    await sleep(settleMs);
+    s.state = await s.cdp.eval(stateExpr).catch(() => s.state);
+    let mm = s.state ? skuPageMismatch(s.state.text, prdId, s.code) : null;
+    if (mm) {
+      log(`页签 ${s.code} 已选「${mm.got}」≠ 绑定（缺 ${mm.missing.join('/')}），导航拉回…`, 'warn');
+      await s.cdp.send('Page.navigate', { url: urlFor(s.code) }).catch(() => {});
+      for (let i = 0; i < 20; i++) {
+        await sleep(500);
+        s.state = await s.cdp.eval(stateExpr).catch(() => null);
+        if (s.state && s.state.ready === 'complete' && s.state.text) break;
+      }
+      mm = s.state ? skuPageMismatch(s.state.text, prdId, s.code) : null;
+      if (mm) {
+        s.dead = `WRONG_SKU（页面停在「${mm.got}」）`;
+        log(`页签 ${s.code} 拉不回绑定规格，该页签退役。`, 'err');
+      }
+    }
+    if (s.state) stateRef.last = s.state;
+  }
+  await Promise.all(sessions.map((s) => settleTab(s)));
+
+  /* ── C. 登录（一个窗口一个账号，主会话上问）── */
+  const cdp0 = sessions[0].cdp;
+  async function loginSettled() {
+    const api = await probeLoginApi(cdp0).catch(() => ({ loggedIn: null, evidence: '探测异常' }));
+    if (api.loggedIn !== null) {
+      log(api.loggedIn ? `登录态：已登录（${api.evidence}）` : `登录态：未登录（${api.evidence}）`, api.loggedIn ? 'ok' : 'warn');
+      return api.loggedIn;
+    }
+    const ck = await readLoginState(cdp0);
+    if (ck.loggedIn !== null) {
+      log(ck.loggedIn ? `登录态：已登录（${ck.evidence}）` : `登录态：未登录（${ck.evidence}）`, ck.loggedIn ? 'ok' : 'warn');
+      return ck.loggedIn;
+    }
+    const st = await cdp0.eval(stateExpr).catch(() => null);
+    return !(st && NOT_LOGIN.test(st.text));
+  }
+  async function waitLoginFlowMulti(deadlineMs) {
+    log('未登录。请在专用窗口里登录华为账号，登录后自动继续。', 'warn');
+    await report({ outcome: 'WAITING_HUMAN', resultCode: 'NEEDS_LOGIN', message: '等待登录（多页签值守不放弃）', humanAction: '请在专用窗口完成登录' });
+    const deadline = deadlineMs || Date.now() + 15 * 60 * 1000;
+    let lastApi = 0;
+    while (Date.now() < deadline) {
+      await sleep(2000);
+      const ck = await readLoginState(cdp0);
+      const due = Date.now() - lastApi >= 8000;
+      if (ck.loggedIn !== true && !due) continue;
+      lastApi = Date.now();
+      const api = await probeLoginApi(cdp0).catch(() => ({ loggedIn: null, evidence: '' }));
+      const navigating = api.loggedIn === null && /navigated or closed/i.test(api.evidence || '');
+      if (api.loggedIn === true || (!navigating && api.loggedIn === null && ck.loggedIn === true)) {
+        log(`已检测到登录（${api.evidence || ck.evidence}），全部页签重新就位…`, 'ok');
+        await Promise.all(sessions.map(async (s) => {
+          if (s.dead) return;
+          try { await s.cdp.send('Page.navigate', { url: urlFor(s.code) }); } catch { /* 下一轮巡检兜底 */ }
+        }));
+        await Promise.all(sessions.map((s) => (s.dead ? null : settleTab(s, 1000))));
+        return;
+      }
+    }
+    throw new Error('等待登录超时，脚本退出');
+  }
+  if (!(await loginSettled())) await waitLoginFlowMulti();
+
+  /* ── D. 价格上限（每页签各自校验，超限页签退役）── */
+  if (product.maxPrice != null) {
+    for (const s of sessions) {
+      if (s.dead) continue;
+      const price = await s.cdp.eval(`(() => {
+        const scope = document.querySelector('#prd-detail') || document.body;
+        let best = null;
+        for (const el of scope.querySelectorAll('*')) {
+          const t = (el.innerText || '').trim();
+          if (!t || t.length > 12 || el.children.length > 2) continue;
+          const m = t.match(/^[¥￥]?\\s*([\\d,]{4,}(?:\\.\\d{1,2})?)$/);
+          if (!m) continue;
+          const fs = parseFloat(getComputedStyle(el).fontSize) || 0;
+          if (!best || fs > best.fs) best = { fs, v: parseFloat(m[1].replace(/,/g, '')) };
+        }
+        return best ? best.v : null;
+      })()`).catch(() => null);
+      if (price == null) { log(`页签 ${s.code} 未能读到可信价格，价格上限校验跳过。`, 'warn'); continue; }
+      if (price > product.maxPrice) {
+        s.dead = `PRICE_EXCEEDED(¥${price})`;
+        log(`页签 ${s.code} 价格 ¥${price} 超过上限 ¥${product.maxPrice}，该页签退役。`, 'err');
+      }
+    }
+    const alive = sessions.filter((s) => !s.dead);
+    if (!alive.length) {
+      await report({ outcome: 'FAILED', resultCode: 'PRICE_EXCEEDED', message: `全部页签价格超过上限 ¥${product.maxPrice}` });
+      return { ok: false, outcome: 'PRICE_EXCEEDED' };
+    }
+  } else {
+    log('价格上限：不限');
+  }
+
+  /* ── E. 对表 + 开售时刻（官方场次优先，取各页签场次的最早一个）── */
+  const saleAtIso = slot.saleAt || product.saleAt || null;
+  let serverT0Ms = saleAtIso ? new Date(saleAtIso).getTime() : null;
+  const ignoreApiStart = slot.ignoreApiStart === true || product.ignoreApiStart === true;
+  if (!ignoreApiStart) {
+    const starts = [];
+    for (const s of sessions) {
+      if (s.dead) continue;
+      const ms = await fetchSaleStartServerMs(s.code, stateRef.ua).catch(() => null);
+      if (ms && ms > Date.now() - 60000) starts.push(ms);
+    }
+    if (starts.length) {
+      const apiStart = Math.min(...starts);
+      if (serverT0Ms && Math.abs(apiStart - serverT0Ms) > 10000) {
+        log(`注意：官方接口开售时刻与配置 saleAt 不一致（接口 ${fmtLocal(apiStart)}，配置 ${saleAtIso}），以官方接口为准。`, 'warn');
+      } else if (!serverT0Ms) {
+        log(`官方接口给出开售时刻：${fmtLocal(apiStart)}（配置没填 saleAt，自动采用）`);
+      }
+      serverT0Ms = apiStart;
+    }
+  }
+  let clockOffsetMs = 0;
+  let triggerLocalMs = null;
+  if (serverT0Ms) {
+    try {
+      const clock = await calibrateClock(stateRef.ua, log, limits.clockSyncSamples ?? 5);
+      clockOffsetMs = clock ? clock.offsetMs : 0;
+    } catch (e) {
+      log(`校时失败（${e.message}），按本地钟执行`, 'warn');
+    }
+    triggerLocalMs = serverT0Ms + clockOffsetMs;
+    E.state.t0Server = serverT0Ms;
+    E.state.offset = clockOffsetMs;
+    E.ev('CLOCK_T0', `serverT0=${fmtLocal(serverT0Ms)} offset=${clockOffsetMs}ms`);
+    log(`开售触发点（本地钟）：${fmtLocal(triggerLocalMs)}；到点 ${sessions.filter((s) => !s.dead).length} 个页签齐射。`);
+  } else {
+    log('没有开售时刻（官方无场次 + 配置没填）=「看到可买就抢」：坐标就绪即开火。');
+  }
+
+  /* ── F. 会话保活（值守期在主会话上做，一个账号一份会话）── */
+  const sessionPingMs = limits.sessionPingMs ?? 8 * 60 * 1000;
+  let lastPingAt = 0;
+  let pingGapMs = sessionPingMs;
+  async function sessionPingMulti(force = false) {
+    if (!force && Date.now() - lastPingAt < pingGapMs) return null;
+    lastPingAt = Date.now();
+    pingGapMs = Math.round(sessionPingMs * (0.8 + Math.random() * 0.4));
+    const r = await cdp0.eval(`(async () => {
+      try { await fetch('https://www.vmall.com/', { credentials: 'include', mode: 'no-cors' }); } catch (e) {}
+      try {
+        const r = await fetch('https://openapi.vmall.com/mcp/queryUserInfo?portal=1&lang=zh_CN&country=CN', { credentials: 'include' });
+        return (await r.text()).slice(0, 300);
+      } catch (e) { return 'err'; }
+    })()`).catch(() => 'err');
+    const verdict = r === 'err' ? 'err' : judgeVmallLoginBody(r);
+    if (verdict === 'ok') log('会话保活：已续命。');
+    if (verdict === 'out') {
+      log('保活发现登录失效。等你重新登录，值守继续不放弃。', 'warn');
+      await report({ outcome: 'WAITING_HUMAN', resultCode: 'NEEDS_LOGIN', message: '值守期间登录失效（继续值守）', humanAction: '随时在专用窗口重新登录即可' });
+      await waitLoginFlowMulti(triggerLocalMs);
+    }
+    return verdict;
+  }
+
+  /* ── G. 值守等待（距 T0 远时：巡检登录/风控/规格跑偏 + 保活）── */
+  const earlyMs = (config.earlyEnterSec ?? 90) * 1000;
+  if (triggerLocalMs && Date.now() < triggerLocalMs) {
+    const ahead = triggerLocalMs - Date.now();
+    if (ahead > earlyMs) {
+      log(`距开售还有 ${Math.round(ahead / 1000)} 秒，值守：每 30 秒巡一圈（登录/风控/规格跑偏），每 ${Math.round(sessionPingMs / 60000)} 分钟保活。`);
+      while (Date.now() < triggerLocalMs - earlyMs) {
+        await sleep(30000);
+        await sessionPingMulti();
+        for (const s of sessions) {
+          if (s.dead) continue;
+          const st = await s.cdp.eval(stateExpr).catch(() => null);
+          if (!st) continue;
+          if (looksLikeRiskControl({ url: st.url, title: st.title, text: st.text })) {
+            log('值守期间出现风控验证，停止并转人工。', 'err');
+            await report({ outcome: 'WAITING_HUMAN', resultCode: 'CAPTCHA', message: '值守中出现风控验证', humanAction: '请人工处理后重跑' });
+            return { ok: false, outcome: 'WAITING_HUMAN' };
+          }
+          if (ON_LOGIN_PAGE.test(st.url + ' ' + st.title) || NOT_LOGIN.test(st.text)) {
+            const lr = await readLoginState(cdp0);
+            if (lr.loggedIn === true) continue; // 文案抖动
+            await waitLoginFlowMulti(triggerLocalMs);
+            break;
+          }
+          const mm = skuPageMismatch(st.text, prdId, s.code);
+          if (mm) {
+            log(`值守期间页签 ${s.code} 已选变成「${mm.got}」，导航回绑定规格。`, 'warn');
+            await s.cdp.send('Page.navigate', { url: urlFor(s.code) }).catch(() => {});
+          }
+        }
+      }
+    }
+    // 就位：全部页签刷新拿最新状态（与单页签模式同款动作）
+    log('就位：全部页签刷新（拿最新状态）…');
+    await Promise.all(sessions.map(async (s) => {
+      if (s.dead) return;
+      try { await s.cdp.send('Page.navigate', { url: urlFor(s.code) }); } catch { /* settle 兜底 */ }
+    }));
+    await Promise.all(sessions.map((s) => (s.dead ? null : settleTab(s, 1200))));
+
+    // ── H. 跨商品预热（一次即可，磁盘缓存整个窗口全部页签共享）──
+    //   用别的现货商品开一次结算页焐热缓存，目标商品 T0 开确认页 ~5.8s → ~0.5s。
+    //   （预开确认页逻辑已移除——2026-10-09 用户定稿：预开只在按钮已解锁的现货场景
+    //     才能成功，现货不需要抢；真要抢的场次按钮锁着，预开永远失败。纯负资产。）
+    if (warmupCfg.enabled !== false && Date.now() < triggerLocalMs - 45 * 1000) {
+      try { await warmupOnce(triggerLocalMs - 15 * 1000); }
+      catch (e) { log(`跨商品预热异常（${e.message}），跳过，不影响抢购。`, 'warn'); }
+    }
+  }
+
+  /** 跨商品预热（紧凑版）：开一次别的现货商品的确认页草稿焐热结算页资源后关掉。 */
+  async function warmupOnce(hardDeadlineMs) {
+    const warmUrl = String(warmupCfg.url || '').trim();
+    const pidOf = (u) => (String(u || '').match(/prdId=(\d+)/) || [])[1] || null;
+    let pick = null;
+    if (warmUrl && pidOf(warmUrl)) pick = { id: '指定预热商品', url: warmUrl };
+    else {
+      const cand = (config.products || []).find((p) => p && p.enabled !== false && pidOf(p.url) && pidOf(p.url) !== prdId);
+      if (cand) pick = { id: cand.id || cand.prdId, url: cand.url };
+    }
+    if (!pick) { log('跨商品预热：没有可用候选，跳过。'); return false; }
+    const warmPrd = pidOf(pick.url);
+    const warmSku = (String(pick.url).match(/sbomCode=(\d+)/) || [])[1] || '';
+    log(`跨商品预热：用「${pick.id}」开一次确认页草稿焐热结算页资源…`);
+    E.ev('WARMUP_START', pick.id);
+    let warmTab = null;
+    try {
+      warmTab = await openTabAt(port, `https://item.vmall.com/product/comdetail/index.html?prdId=${warmPrd}${warmSku ? `&sbomCode=${warmSku}` : ''}`);
+      const wcdp = new CDP(warmTab.webSocketDebuggerUrl);
+      await wcdp.connect();
+      await wcdp.send('Runtime.enable');
+      let btnOk = false;
+      for (let i = 0; i < 40 && !btnOk && Date.now() < hardDeadlineMs; i++) {
+        await sleep(500);
+        const t = await wcdp.eval(`(() => { const a = document.getElementById('prd-botnav-rightbtn'); return a ? (a.innerText || '').replace(/[\\s]+/g, ' ').trim().slice(0, 20) : null; })()`).catch(() => null);
+        if (t && /立即购买|立即申购|马上抢|立即抢购/.test(t)) btnOk = true;
+        else if (t && /开始|售罄|缺货|预约|暂不|已结束/.test(t)) break;
+      }
+      if (!btnOk) { log('预热商品按钮锁定/不可买，跳过预热（目标页走常规加载）。', 'warn'); return false; }
+      const r1 = await wcdp.send('Runtime.evaluate', {
+        expression: `(() => {
+          const root = document.getElementById('prd-botnav-rightbtn');
+          if (!root) return null;
+          const host = root.querySelector('div[tabindex]') || root.querySelector('[tabindex]');
+          if (!host) return null;
+          const key = Object.keys(host).find((k) => /^__react(Fiber|InternalInstance)\\$/.test(k));
+          let node = key ? host[key] : null, hops = 0;
+          while (node && hops < 25) {
+            const p = node.memoizedProps;
+            if (p && typeof p.onPress === 'function') { globalThis.__qpWarmPress = p.onPress; return 'ARMED'; }
+            node = node.return; hops++;
+          }
+          return null;
+        })()`,
+        returnByValue: true,
+      }).catch(() => null);
+      let fired = false;
+      if (r1 && r1.result && r1.result.value === 'ARMED') {
+        const g = await wcdp.send('Runtime.evaluate', { expression: 'globalThis.__qpWarmPress', returnByValue: false });
+        const fr = await wcdp.send('Runtime.callFunctionOn', {
+          objectId: g.result.objectId,
+          functionDeclaration: 'function(){ try { this(); return "FIRED"; } catch (e) { return "ERR:" + e.message; } }',
+          returnByValue: true, userGesture: true,
+        }).catch(() => null);
+        fired = !!(fr && fr.result && fr.result.value === 'FIRED');
+      }
+      if (!fired) {
+        const pos = await wcdp.eval(`(() => { const a = document.getElementById('prd-botnav-rightbtn'); if (!a) return null; const r = a.getBoundingClientRect(); if (r.width <= 0) return null; return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`).catch(() => null);
+        if (pos) await trustedClick(wcdp, pos.x, pos.y);
+      }
+      let confirmInfo = null;
+      for (let i = 0; i < 24 && !confirmInfo && Date.now() < hardDeadlineMs; i++) {
+        await sleep(500);
+        confirmInfo = (await listTabs(port).catch(() => []))
+          .find((t) => /orderConfirm/.test(t.url || '') && t.id !== warmTab.id) || null;
+      }
+      if (confirmInfo) {
+        // 等「提交订单」挂载（重资源加载完成的标志），最多 10s
+        try {
+          const ccdp = new CDP(confirmInfo.webSocketDebuggerUrl);
+          await ccdp.connect();
+          await ccdp.send('Runtime.enable');
+          const MOUNT = `(() => {
+            const clean = (s) => (s || '').replace(/[\\s]+/g, ' ').trim();
+            for (const el of document.querySelectorAll('a,button,div,span')) {
+              const t = clean(el.innerText);
+              if (!t || t.length > 6 || !t.includes('提交订单')) continue;
+              const r = el.getBoundingClientRect();
+              if (r.width > 0 && r.height > 0) return true;
+            }
+            return false;
+          })()`;
+          let mounted = false;
+          for (let i = 0; i < 20 && !mounted && Date.now() < hardDeadlineMs; i++) {
+            try { mounted = await ccdp.eval(MOUNT); } catch { /* 加载中 */ }
+            if (!mounted) await sleep(500);
+          }
+          try { ccdp.ws.close(); } catch { /* 已关 */ }
+        } catch { /* 探测失败按已预热处理 */ }
+        await fetch(`http://127.0.0.1:${port}/json/close/${confirmInfo.id}`).catch(() => {});
+        log('✔ 跨商品预热完成：结算页资源已焐热，草稿页已关闭。', 'ok');
+        E.ev('WARMUP_OK', pick.id);
+        return true;
+      }
+      log('预热没开出确认页，跳过。', 'warn');
+      return false;
+    } finally {
+      if (warmTab && warmTab.id) await fetch(`http://127.0.0.1:${port}/json/close/${warmTab.id}`).catch(() => {});
+    }
+  }
+
+  /* ── I. 坐标缓存：开火前最后一次真实定位（之后只盲点+后台重定位）── */
+  for (const s of sessions) {
+    if (s.dead) continue;
+    const fc = await s.cdp.eval(fastCheckExpr(false)).catch(() => null);
+    if (fc && fc.buy) s.coords = fc.buy;
+  }
+  log(`坐标就绪：${sessions.filter((s) => s.coords).length}/${sessions.filter((s) => !s.dead).length} 个页签拿到购买按钮坐标。`);
+  E.ev('COORDS_READY', sessions.map((s) => `${s.code}:${s.coords ? 'ok' : 'none'}`).join(' '));
+
+  /* ── J. T0 齐射 ── */
+  const T0_ACT_LEAD_MS = Math.max(500, (((config.intercept || {}).leadMs) || 300) + 200);
+  const hotWindowMs = limits.hotWindowMs ?? 3000;
+  const giveUpAt = (triggerLocalMs || Date.now()) + (limits.giveUpAfterMs ?? 60 * 1000);
+  if (triggerLocalMs) {
+    const toHot = triggerLocalMs - hotWindowMs - Date.now();
+    if (toHot > 0) {
+      log(`${Math.round(toHot / 1000)} 秒后进热区。`);
+      await sleepUntil(triggerLocalMs - hotWindowMs);
+    }
+    if (Date.now() < triggerLocalMs - 500) {
+      try {
+        const fine = await calibrateClock(stateRef.ua, log, limits.clockSyncFineSamples ?? 3);
+        if (fine) { clockOffsetMs = fine.offsetMs; triggerLocalMs = serverT0Ms + clockOffsetMs; }
+      } catch { /* 沿用粗校 */ }
+    }
+  }
+
+  // 浏览器级连接：窗口最大化 + 确认订单页 Target 事件（openerId 能映射到开出它的页签）
+  const baseline = new Set((await listTabs(port).catch(() => [])).map((t) => t.id));
+  const confirmHits = []; // { targetId, openerId }
+  let salvoArmed = false; // 齐射武装标志：齐射开始前出现的确认页（历史草稿）不触发停火
+  try {
+    const v = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
+    const bws = new WebSocket(v.webSocketDebuggerUrl);
+    await new Promise((res, rej) => { bws.addEventListener('open', res, { once: true }); bws.addEventListener('error', rej, { once: true }); });
+    let bid = 0;
+    const bpend = new Map();
+    bws.addEventListener('message', (ev2) => {
+      let m; try { m = JSON.parse(ev2.data); } catch { return; }
+      if (m.id && bpend.has(m.id)) {
+        const p = bpend.get(m.id); // { res, rej }
+        bpend.delete(m.id);
+        m.error ? p.rej(new Error(m.error.message)) : p.res(m.result);
+      }
+      else if (m.method === 'Target.targetCreated' || m.method === 'Target.targetInfoChanged') {
+        const t = m.params.targetInfo || {};
+        if (t.type === 'page' && /orderConfirm|确认订单/.test((t.url || '') + (t.title || ''))) {
+          confirmHits.push({ targetId: t.targetId, openerId: t.openerId || null, at: Date.now() });
+          // ★ 瞬时停火：齐射期间确认订单页一露头，全部页签立刻停手（事件驱动，不等轮询拍）。
+          //   只认"新出现的"确认页——baseline 里已有的旧标签事件不停火。
+          if (salvoArmed && !baseline.has(t.targetId)) {
+            for (const x of sessions) x.stop = true;
+          }
+        }
+      }
+    });
+    const bsend = (method, params = {}) => new Promise((res, rej) => {
+      const i = ++bid;
+      bpend.set(i, { res, rej });
+      bws.send(JSON.stringify({ id: i, method, params }));
+    });
+    // ★ 不开 discover 就收不到 Target 事件——确认页归属会退化成"猜"（10-09 演练实测）
+    await bsend('Target.setDiscoverTargets', { discover: true }).catch(() => {});
+    const win = await bsend('Browser.getWindowForTarget', { targetId: sessions[0].tab.id }).catch(() => null);
+    if (win && win.bounds && win.bounds.windowState !== 'maximized') {
+      await bsend('Browser.setWindowBounds', { windowId: win.windowId, bounds: { windowState: 'normal' } }).catch(() => {});
+      await sleep(200);
+      await bsend('Browser.setWindowBounds', { windowId: win.windowId, bounds: { windowState: 'maximized' } }).catch(() => {});
+    }
+  } catch { /* 最大化/事件订阅失败不影响抢购，确认页发现退回轮询兜底 */ }
+
+  /** 单页签开火循环：内部入口 Yo（T0-lead 起）+ 坐标盲点（T0 起），全 fire-and-forget。
+   *  ★ 为什么不等响应：隐藏页签的输入响应挂在帧调度上（实测首条 ~5s），
+   *    管线连发则 1 秒内全落弹——await 一条就把整个节拍拖死。 */
+  async function hammerLoop(s) {
+    const canYo = () => !triggerLocalMs || Date.now() >= triggerLocalMs - T0_ACT_LEAD_MS;
+    const canClick = () => !triggerLocalMs || Date.now() >= triggerLocalMs; // 提前点锁定按钮可能弹规格抽屉挡页面
+    let lastCoordAt = 0;
+    let lastSentPt = null;                    // 上一次鼠标所在点（挪了才发 mouseMoved，人手不瞬移）
+    let breathUntil = 0;                      // 拟人"换气"截止时刻
+    let nextBreathAt = Date.now() + breathBaseMs * (0.5 + Math.random());
+    /** 拟人间隔：基准值上随机 ±jitterPct，绝不匀速（固定节拍是机器人指纹） */
+    const gap = (base) => Math.max(60, Math.round(base * (1 - jitterPct + Math.random() * jitterPct * 2)));
+    /** 点击点在按钮范围内随机散布（±1/4 边长），不总是钉死正中心像素 */
+    const jitterPt = (c) => {
+      if (!c) return null;
+      const jx = c.w > 8 ? Math.round((Math.random() - 0.5) * c.w * 0.5) : 0;
+      const jy = c.h > 8 ? Math.round((Math.random() - 0.5) * c.h * 0.5) : 0;
+      return { x: (c.x || 0) + jx, y: (c.y || 0) + jy };
+    };
+    while (!s.stop && !s.dead && Date.now() < giveUpAt) {
+      if (s.busy) { await sleep(8); continue; }
+      const now = Date.now();
+      // 换气：每隔 breathBaseMs(±随机) 随机停一小手（0.2~0.8s）——人的手指不会匀速连点几分钟
+      if (breathBaseMs > 0 && now >= nextBreathAt) {
+        breathUntil = now + 200 + Math.random() * 600;
+        nextBreathAt = now + breathBaseMs * (0.6 + Math.random() * 1.6);
+        E.ev('BREATH', s.code);
+      }
+      if (now < breathUntil) { await sleep(40); continue; }
+      const wantFire = !s.internalDisabled && canYo() && now - (s.lastFiredAt || 0) >= gap(fireBaseMs);
+      const wantClick = canClick() && s.coords && now - (s.lastClickedAt || 0) >= gap(clickBaseMs);
+      if (!wantFire && !wantClick) { await sleep(15); continue; }
+      s.busy = true;
+      (async () => {
+        // ① 内部入口（10-08 实测当前页面版本唯一有效触发；未解锁时调用零副作用）
+        if (wantFire) {
+          s.lastFiredAt = Date.now();
+          try {
+            const pick = await pickInternalEntryOn(s.cdp);
+            if (pick.s === 'OK') {
+              s.missStreak = 0;
+              const rr = await s.cdp.send('Runtime.callFunctionOn', {
+                objectId: pick.yoId,
+                functionDeclaration: 'function(){ try { this(); return "YO"; } catch (e) { return "ERR:" + e.message; } }',
+                returnByValue: true, userGesture: true,
+              }).catch(() => null);
+              if (rr && rr.result && rr.result.value === 'YO') { s.fired++; s.lastFiredAt = Date.now(); }
+            } else {
+              s.missStreak++;
+              if (s.missStreak === 1 || s.missStreak % 40 === 0) log(`页签 ${s.code}：内部入口暂不可达（${pick.s}），继续。`);
+              if (s.missStreak >= 120) {
+                s.internalDisabled = true;
+                log(`页签 ${s.code}：内部入口持续不可达，停用内部开火，只保留坐标点击。`, 'warn');
+              }
+            }
+          } catch { s.missStreak++; }
+        }
+        // ② 坐标点击：散布点 + 挪动鼠标 + 按下/抬起之间留人手间隙（25~70ms）；不等响应
+        if (wantClick) {
+          s.lastClickedAt = Date.now();
+          const pt = jitterPt(s.coords);
+          if (!lastSentPt || Math.abs(pt.x - lastSentPt.x) + Math.abs(pt.y - lastSentPt.y) > 6) {
+            s.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: pt.x, y: pt.y, pointerType: 'mouse' }).catch(() => {});
+            lastSentPt = pt;
+          }
+          s.cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pt.x, y: pt.y, button: 'left', buttons: 1, clickCount: 1, pointerType: 'mouse' }).catch(() => {});
+          setTimeout(() => {
+            s.cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pt.x, y: pt.y, button: 'left', buttons: 0, clickCount: 1, pointerType: 'mouse' }).catch(() => {});
+          }, 25 + Math.random() * 45);
+          s.clicked++;
+        }
+      })().finally(() => { s.busy = false; });
+      // 坐标重定位（fire-and-forget，绝不占开火节拍）
+      if (Date.now() - lastCoordAt > coordRefreshMs) {
+        lastCoordAt = Date.now();
+        s.cdp.eval(fastCheckExpr(false))
+          .then((fc) => { if (fc && fc.buy) s.coords = fc.buy; })
+          .catch(() => {});
+      }
+      await sleep(15);
+    }
+  }
+
+  /** 胜负判定：确认订单页出现 → 找到开出它的页签。优先 Target 信号（openerId），
+   *  轮询标签列表兜底，页签自己跳转成确认页也算。 */
+  let lastSelfScan = 0;
+  async function pickWinner() {
+    while (confirmHits.length) {
+      const h = confirmHits.shift();
+      if (baseline.has(h.targetId)) continue;
+      const s = (h.openerId && sessions.find((x) => x.tab.id === h.openerId)) || null;
+      return { confirmTargetId: h.targetId, session: s || sessions.find((x) => !x.dead && !x.stop) || sessions[0], via: 'target-signal' };
+    }
+    const ts = await listTabs(port).catch(() => []);
+    const ct = ts.find((t) => /orderConfirm/.test(t.url || '') && !baseline.has(t.id));
+    if (ct) {
+      // 轮询兜底拿不到 openerId：按"最近开过火的页签"猜归属（Target 信号可用时走不到这里）
+      const guess = sessions.filter((x) => !x.dead && !x.stop)
+        .sort((a, b) => (b.lastFiredAt || 0) - (a.lastFiredAt || 0))[0] || sessions[0];
+      return { confirmTargetId: ct.id, session: guess, via: 'tab-poll' };
+    }
+    // 页签自己跳成确认页（不开新标签的路径）
+    if (Date.now() - lastSelfScan > 500) {
+      lastSelfScan = Date.now();
+      for (const s of sessions) {
+        if (s.dead || s.stop) continue;
+        const u = await s.cdp.eval('location.href').catch(() => null);
+        if (u && /orderConfirm/.test(u)) return { confirmTargetId: null, session: s, via: 'self-nav', selfUrl: u };
+      }
+    }
+    return null;
+  }
+
+  /** 确认订单页到手后的收尾：演练读金额即停；真模式接管提交（submitOrder）。 */
+  async function finishMultiConfirm(confirmTab, session) {
+    if (dryRun) {
+      let payNote = '';
+      try {
+        const c2 = new CDP(confirmTab.webSocketDebuggerUrl);
+        await c2.connect();
+        const m = await c2.eval('(() => (document.body.innerText.match(/应付[金额总额][:：]?\\s*¥?\\s*([\\d,.]+)/) || [])[1] || null)()');
+        if (m) payNote = `（应付 ¥${m}）`;
+        c2.ws.close();
+      } catch { /* 读不到金额不影响结论 */ }
+      log(`✅ 规格 ${session.code} 已进入确认订单页${payNote}。演练模式到此为止，不点“提交订单”。`, 'ok');
+      await report({
+        outcome: 'DRY_RUN_OK', resultCode: null,
+        message: `多页签演练：规格 ${session.code} 可信链路已进入确认订单页，未提交订单`,
+        skuCode: session.code,
+      });
+      return { ok: true, outcome: 'DRY_RUN_OK' };
+    }
+    const confirmCdp = new CDP(confirmTab.webSocketDebuggerUrl);
+    await confirmCdp.connect();
+    await confirmCdp.send('Runtime.enable');
+    await confirmCdp.send('Network.enable', { maxResourceBufferSize: 10 * 1024 * 1024 }).catch(() => {});
+    attachNetRecorder(confirmCdp, session.E);
+    E.ev('CONFIRM_TAB', `${session.code} ${String(confirmTab.url || '').slice(0, 140)}`);
+    try { await installInterception(confirmCdp, planIntercept, log); }
+    catch (e) { log(`确认页拦截安装失败（${e.message}），该标签不留证。`, 'warn'); }
+    await submitOrder(confirmCdp, { config, report, stateRef, log, E });
+    return { ok: true, outcome: 'ORDER_FLOW_DONE' };
+  }
+
+  // 开火 + 判定并行跑；谁先进确认订单页谁赢
+  const winnerBox = { v: null };
+  confirmHits.length = 0; // 预热阶段残留的确认页事件清掉，只认齐射开始后的
+  salvoArmed = true;
+  const loops = sessions.filter((s) => !s.dead).map((s) => hammerLoop(s));
+  const coordinator = (async () => {
+    let lastLogAt = 0;
+    while (Date.now() < giveUpAt) {
+      const w = await pickWinner();
+      if (w) { winnerBox.v = w; return; }
+      if (Date.now() - lastLogAt > 10000) {
+        lastLogAt = Date.now();
+        const rel = triggerLocalMs ? Math.round((Date.now() - triggerLocalMs) / 1000) : null;
+        log(`开火中…（${sessions.map((s) => `${s.code.slice(-4)}:${s.fired}发/${s.clicked}点`).join(' ')}）${rel != null ? `T0${rel >= 0 ? '+' : ''}${rel}s` : ''}`);
+        E.ev('HAMMER_TICK', sessions.map((s) => `${s.code}:${s.fired}/${s.clicked}${s.dead ? '/dead' : ''}`).join(' '));
+      }
+      await sleep(120);
+    }
+  })();
+  const timeout = (async () => {
+    while (Date.now() < giveUpAt + 500) await sleep(200);
+  })();
+  await Promise.race([coordinator, timeout]);
+  for (const s of sessions) s.stop = true; // 全部停火
+  await Promise.allSettled(loops);
+  const winner = winnerBox.v;
+
+  /* ── K. 收尾 ── */
+  if (!winner) {
+    const stats = sessions.map((s) => `${s.code}(开火${s.fired}/盲点${s.clicked}${s.dead ? `，退役:${s.dead}` : ''})`).join('　');
+    log(`齐射窗口结束，未见确认订单页。${stats}`, 'warn');
+    E.ev('GIVE_UP', stats);
+    // 多页签 v1 不进回流监控：N 个页签的回流扫描要切规格，和页签模型冲突，先如实报败
+    await report({
+      outcome: 'FAILED', resultCode: 'GIVE_UP',
+      message: `多页签齐射（${sessions.length} 个规格）未进入确认订单页`,
+      evidence: { stats },
+    });
+    return { ok: false, outcome: 'GIVE_UP' };
+  }
+
+  const ws = winner.session;
+  log(`🎉 页签「${ws.code}」开出确认订单页（${winner.via}），全部页签停火。`, 'ok');
+  E.ev('CONFIRM_DETECTED', `${ws.code} via=${winner.via}`);
+  // 别在开售前提交（会被"活动未开始"拒）：赢家出现得再早也压到 T0 再交
+  if (triggerLocalMs && Date.now() < triggerLocalMs) {
+    log(`赢家出现得比 T0 早 ${triggerLocalMs - Date.now()}ms，压到 T0 再提交（防"未开始"拒单）。`);
+    await sleepUntil(triggerLocalMs);
+  }
+  // 让在途的最后一批点击落完，再统计新开的确认页：只留一张，其余关掉
+  await sleep(300);
+  const confirms = (await listTabs(port).catch(() => []))
+    .filter((t) => /orderConfirm/.test(t.url || '') && !baseline.has(t.id));
+  let keep = (winner.confirmTargetId && confirms.find((t) => t.id === winner.confirmTargetId)) || confirms[0] || null;
+  for (const t of confirms) {
+    if (!keep || t.id === keep.id) continue;
+    await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`).catch(() => {});
+  }
+  if (!keep && winner.selfUrl) {
+    keep = { id: ws.tab.id, url: winner.selfUrl, webSocketDebuggerUrl: ws.tab.webSocketDebuggerUrl };
+  }
+  if (!keep) {
+    log('确认页信号闪了一下就没了（可能被页面自己关掉），按未中处理。', 'warn');
+    await report({ outcome: 'FAILED', resultCode: 'CONFIRM_VANISHED', message: '确认订单页出现后又消失' });
+    return { ok: false, outcome: 'CONFIRM_VANISHED' };
+  }
+  await fetch(`http://127.0.0.1:${port}/json/activate/${keep.id}`).catch(() => {});
+  if (confirms.length > 1) log(`顺手关掉了 ${confirms.length - 1} 张重复确认页草稿。`);
+
+  // 收尾流程：演练读金额即停；真模式接管提交
+  return finishMultiConfirm(keep, ws);
+}
+
 /** 轻量保温操作：动鼠标 + 上下滚动（全部真实输入事件，不碰页面任何请求）。
  *  坐标/幅度/节奏都随机（2026-10-08）：每次一模一样的轨迹也是机器人指纹。 */
 async function lightActivity(cdp) {
@@ -1905,9 +2646,9 @@ async function submitOrder(cdp, ctx) {
   const EV = ctx.E || { ev() {}, shot() {}, text() {} }; // 老调用方没传 E 也能跑
   const tClick0 = Date.now();
   let pos = null; // 兜底点击坐标（evidence 里要带；内部路径成功时保持 null）
-  // 提交按钮挂载探测节拍：2026-10-08 从 300ms 收紧到 100ms（真机实测按钮可见要
-  // ~5.8s，探测节拍直接决定"提交发出去"的时刻；100ms 在 CPU 上可忽略）
-  const PROBE_MS = 100;
+  // 提交按钮挂载探测节拍：决定"提交发出去"的时刻（按钮可见要 ~0.5s 热 / ~5.8s 冷，
+  // 探测节拍 = 按钮出现到出手的最坏延迟）。2026-10-09 起可调（limits.submitProbeMs），默认 60ms。
+  const PROBE_MS = Math.max(30, config.limits?.submitProbeMs ?? 60);
 
   /** 等待「提交订单」按钮挂载（真机实测确认页出现→按钮可见要 3~6s，高峰 5.8s） */
   async function waitSubmitButton(deadlineMs) {

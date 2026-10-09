@@ -339,11 +339,12 @@
     <div class="tblwrap">
       <table id="dpSlotsTable">
         <thead>
-          <tr><th style="width:9%;">槽位</th><th style="width:21%;">抢哪个商品</th><th style="width:27%;">抢哪个规格</th><th style="width:24%;">回流时切换哪些规格</th><th style="width:7%;">端口</th><th style="width:10%;">最近结果</th><th></th></tr>
+          <tr><th style="width:8%;">槽位</th><th style="width:17%;">抢哪个商品</th><th style="width:21%;">抢哪个规格</th><th style="width:21%;">多页签齐射</th><th style="width:18%;">回流时切换哪些规格</th><th style="width:6%;">端口</th><th style="width:8%;">最近结果</th><th></th></tr>
         </thead>
         <tbody id="dpSlotsBody"></tbody>
       </table>
     </div>
+    <p class="hint" style="margin-top:8px;">「多页签齐射」= 给这个账号再开几个页签、每个页签守一个规格，到点<strong>全部页签同时猛点</strong>，不用来回切规格；后台页签一样生效（填规格编号，逗号分隔，总页签最多 8 个）。第一次用先演练：设置页开「演练模式」派发一次，看到确认订单页就算通。</p>
   </div>
 
   <div class="card">
@@ -468,6 +469,35 @@
         <label>提前多久进入紧盯（毫秒）</label>
         <input type="number" id="setHotWindow" min="1000" step="1000" />
         <div class="fhint">开售前多久切成紧盯模式。3000 = 提前 3 秒。</div>
+      </div>
+    </div>
+
+    <div class="subttl">多页签齐射的节奏（拟人击发）</div>
+    <div class="grid3">
+      <div class="f">
+        <label>喊话间隔（毫秒）</label>
+        <input type="number" id="setMtFire" min="80" step="50" />
+        <div class="fhint">每个页签多久「喊」一次按钮干活。300 ≈ 手速很快的真人（每秒 3 发）。想更猛就调小，别低于 100。</div>
+      </div>
+      <div class="f">
+        <label>点击间隔（毫秒）</label>
+        <input type="number" id="setMtClick" min="120" step="50" />
+        <div class="fhint">每个页签多久点一次按钮坐标。450 ≈ 真人狂点。这是兜底通道，和喊话独立。</div>
+      </div>
+      <div class="f">
+        <label>节奏抖动（%）</label>
+        <input type="number" id="setMtJitter" min="0" max="50" step="5" />
+        <div class="fhint">每次间隔在此基础上随机 ±这个百分比。40 = 时快时慢，绝不匀速——固定节拍是机器人指纹，别设 0。</div>
+      </div>
+      <div class="f">
+        <label>换气间隔（毫秒）</label>
+        <input type="number" id="setMtBreath" min="0" step="500" />
+        <div class="fhint">每个页签每隔这么久（±随机）会停一小手（0.2~0.8 秒），模拟人手指停顿。0 = 关闭换气（不推荐）。</div>
+      </div>
+      <div class="f">
+        <label>提交探测节拍（毫秒）</label>
+        <input type="number" id="setSubmitProbe" min="30" step="10" />
+        <div class="fhint">确认订单页出现后，多久看一眼「提交订单」按钮挂载没。60 = 按钮一出 60ms 内就打。</div>
       </div>
     </div>
 
@@ -767,8 +797,11 @@ function normSku(s) {
     label: s.label ?? '',
     attrs: s.attrs || {},
     price: s.price ?? null,
+    // ★ 2026-10-09 起采集器直接给统一推导字段（库存0=缺货 > 场次 > buttonMode 快照）
     statusText: s.statusText ?? s.buyableText ?? '未知',
     buyable: s.buyable ?? s.buyableNow ?? null,
+    sessionState: s.sessionState ?? null,
+    oos: s.oos ?? null,
     saleStartAt: s.saleStartAt ?? (r ? r.startTime : null),
     saleStartsInMs: r && r.startsInMs != null ? r.startsInMs : null,
     limitPerUser: s.limitPerUser ?? (r ? r.limitNum : null) ?? s.limitedQuantity ?? null,
@@ -790,10 +823,16 @@ function platformMeta() {
 
 function buyBadge(sk) {
   const t = sk.statusText || '未知';
-  if (sk.buyable) return '<span class="badge ok">可买</span>';
-  if (t.includes('抢购')) return '<span class="badge warn">待抢购</span>';
-  if (t.includes('缺货') || t.includes('售罄')) return '<span class="badge err">缺货</span>';
-  return `<span class="badge">${esc(t)}</span>`;
+  // ★ 统一推导口径（2026-10-09）：实时库存 0 一律缺货；无场次/已结束明确标出，
+  //   不再让 buttonMode 快照的"可买/待抢购"把实际抢不了的规格化装成能抢的样子。
+  const tip = `title="${esc(t)}（判定依据：${esc(sk.oos ? '实时库存' : sk.sessionState === 'upcoming' || sk.sessionState === 'live' || sk.sessionState === 'ended' || sk.sessionState === 'none' ? '抢购场次' : '按钮快照')}）"`;
+  if (sk.stockQty === 0 || sk.oos === true || t.includes('缺货') || t.includes('售罄')) return `<span class="badge err" ${tip}>缺货</span>`;
+  if (sk.sessionState === 'none') return `<span class="badge err" ${tip}>无场次</span>`;
+  if (sk.sessionState === 'ended') return `<span class="badge" style="color:var(--dim2)" ${tip}>已结束</span>`;
+  if (sk.sessionState === 'live') return `<span class="badge ${sk.buyable ? 'ok' : 'warn'}" ${tip}>${esc(t)}</span>`;
+  if (sk.buyable) return `<span class="badge ok" ${tip}>可买</span>`;
+  if (sk.sessionState === 'upcoming' || t.includes('抢购')) return `<span class="badge warn" ${tip}>待抢购</span>`;
+  return `<span class="badge" ${tip}>${esc(t)}</span>`;
 }
 
 /* ═══════════════ 页面切换 ═══════════════ */
@@ -853,7 +892,13 @@ function dpSkuOptions(prd, sel) {
   if (!checked.length) return `<option value="${esc(sel || '')}">${esc(sel || '（先去「商品与规格」页勾选并保存）')}</option>`;
   return checked.map((code) => {
     const sk = dpSkuOf(prd, code);
-    const stock = sk ? (sk.buyable ? '✅有货' : (/缺货|售罄/.test(sk.statusText || '') ? '⛔缺货' : '⏳' + (sk.statusText || '待开售'))) : '';
+    // ★ 2026-10-09：库存 0 / 无场次 一眼可见，别再把抢不了的规格配进槽位
+    const stock = !sk ? ''
+      : (sk.stockQty === 0 || sk.oos === true) ? '⛔缺货'
+      : sk.sessionState === 'none' ? '⛔无场次'
+      : sk.sessionState === 'ended' ? '⏳已结束'
+      : sk.buyable ? '✅有货'
+      : '⏳' + (sk.statusText || '待开售');
     const lab = `${(sk && sk.label) || code}（${stock}${sk && sk.price != null ? ' · ¥' + sk.price : ''}）`;
     return `<option value="${esc(code)}" ${String(sel) === String(code) ? 'selected' : ''}>${esc(lab)}</option>`;
   }).join('');
@@ -882,6 +927,75 @@ function dpFreeId() {
   while (dpSlots.some((s) => s.id === 'acc' + n)) n += 1;
   return 'acc' + n;
 }
+
+/* ── 多页签齐射：槽位上的 SKU 勾选器（2026-10-09 用户定稿：要能选，不要手打编号）── */
+function dpTabBtnLabel(s) {
+  const n = (s.skuTabs || []).length;
+  return n ? `多页签 · 共 ${n + 1} 页签` : '多页签 · 关';
+}
+function openTabPicker(slot, anchor) {
+  document.querySelectorAll('.tabPicker').forEach((p) => p.remove());
+  const codes = dpCheckedOf(slot.prdId);
+  const cur = new Set((slot.skuTabs || []).map(String));
+  const rows = codes.map((code) => {
+    const sk = dpSkuOf(slot.prdId, code);
+    const attrs = Object.entries((sk && sk.attrs) || {}).map(([k, v]) => v).join(' / ') || code;
+    const st = !sk ? ''
+      : (sk.stockQty === 0 || sk.oos === true) ? '⛔缺货'
+      : sk.sessionState === 'none' ? '⛔无场次'
+      : sk.sessionState === 'ended' ? '⏳已结束'
+      : sk.sessionState === 'upcoming' ? '⏰待抢购'
+      : sk.buyable ? '✅有货'
+      : (sk.statusText || '');
+    return `<label style="display:flex;gap:8px;align-items:center;padding:6px 2px;cursor:pointer;border-bottom:1px solid var(--border);">
+      <input type="checkbox" data-code="${esc(code)}" ${cur.has(String(code)) ? 'checked' : ''} />
+      <span style="flex:1">${esc(String(attrs).slice(0, 40))}</span>
+      <span style="font-size:12px;color:var(--dim)">${st}</span>
+    </label>`;
+  }).join('');
+  const panel = document.createElement('div');
+  panel.className = 'tabPicker';
+  panel.style.cssText = 'position:fixed;z-index:999;background:var(--bg,#16181d);border:1px solid var(--border,#333);border-radius:10px;padding:12px;box-shadow:0 12px 32px rgba(0,0,0,.4);width:430px;max-height:60vh;overflow:auto;';
+  panel.innerHTML = `
+    <div style="font-weight:600;margin-bottom:8px;">多页签齐射：勾要同时抢的规格</div>
+    <div style="font-size:12px;color:var(--dim2);margin-bottom:6px;">主规格（上面下拉选的）永远是第 1 个页签，不用在这里勾。总页签最多 8 个。</div>
+    ${rows || '<div style="color:var(--dim);padding:8px 0;">这个商品还没勾抢购规格——先去「商品与规格」页勾选并保存，这里才有得选。</div>'}
+    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+      <button class="sec sm" data-clear>全不选（只用主规格）</button>
+      <span style="flex:1"></span>
+      <span style="font-size:12px;color:var(--dim2)" data-count></span>
+      <button class="sm" data-done>完成</button>
+    </div>`;
+  document.body.appendChild(panel);
+  const r = anchor.getBoundingClientRect();
+  panel.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 260)) + 'px';
+  panel.style.left = Math.max(8, Math.min(r.left - 200, window.innerWidth - 446)) + 'px';
+  const sync = () => {
+    const boxes = [...panel.querySelectorAll('input[data-code]')];
+    slot.skuTabs = boxes.filter((b) => b.checked).map((b) => String(b.dataset.code))
+      .filter((c) => String(c) !== String(slot.sbomCode));
+    dpDirty = true;
+    anchor.textContent = dpTabBtnLabel(slot);
+    const cnt = panel.querySelector('[data-count]');
+    if (cnt) cnt.textContent = slot.skuTabs.length ? `已选 ${slot.skuTabs.length} + 主规格 1 = ${slot.skuTabs.length + 1} 页签` : '未启用多页签';
+  };
+  panel.addEventListener('change', sync);
+  panel.querySelector('[data-clear]').onclick = () => {
+    panel.querySelectorAll('input[data-code]').forEach((b) => { b.checked = false; });
+    sync();
+  };
+  panel.querySelector('[data-done]').onclick = () => panel.remove();
+  sync();
+  setTimeout(() => {
+    const off = (ev2) => {
+      if (!panel.contains(ev2.target) && ev2.target !== anchor && !anchor.contains(ev2.target)) {
+        panel.remove();
+        document.removeEventListener('click', off);
+      }
+    };
+    document.addEventListener('click', off);
+  }, 0);
+}
 function dpFreePort() {
   let port = 9401;
   while (dpSlots.some((s) => Number(s.port) === port)) port += 1;
@@ -900,6 +1014,7 @@ function renderDpSlots() {
         return `<option value="${esc(prd)}" ${String(s.prdId) === prd ? 'selected' : ''}>${esc(p.id || prd)}</option>`;
       }).join('')}</select></td>
       <td><select data-k="sbomCode">${dpSkuOptions(s.prdId, s.sbomCode)}</select></td>
+      <td><button class="sec sm slotTabsBtn" title="点击勾选这个账号要同时抢的规格：每个规格开一个页签，到点全部同时出手">${esc(dpTabBtnLabel(s))}</button></td>
       <td><input type="text" class="slotScan" value="${esc((s.scanSboms || []).join(', '))}" placeholder="留空 = 抢购勾选的规格" title="回流监控时随机切换的规格编号，逗号分隔。留空 = 该商品勾选要抢的规格。多个账号各配各的。" /></td>
       <td class="mono">${esc(s.port || '')}</td>
       <td class="dpRes" data-slot="${esc(s.id || '')}">${dpResCell(s)}</td>
@@ -909,10 +1024,13 @@ function renderDpSlots() {
     prdSel.onchange = () => {
       s.prdId = prdSel.value;
       s.sbomCode = dpCheckedOf(s.prdId)[0] || '';
+      s.skuTabs = []; // 换商品 = 旧商品的页签规格全部失效，清空重挑
       skuSel.innerHTML = dpSkuOptions(s.prdId, s.sbomCode);
+      tr.querySelector('.slotTabsBtn').textContent = dpTabBtnLabel(s);
       dpDirty = true;
     };
     skuSel.onchange = () => { s.sbomCode = skuSel.value; dpDirty = true; };
+    tr.querySelector('.slotTabsBtn').onclick = (e) => { e.stopPropagation(); openTabPicker(s, e.target); };
     tr.querySelector('.slotScan').onchange = (e) => {
       s.scanSboms = e.target.value.split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean);
       dpDirty = true;
@@ -1020,24 +1138,37 @@ async function loadLamps() {
   setLamp('lampDry', dry ? 'ok' : 'err', dry ? '演练中（不下单）' : '真抢（会下单！）');
   const qk = $('setDryRunQuick');
   if (qk && qk.checked !== dry) qk.checked = dry;
-  // 开售倒计时：找最近的未来 saleAt
+  // 开售倒计时：配置 saleAt 优先，没填的商品用采集到的真实场次（nextSale）补上
+  // ★ 2026-10-09：以前只看配置 saleAt， Mate XT 2 这类纯官方场次商品（没填 saleAt）
+  //   采集完明明有"明天 10:08 开售"也不倒计时。现在两边合并。
   const times = [];
+  const seenPrd = new Set();
   for (const p of (CFG.products || [])) {
     if (p.enabled === false || !p.saleAt) continue;
     const t = new Date(p.saleAt).getTime();
-    if (Number.isFinite(t) && t > Date.now() - 60 * 1000) times.push({ t, p });
+    if (Number.isFinite(t) && t > Date.now() - 60 * 1000) { times.push({ t, name: p.id || '', src: '配置' }); seenPrd.add(String(p.id || '')); }
+  }
+  for (const cp of ((CATALOG && CATALOG.products) || [])) {
+    if (!cp || cp.ok === false || !cp.nextSale || !cp.nextSale.startTime) continue;
+    const cfgP = (CFG.products || []).find((x) => x.url === cp.url);
+    if (!cfgP || cfgP.enabled === false) continue;
+    if (cfgP.saleAt) continue; // 配置优先，不重复计时
+    const t = new Date(cp.nextSale.startTime).getTime();
+    if (Number.isFinite(t) && t > Date.now() - 60 * 1000) {
+      times.push({ t, name: `${cp.configId || cp.prdId}（官方场次·${cp.nextSale.skuCodes.length} 个规格）`, src: '场次' });
+    }
   }
   times.sort((a, b) => a.t - b.t);
   if (times.length) {
     const left = times[0].t - Date.now();
     setLamp('lampCountdown', left < 10 * 60 * 1000 ? 'warn' : '', fmtAgo(left));
-    $('qkNext').textContent = fmtDT(times[0].p.saleAt);
+    $('qkNext').textContent = fmtDT(times[0].t);
     $('qkNext').className = 'v' + (left < 10 * 60 * 1000 ? ' amber' : '');
-    $('qkNextNote').textContent = `${times[0].p.id || ''} · 共 ${times.length} 个待开售`;
+    $('qkNextNote').textContent = `${times[0].name} · 共 ${times.length} 个待开售`;
   } else {
     setLamp('lampCountdown', '', '未设定');
     $('qkNext').textContent = '看到能买就抢';
-    $('qkNextNote').textContent = '没填开售时间的商品不倒计时';
+    $('qkNextNote').textContent = '没填开售时间也没采到场次';
   }
   // 首页模式卡
   $('qkMode').textContent = (CFG.mode || 'rush') === 'monitor' ? '只捡回流' : '到点就抢';
@@ -1135,6 +1266,12 @@ function renderSettings() {
   $('setGiveUp').value = CFG.limits?.giveUpAfterMs ?? 60000;
   $('setInternalFire').value = CFG.limits?.internalFireMs ?? 50;
   $('setFuse').value = CFG.limits?.fuseRefreshDelayMs ?? 1000;
+  // 多页签齐射节奏（拟人）
+  $('setMtFire').value = CFG.limits?.multiTabFireMs ?? 300;
+  $('setMtClick').value = CFG.limits?.multiTabClickMs ?? 450;
+  $('setMtJitter').value = CFG.limits?.multiTabJitterPct ?? 40;
+  $('setMtBreath').value = CFG.limits?.multiTabBreathMs ?? 3000;
+  $('setSubmitProbe').value = CFG.limits?.submitProbeMs ?? 60;
   $('setBuyRetry').value = CFG.limits?.cdpBuyRetry ?? 3;
   $('setLead').value = CFG.intercept?.leadMs ?? 300;
   $('setTrigInternal').checked = CFG.triggerMode === 'internal';
@@ -1378,7 +1515,9 @@ function renderSkuPanel(bd, i) {
       <span style="color:var(--dim);font-size:12.5px;">
         共 <b style="color:var(--fg)">${skus.length}</b> 个规格 ·
         能买 <b style="color:var(--fg)">${skus.filter((s) => s.buyable).length}</b> ·
-        待开售 <b style="color:var(--fg)">${skus.filter((s) => s.saleStartAt).length}</b>
+        缺货 <b style="color:var(--red)">${skus.filter((s) => s.stockQty === 0 || s.oos === true).length}</b> ·
+        待抢购 <b style="color:var(--fg)">${skus.filter((s) => s.sessionState === 'upcoming').length}</b>
+        <span style="color:var(--dim2)">（已结束 ${skus.filter((s) => s.sessionState === 'ended').length} · 无场次 ${skus.filter((s) => s.sessionState === 'none').length}）</span>
       </span>
       <span class="badge ${allChecked ? 'warn' : 'ok'}">
         ${allChecked ? '当前：全部规格都算目标' : `当前：只抢选中的 ${selected.size} 个`}
@@ -1489,7 +1628,8 @@ async function runCrawl() {
       const c = r.summary?.counts || {};
       say('crawlMsg',
         `采集完成：商品 <b>${c.ok ?? '?'}</b> 个 · 规格 <b>${c.skus ?? '?'}</b> 个 · ` +
-        `能买 <b>${c.buyableNow ?? 0}</b> · 待开售 <b>${c.withRushBuy ?? 0}</b>`, 'ok');
+        `能买 <b>${c.buyable ?? c.buyableNow ?? 0}</b> · 缺货 <b>${c.oos ?? c.outOfStock ?? 0}</b> · ` +
+        `待抢购(有场次) <b>${c.rushUpcoming ?? 0}</b>`, 'ok');
     } else {
       say('crawlMsg', '采集失败：' + esc(r.error || ('退出码 ' + r.exitCode)) +
         (r.stderrTail ? `<br/><span style="font-size:12px;opacity:.8">${esc(String(r.stderrTail).slice(-300))}</span>` : ''), 'bad');
@@ -1524,6 +1664,9 @@ function buildSettingsPatch() {
   const leadRaw = $('setLead').value.trim();
   const leadN = Number(leadRaw);
   const retryRaw = Number($('setBuyRetry').value);
+  // 多页签节奏：空/非法输入一律回到默认（抖动 0 会变成机械匀速，不允许静默设 0）
+  const mtJ = Number($('setMtJitter').value);
+  const mtB = Number($('setMtBreath').value);
   return {
     mode: $('setMode').value,
     earlyEnterSec: Number($('setEarly').value) || 90,
@@ -1534,6 +1677,12 @@ function buildSettingsPatch() {
       giveUpAfterMs: Number($('setGiveUp').value) || 60000,
       internalFireMs: Number($('setInternalFire').value) || 50,
       fuseRefreshDelayMs: Number($('setFuse').value) || 1000,
+      // 多页签齐射节奏（拟人击发）
+      multiTabFireMs: Number($('setMtFire').value) || 300,
+      multiTabClickMs: Number($('setMtClick').value) || 450,
+      multiTabJitterPct: Number.isFinite(mtJ) && mtJ > 0 ? mtJ : 40,
+      multiTabBreathMs: Number.isFinite(mtB) && mtB >= 0 ? mtB : 3000,
+      submitProbeMs: Number($('setSubmitProbe').value) || 60,
       cdpBuyRetry: Number.isFinite(retryRaw) && retryRaw >= 0 ? retryRaw : 3,
     },
     intercept: { leadMs: leadRaw === '' || !Number.isFinite(leadN) ? 300 : leadN },
