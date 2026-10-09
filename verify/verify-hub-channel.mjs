@@ -75,7 +75,7 @@ try {
 
   /* ---- 3. 模拟 WiFi Agent 上线: 通道 = wifi, 代操作降级可用 ---- */
   console.log('\n=== 3. WiFi Agent 上线 → 降级通道 ===');
-  const hello = await post('/api/device/hello', { deviceId: 'wifi-phone-01', agentVersion: '1.0.2', screen: [1080, 2400], accessibility: true, battery: 80 });
+  const hello = await post('/api/device/hello', { deviceId: 'wifi-phone-01', agentVersion: '1.1.0', screen: [1080, 2400], accessibility: true, battery: 80 });
   ok(hello.status === 200 && hello.body.channel, 'hello 注册成功且回带 channel');
   const ch1 = await j('/api/channel');
   ok(ch1.body.channel.mode === 'wifi' && ch1.body.channel.wifi === true, `通道模式 = ${ch1.body.channel.mode}`);
@@ -89,6 +89,16 @@ try {
   ok(queued.body.status === 'task' && queued.body.task.mode === 'phone_op' && queued.body.task.op === 'open_item', '手机长轮询能领到 phone_op/open_item 任务');
   const pf1 = await j('/api/device/perf-boost');
   ok(pf1.body.status === 'unavailable' && pf1.body.needUsb === true, 'WiFi 下 perf-boost 仍明确 needUsb (USB 独占, 不误导)');
+
+  // 旧脚本版本闸门: agentVersion < 1.1.0 时 phone_op 被拦下 (旧脚本会把它当演练跑掉)
+  await post('/api/device/hello', { deviceId: 'old-phone-02', agentVersion: '1.0.1', screen: [1080, 2400], accessibility: true });
+  const oldOp = await post('/api/phone/cmd', { op: 'open_item', params: { itemId: '1085142029424' }, deviceId: 'old-phone-02' });
+  ok(oldOp.status === 409 && /过旧|更新手机脚本/.test(oldOp.body.error || ''), `旧脚本派 phone_op → 409 拦下 (实际 ${oldOp.status})`);
+  // 自测单飞: 两次自测派发, 第二次被拒
+  const st1 = await post('/api/tasks/dispatch', { deviceId: 'wifi-phone-01', task: { taskId: 't-st-a', mode: 'grab', grab: { selfTest: true }, target: { itemId: '1085142029424' }, timing: { fireAtEpochMs: Date.now() + 60000 } } });
+  ok(st1.status === 200, `第一次自测派发成功 (${st1.status})`);
+  const st2 = await post('/api/tasks/dispatch', { deviceId: 'wifi-phone-01', task: { taskId: 't-st-b', mode: 'grab', grab: { selfTest: true }, target: { itemId: '1085142029424' }, timing: { fireAtEpochMs: Date.now() + 60000 } } });
+  ok(st2.status === 400 && /仍在执行/.test(st2.body.error || ''), `第二次自测被单飞闸门拦下 (${st2.status}: ${(st2.body.error || '').slice(0, 30)})`);
 
   /* ---- 4. 控制台 UI (无头浏览器) ---- */
   console.log('\n=== 4. 控制台 UI ===');

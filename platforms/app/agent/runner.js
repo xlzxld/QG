@@ -214,9 +214,20 @@ function handleTask(task) {
             } else if (mode === "grab") {
                 // 链接抢购 (2026-10-09 重写): 链接就位 → 页面核对 → 锚定 → 高频突变检测 → 首击 → 连点链
                 executeDamaiGrab(task);
-            } else {
+            } else if (mode === "test" || mode === "dryrun" || mode === "buy") {
                 // 安全演练 / 立即购买 (直通流; 旧 rush 全自动流程已下线)
                 executeDamaiRush(task);
+            } else {
+                // ★ 2026-10-10 修复: 未知模式**绝不兜成演练** —— 旧版会掉进 executeDamaiRush,
+                //   导致"打开商品页(phone_op)被当成一键安全演练整条跑出来"的低级事故
+                console.error("【拒绝任务】未知任务模式: " + mode + " (手机脚本与中枢版本不匹配? 请更新手机脚本)");
+                Transport.sendResult({
+                    taskId: tid,
+                    platform: "damai",
+                    outcome: "failed",
+                    reason: "unknown_mode",
+                    evidence: "未知任务模式: " + mode + " — 手机脚本过旧, 请在控制台「更新手机脚本并重启」"
+                });
             }
         } else {
             console.warn("暂未实现的平台适配器: " + platform);

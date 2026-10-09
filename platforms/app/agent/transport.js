@@ -250,7 +250,7 @@ var Transport = {
             try { if (typeof device !== 'undefined') { sw = device.width || 1080; sh = device.height || 2400; } } catch(eS) {}
             var payload = {
                 deviceId: this.deviceId,
-                agentVersion: "1.0.1",
+                agentVersion: "1.1.0",   // 1.1.0: 支持 phone_op (中枢据此做版本闸门, 旧脚本派 phone_op 会被拦下)
                 autoX: "7.2.4",
                 screen: [sw, sh],
                 accessibility: isAcc,

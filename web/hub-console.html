@@ -1081,6 +1081,7 @@ function processEvent(e) {
     const r = det;
     const rCls = (r.outcome === 'success' || r.outcome === 'ordered') ? 'resultline success' : r.outcome === 'failed' ? 'resultline failed' : '';
     logLines.push({ t: time, e: '[结果]', m: `${r.outcome} — ${r.message || r.evidence || ''}`, taskId: r.taskId, cls: rCls });
+    if (selfTestTaskId && r.taskId === selfTestTaskId) { selfTestInFlight = false; selfTestTaskId = null; }   // 自测出结果, 解除单飞
     showTaskResult(r);
     if (r.outcome === 'success' && (r.data?.viewers || r.data?.addresses || String(r.taskId || '').includes('add'))) loadProfile();
   } else if (e.event === 'task_cancel_requested') {
@@ -1233,6 +1234,9 @@ async function grabOpenItem() {
   const itemId = parseItemId($('grab-link').value);
   if (!itemId) return toast('请先粘贴商品链接或 ID', '', 'warn');
   if (requireChannel()) return;
+  const btn = event && event.target ? event.target : null;
+  if (btn && btn.disabled) return;
+  if (btn) { btn.disabled = true; setTimeout(() => { btn.disabled = false; }, 3000); }
   try {
     const r = await api('/api/phone/cmd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'open_item', params: { itemId } }) });
     if (r.via === 'wifi') {
@@ -1497,7 +1501,11 @@ async function grabDisarm() {
   await cancelTask(grabTask.taskId);
 }
 
+let selfTestInFlight = false;   // 自测单飞: 上一次自测出结果前禁止再点 (防任务排队连跑成"无限循环")
+let selfTestTaskId = null;
+
 async function grabSelfTest() {
+  if (selfTestInFlight) return toast('自测正在执行', '等本轮出结果再点 (结果会弹窗 + 写入「任务执行状态」)', 'warn', 5000);
   const itemId = parseItemId($('grab-link').value);
   if (!itemId) return toast('请先粘贴商品链接或 ID', '自测需要脚本先就位商品页', 'warn');
   const item = catalog.find(x => String(x.itemId || '') === String(itemId));
@@ -1513,11 +1521,17 @@ async function grabSelfTest() {
     timing: { fireAtEpochMs: Date.now() + 3600000, highFreqLeadMs: 1000 },
     grab: { selfTest: true },
   };
+  selfTestInFlight = true;
+  selfTestTaskId = task.taskId;
+  setTimeout(() => { if (selfTestTaskId === task.taskId) { selfTestInFlight = false; } }, 120000);   // 兜底复位
   try {
     await api('/api/tasks/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task }) });
     startTracking(task);
     toast('🧪 自测已下发', '看「任务执行状态」时间线: 读取速率 + 发现延迟', 'success', 7000);
-  } catch (e) { toast('自测下发失败', e.message, 'error', 7000); }
+  } catch (e) {
+    selfTestInFlight = false;
+    toast('自测下发失败', e.message, 'error', 7000);
+  }
 }
 
 /* ==================== 初始化 ==================== */

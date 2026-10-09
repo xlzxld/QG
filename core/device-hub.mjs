@@ -76,6 +76,8 @@ function scanAdbDevices() {
   const now = Date.now();
   if (now - lastAdbScanTime < 2000) return cachedAdbDevices;
   lastAdbScanTime = now;
+  // 测试开关: DEVICE_HUB_FAKE_NO_ADB=1 → 强制"无 USB"场景 (验证 WiFi 降级链路用, 不碰真机)
+  if (process.env.DEVICE_HUB_FAKE_NO_ADB === '1') { cachedAdbDevices = []; return cachedAdbDevices; }
   try {
     const output = runAdb('adb devices -l', 6000);
     const list = parseAdbDevices(output);
@@ -509,6 +511,23 @@ function dispatchTask(task, targetDeviceId = null) {
     return dev && (dev.state === 'idle' || !dev.state);
   }) || [...devices.keys()][0];
   if (!deviceId) throw new Error('当前无任何在线或注册的 Android 设备 (请先连接设备并启动手机端 Agent)');
+
+  /* ★ 防重防堆积 (2026-10-10 修复"无限循环"): 设备 busy 时新任务会排队, 连点按钮 = 队列塞满,
+   *  每条又是完整抢购流水线 (30~60s), 逐个执行看起来像无限循环。两条闸门:
+   *  ① 排队上限: busy 且已排 ≥2 条 → 拒绝, 提示先停止
+   *  ② 自测单飞: 上一个自测 120s 内未出结果 → 拒绝重复点击 */
+  const devNow = devices.get(deviceId);
+  const isBusy = devNow && devNow.state === 'busy';
+  const pending = taskQueues.get(deviceId) || [];
+  if (isBusy && pending.length >= 2) {
+    throw new Error(`设备正忙且已有 ${pending.length} 个任务排队 — 请先「⛔ 停止」或等当前任务结束再下发 (防止任务堆积连跑)`);
+  }
+  if (task.mode === 'grab' && task.grab && task.grab.selfTest) {
+    const dup = [...taskStates.values()].find((e) =>
+      e.task && e.task.mode === 'grab' && e.task.grab && e.task.grab.selfTest && !e.result
+      && (Date.now() - e.dispatchedAt) < 120000);
+    if (dup) throw new Error('检测通道自测仍在执行 (运行或排队中), 请等本轮出结果再点');
+  }
 
   addRecentEvent({
     deviceId,
@@ -1238,6 +1257,16 @@ const server = http.createServer(async (req, res) => {
           if (ch.mode === 'usb') {
             const r = await openItemViaAdb(itemId);
             return sendJson(res, r.ok ? 200 : (r.status || 500), { ...r, channel: ch });
+          }
+          // ★ 版本闸门 (2026-10-10): 旧手机脚本不认识 phone_op, 会把它当演练流水线跑掉
+          const dev = ch.deviceId ? devices.get(ch.deviceId) : null;
+          if (dev && dev.agentVersion) {
+            const [maj, min] = String(dev.agentVersion).split('.').map((n) => parseInt(n, 10) || 0);
+            if (maj < 1 || (maj === 1 && min < 1)) {
+              return sendJson(res, 409, {
+                error: '手机脚本过旧 (不认识 phone_op 指令) — 请先点「📦 更新手机脚本并重启 Agent」, 再重新打开商品页',
+              });
+            }
           }
           const r = dispatchPhoneOp('open_item', { itemId }, ch.deviceId);
           return sendJson(res, 200, {
