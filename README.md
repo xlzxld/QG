@@ -48,6 +48,7 @@ node platforms/huawei/cdp-rush.mjs              # 所有槽位并行开抢
 
 ```bash
 npm run hub                 # 设备中枢控制台 (:3120)
+node core/service-menu.mjs  # 服务启停台（启动/停止/重启/状态；双击 服务启停.bat）
 npm run drill               # 大麦安全演练
 npm run agent:build         # 改手机端源码后重新打包
 npm run device:prepare      # USB 真机一键整备
@@ -61,7 +62,7 @@ npm test                    # 单元测试
 
 - **商品列表 = 唯一白名单**：清单外不开窗、不点击、不发请求；匹配失败按错误处理，不兜底。
 - 下单动作必须通过页面自身代码发起；不构造、不重放请求；验证码一律转人工。
-- 桥接不热加载：改 `core/` 后重启服务；子进程一律 `windowsHide: true`。
+- 桥接不热加载：改 `core/` 后重启服务（双击 `服务启停.bat` → 按 3 重启全部）；子进程一律 `windowsHide: true`。
 - 手机端 Agent 改动后必须 `npm run agent:build` 并经控制台「更新手机脚本」推送。
 
 ## git

@@ -30,12 +30,7 @@ describe('跨平台 (macOS Darwin / Windows Win32) 兼容性测试', () => {
 
   it('3. 验证所有 macOS 启动脚本与 .command 文件存在且格式规范', () => {
     const scripts = [
-      'start.sh',
-      '启动.command',
-      'start-device-hub.sh',
-      '启动-手机中枢.command',
-      'stop.sh',
-      '停止服务.command',
+      '服务启停.command',
       path.join('tools', 'mobile', 'prepare-device.sh'),
       path.join('tools', 'mobile', 'prepare-device.command')
     ];
@@ -57,11 +52,7 @@ describe('跨平台 (macOS Darwin / Windows Win32) 兼容性测试', () => {
 
   it('5. Windows .bat 启动脚本：CRLF 换行 + 编码安全（纯 ASCII 或 GBK+chcp 936）', () => {
     const bats = [
-      '启动.bat',
-      '停止服务.bat',
-      '重启服务.bat',
-      '启动-手机中枢.bat',
-      '停止抢购中枢.bat',
+      '服务启停.bat',
       '自检-Windows环境.bat',
       '今早抢购-手动武装.bat',
       path.join('tools', 'mobile', 'prepare-device.bat'),

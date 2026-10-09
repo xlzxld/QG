@@ -42,7 +42,7 @@ const getJson = async (u) => (await fetch(u)).json();
 /* ⓪ 桥接探活：服务没起就给句人话，别让脚本崩在半路 */
 const alive = await fetch(`${BRIDGE}/api/dispatch/slots?platform=huawei`).then((r) => r.ok).catch(() => false);
 if (!alive) {
-  console.error('桥接服务没有响应（127.0.0.1:3100）。请先双击「启动.bat」把服务跑起来，再执行本脚本。');
+  console.error('桥接服务没有响应（127.0.0.1:3100）。请先双击「服务启停.bat」→ 按 1 把服务跑起来，再执行本脚本。');
   process.exit(1);
 }
 

@@ -6,7 +6,7 @@
 
 ## 零、最快上手
 
-双击 `启动.bat`，然后：
+双击 `服务启停.bat` → 按 `1` 启动全部服务，然后：
 
 ```
 1) 打开商品页 → 把地址复制下来
@@ -146,7 +146,7 @@
 
 ## 三、控制台
 
-双击 `启动.bat` 后按 `C`，或直接开 <http://127.0.0.1:3100/>。
+双击 `服务启停.bat` 后按 `7`，或直接开 <http://127.0.0.1:3100/>。
 
 界面在 `web/platforms/grab-console.html`（独立文件，不嵌在 .mjs 里）。
 
@@ -337,7 +337,7 @@ node core/grab-bridge.mjs
 ### 用法
 
 ```
-1. 启动桥接服务（启动.bat 或 node core/grab-bridge.mjs）
+1. 启动桥接服务（双击 `服务启停.bat` → 按 1，或 node core/grab-bridge.mjs）
 2. node platforms/huawei/cdp-rush.mjs --prdId=10086621059876
 3. 第一次运行会开一个"抢购专用 Chrome 窗口"（独立数据目录
    data/grab/chrome-profile-rush/，与日常浏览器互不干扰），

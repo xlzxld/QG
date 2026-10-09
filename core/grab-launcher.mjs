@@ -1,7 +1,7 @@
 /**
  * 一键启动器（交互菜单）
  * =====================================================================
- * 用法：双击 启动.bat，或在终端运行 node core/grab-launcher.mjs
+ * 用法：从「服务启停」菜单进入（第 9 项），或在终端运行 node core/grab-launcher.mjs
  *
  * 功能：
  *   1. 检查桥接服务是否在跑；没跑就自动拉起
@@ -496,7 +496,7 @@ async function main() {
     return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : null;
   })();
 
-  // 非交互子命令：给「重启服务.bat / 停止服务.bat」用
+  // 非交互子命令：给「服务启停」菜单（以及终端 / 自动化）用
   // （桥接改完代码必须重启才生效，用户不该需要去找进程 PID）
   if (process.argv.includes('--restart')) {
     title('重启桥接服务');
@@ -507,6 +507,12 @@ async function main() {
   if (process.argv.includes('--stop')) {
     title('停止桥接服务');
     const ok = await stopBridge();
+    process.exitCode = ok ? 0 : 1;
+    return;
+  }
+  if (process.argv.includes('--start')) {
+    title('启动桥接服务');
+    const ok = await ensureBridge();
     process.exitCode = ok ? 0 : 1;
     return;
   }
@@ -622,8 +628,12 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  console.error(`\n${C.red}启动器异常：${e.message}${C.reset}`);
-  console.error(C.dim + (e.stack || '') + C.reset);
-  process.exitCode = 1;
-});
+// 直接运行时才进交互逻辑；被 import（测试 / 服务启停台复用工具函数）时不执行 main。
+const isEntry = /grab-launcher\.mjs$/i.test(String(process.argv[1] || ''));
+if (isEntry) {
+  main().catch((e) => {
+    console.error(`\n${C.red}启动器异常：${e.message}${C.reset}`);
+    console.error(C.dim + (e.stack || '') + C.reset);
+    process.exitCode = 1;
+  });
+}

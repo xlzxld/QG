@@ -1,11 +1,13 @@
 /**
  * 设备中枢 (device-hub :3120) 生命周期工具
  * =====================================================================
- * 给「启动-手机中枢.bat / 停止抢购中枢.bat」当内核用，也可以手动跑：
+ * 给「服务启停」菜单当内核用，也可以手动跑：
  *
- *   node core/hub-launcher.mjs --start    前台启动中枢（日志显示在本窗口）
- *   node core/hub-launcher.mjs --stop     停止中枢（兼容 PID 文件丢失/过期等残留状态）
- *   node core/hub-launcher.mjs --status   查看中枢状态
+ *   node core/hub-launcher.mjs --start     前台启动中枢（日志显示在本窗口）
+ *   node core/hub-launcher.mjs --start-bg  后台启动中枢（日志写 data/grab/device-hub.log）
+ *   node core/hub-launcher.mjs --stop      停止中枢（兼容 PID 文件丢失/过期等残留状态）
+ *   node core/hub-launcher.mjs --restart   重启中枢（先停再后台起）
+ *   node core/hub-launcher.mjs --status    查看中枢状态
  *
  * 为什么不在 .bat 里直接杀进程：
  *   .bat 里没有可靠的「按命令行找进程」能力（PowerShell 那层转义极易写错，
@@ -26,6 +28,7 @@ const ROOT = path.resolve(__dirname, '..');
 const GRAB_DIR = path.join(ROOT, 'data', 'grab');
 const HUB_SCRIPT = path.join(ROOT, 'core', 'device-hub.mjs');
 const PID_PATH = path.join(GRAB_DIR, 'device-hub.pid');
+const LOG_PATH = path.join(GRAB_DIR, 'device-hub.log');
 const PORT = Number(process.env.DEVICE_HUB_PORT || 3120);
 const HUB_URL = `http://127.0.0.1:${PORT}`;
 
@@ -199,7 +202,7 @@ async function startHub() {
   const busy = await listeningPids(PORT);
   if (busy.size) {
     console.log(`${C.red}✘ 端口 ${PORT} 已被其它进程占用${C.reset}（PID ${[...busy].join(', ')}），中枢无法启动。`);
-    console.log(`  ${C.dim}处理：先双击「停止抢购中枢.bat」清理一遍，再重新启动。${C.reset}`);
+    console.log(`  ${C.dim}处理：先到「服务启停」菜单里停一下手机中枢，再重新启动。${C.reset}`);
     return false;
   }
 
@@ -209,7 +212,7 @@ async function startHub() {
   }
 
   console.log(`${C.dim}正在前台启动，中枢日志会直接显示在本窗口。${C.reset}`);
-  console.log(`${C.dim}停止方式：本窗口按 Ctrl+C、关闭本窗口，或双击「停止抢购中枢.bat」。${C.reset}`);
+  console.log(`${C.dim}停止方式：本窗口按 Ctrl+C、关闭本窗口，或从「服务启停」菜单停止。${C.reset}`);
   console.log('');
 
   const child = spawn(process.execPath, [HUB_SCRIPT], { cwd: ROOT, stdio: 'inherit', windowsHide: true });
@@ -245,7 +248,7 @@ async function startHub() {
   if (await hubAlive()) {
     console.log('');
     console.log(`${C.green}✔ 设备中枢已就绪${C.reset} —— 电脑浏览器打开：${C.cyan}http://localhost:${PORT}${C.reset}`);
-    console.log(`${C.dim}（本窗口保持开着即可；关掉窗口前建议先双击「停止抢购中枢.bat」）${C.reset}`);
+    console.log(`${C.dim}（本窗口保持开着即可；关掉窗口前建议先从「服务启停」菜单停止）${C.reset}`);
   } else {
     console.log(`${C.dim}（等了 15 秒健康检查还没响应，继续观察下面的输出……）${C.reset}`);
   }
@@ -255,6 +258,78 @@ async function startHub() {
   console.log('');
   console.log(`${C.yellow}·${C.reset} 设备中枢已退出（退出码 ${exitInfo?.code ?? exitInfo?.signal}）。`);
   return true;
+}
+
+/* ============================ 后台启动 ============================ */
+
+async function startHubBackground() {
+  title('启动设备中枢 (:3120) · 后台运行');
+
+  if (await hubAlive()) {
+    const pid = readPid();
+    console.log(`${C.green}✔${C.reset} 设备中枢已经在运行${pid ? `（PID ${pid}）` : ''}，不重复启动。`);
+    console.log(`  ${C.dim}控制台：${C.reset}http://localhost:${PORT}`);
+    return true;
+  }
+
+  const busy = await listeningPids(PORT);
+  if (busy.size) {
+    console.log(`${C.red}✘ 端口 ${PORT} 已被其它进程占用${C.reset}（PID ${[...busy].join(', ')}），中枢无法启动。`);
+    console.log(`  ${C.dim}处理：先到「服务启停」菜单里停一下手机中枢，再重新启动。${C.reset}`);
+    return false;
+  }
+
+  if (!fs.existsSync(HUB_SCRIPT)) {
+    console.log(`${C.red}✘ 找不到中枢脚本：${HUB_SCRIPT}${C.reset}`);
+    return false;
+  }
+
+  const out = fs.openSync(LOG_PATH, 'a');
+  let child;
+  try {
+    child = spawn(process.execPath, [HUB_SCRIPT], {
+      cwd: ROOT,
+      detached: true,
+      stdio: ['ignore', out, out],
+      windowsHide: true,
+    });
+  } catch (e) {
+    console.log(`${C.red}✘ 后台启动失败：${e.code || e.message}${C.reset}`);
+    return false;
+  }
+  child.unref();
+  try {
+    fs.closeSync(out);
+  } catch {
+    /* 忽略 */
+  }
+
+  console.log(`${C.dim}已转入后台启动，日志写入：${path.relative(ROOT, LOG_PATH)}${C.reset}`);
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    if (await hubAlive()) break;
+  }
+
+  if (await hubAlive()) {
+    const pid = await healthPid();
+    console.log(`${C.green}✔ 设备中枢已后台启动${C.reset}${pid ? `（PID ${pid}）` : ''}`);
+    console.log(`  ${C.dim}控制台：${C.reset}http://localhost:${PORT}`);
+    console.log(`  ${C.dim}管理入口：${C.reset}双击「服务启停」→ 手机中枢（停止 / 看日志 / 重启）`);
+    return true;
+  }
+
+  console.log(`${C.red}✘ 后台启动失败：15 秒内未见健康检查响应。${C.reset}`);
+  console.log(`  ${C.dim}请查看日志尾部排查：${path.relative(ROOT, LOG_PATH)}${C.reset}`);
+  return false;
+}
+
+async function restartHub() {
+  const ok = await stopHub();
+  if (!ok) {
+    console.log(`${C.red}✘ 重启中止：旧进程没停掉，直接起新的会因端口被占而失败。${C.reset}`);
+    return false;
+  }
+  return startHubBackground();
 }
 
 /* ============================ 停止 ============================ */
@@ -371,6 +446,14 @@ async function main() {
     process.exitCode = (await startHub()) ? 0 : 1;
     return;
   }
+  if (argv.includes('--start-bg')) {
+    process.exitCode = (await startHubBackground()) ? 0 : 1;
+    return;
+  }
+  if (argv.includes('--restart')) {
+    process.exitCode = (await restartHub()) ? 0 : 1;
+    return;
+  }
   if (argv.includes('--stop')) {
     process.exitCode = (await stopHub()) ? 0 : 1;
     return;
@@ -380,7 +463,7 @@ async function main() {
     return;
   }
 
-  console.log('用法：node core/hub-launcher.mjs --start | --stop | --status');
+  console.log('用法：node core/hub-launcher.mjs --start | --start-bg | --stop | --restart | --status');
   process.exitCode = 2;
 }
 

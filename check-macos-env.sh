@@ -199,9 +199,9 @@ if [ "$ERR_COUNT" -eq 0 ] && [ "$WARN_COUNT" -eq 0 ]; then
     echo -e "${GREEN}${BOLD}🎉 完美！当前 Mac 运行环境 100% 具备抢购与自动化运行条件！${RESET}"
     echo ""
     echo -e "  ${BOLD}快速启动操作：${RESET}"
-    echo -e "  • 方式 1 (Finder 双击)：直接双击 ${CYAN}启动-手机中枢.command${RESET}"
-    echo -e "  • 方式 2 (终端命令)  ：运行 ${CYAN}./start-device-hub.sh${RESET}"
-    echo -e "  • 看板网址          ：${BLUE}http://localhost:3120/devices${RESET}"
+    echo -e "  • 双击启动（Finder）：${CYAN}服务启停.command${RESET} → 菜单按 1（启动全部）"
+    echo -e "  • 终端命令          ：运行 ${CYAN}node core/service-menu.mjs${RESET}"
+    echo -e "  • 看板网址          ：${BLUE}http://localhost:3120${RESET}"
 elif [ "$ERR_COUNT" -eq 0 ]; then
     echo -e "${YELLOW}${BOLD}⚠ 基础核心环境正常，但有 $WARN_COUNT 项警示（大多为手机未插或未授权）：${RESET}"
     echo -e "  若已安装 Chrome 与 Node，插上手机并开启 USB 调试后即可正常运行！"

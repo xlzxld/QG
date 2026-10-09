@@ -295,7 +295,7 @@ async function main() {
     console.log(GREEN(BOLD('🎉 完美！当前 Windows 运行环境 100% 具备抢购与自动化运行条件！')));
     console.log('');
     console.log(BOLD('  快速启动操作：'));
-    console.log(`  · 启动手机中枢（双击）：${CYAN('启动-手机中枢.bat')}`);
+    console.log(`  · 启停服务（双击）      ：${CYAN('服务启停.bat')} → 按 1 启动全部`);
     console.log(`  · 中枢控制台            ：${BLUE('http://localhost:3120')}`);
     console.log(`  · 手机一键整备（双击）  ：${CYAN('tools\\mobile\\prepare-device.bat')}`);
   } else if (ERR_COUNT === 0) {

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ==================================================================
-#  macOS Finder 双击启动器：全能抢购工作台
+#  macOS Finder 双击入口：服务启停台（启动 / 停止 / 重启 / 状态）
+#  桥接服务 :3100 ｜ 手机中枢 :3120
 # ==================================================================
 cd "$(dirname "$0")"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -14,4 +15,4 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-node core/grab-launcher.mjs
+node core/service-menu.mjs "$@"

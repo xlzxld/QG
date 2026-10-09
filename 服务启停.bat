@@ -1,7 +1,9 @@
 @echo off
 rem ==================================================================
-rem  Grab Launcher  (ASCII only, on purpose)
+rem  Service control panel  (ASCII only, on purpose)
 rem ------------------------------------------------------------------
+rem  Double-click to open the menu (start / stop / restart / status)
+rem  for the bridge (:3100) and the device hub (:3120).
 rem  cmd.exe parses .bat files byte-by-byte. Any multi-byte UTF-8
 rem  character (e.g. Chinese) breaks its quote/paren matching, and the
 rem  remainder of the file gets executed as garbage commands.
@@ -12,7 +14,7 @@ rem Switch console to UTF-8 so Node output renders correctly.
 chcp 65001 >nul 2>&1
 
 setlocal
-title Grab Launcher
+title QG Service Panel
 
 cd /d "%~dp0"
 
@@ -45,7 +47,7 @@ if not defined PLAYWRIGHT_BROWSERS_PATH (
 )
 
 rem ---- run -------------------------------------------------------
-"%NODE_EXE%" "core\grab-launcher.mjs" %*
+"%NODE_EXE%" "core\service-menu.mjs" %*
 set "EXITCODE=%ERRORLEVEL%"
 
 if not "%EXITCODE%"=="0" (

@@ -11,8 +11,10 @@ const ROOT = path.resolve(__dirname, '..');
 const BAT = [
   '@echo off',
   'rem ==================================================================',
-  'rem  Grab Launcher  (ASCII only, on purpose)',
+  'rem  Service control panel  (ASCII only, on purpose)',
   'rem ------------------------------------------------------------------',
+  'rem  Double-click to open the menu (start / stop / restart / status)',
+  'rem  for the bridge (:3100) and the device hub (:3120).',
   'rem  cmd.exe parses .bat files byte-by-byte. Any multi-byte UTF-8',
   'rem  character (e.g. Chinese) breaks its quote/paren matching, and the',
   'rem  remainder of the file gets executed as garbage commands.',
@@ -23,7 +25,7 @@ const BAT = [
   'chcp 65001 >nul 2>&1',
   '',
   'setlocal',
-  'title Grab Launcher',
+  'title QG Service Panel',
   '',
   'cd /d "%~dp0"',
   '',
@@ -56,7 +58,7 @@ const BAT = [
   ')',
   '',
   'rem ---- run -------------------------------------------------------',
-  '"%NODE_EXE%" "core\\grab-launcher.mjs" %*',
+  '"%NODE_EXE%" "core\\service-menu.mjs" %*',
   'set "EXITCODE=%ERRORLEVEL%"',
   '',
   'if not "%EXITCODE%"=="0" (',
@@ -71,7 +73,7 @@ const BAT = [
 ].join('\r\n');
 
 // 用 latin1 写出，确保字节级就是纯 ASCII（无 BOM、无多字节序列）
-const target = path.join(ROOT, '启动.bat');
+const target = path.join(ROOT, '服务启停.bat');
 fs.writeFileSync(target, Buffer.from(BAT, 'latin1'));
 
 // 校验
