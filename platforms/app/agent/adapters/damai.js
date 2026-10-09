@@ -562,16 +562,16 @@ var GRAB_POINTS = {
     calib: { w: 1080, h: 2400 },
     anchor: { x: 841, y: 2310 },       // 统一锚点: 一个点通吃 立即预订/确定/立即提交
     jitterCap: { x: 100, y: 40 },      // 锚点抖动上限 (超过必出按钮; 推荐 X 20~40, Y 8~16)
-    popup: { x: 540, y: 1382, jitterX: 80, jitterY: 18, delayMs: 300, pollMs: 60, blindPoke: true, blindEveryMs: 600 },
+    popup: { x: 540, y: 1382, jitterX: 80, jitterY: 18, delayMs: 300, pollMs: 60 },
     popupFromSubmit: { dx: -301, dy: -928 }   // 无 popup 配置时: 提交锚点 + 此偏移 推算弹窗按钮
 };
 
 /**
- * 弹窗多信号探测 (2026-10-10) —— 自绘也兜得住:
+ * 弹窗多信号探测 (2026-10-10) —— 三级信号, 全部基于无障碍可读节点:
  *   ① 按钮 text 节点 (最准; 弹窗按钮大概率是原生 TextView, 与底栏自绘主按钮不同类)
  *   ② textContains 宽匹配
  *   ③ 正文关键词节点 ("别放弃"/"抢票人数") —— 按钮自绘但正文可读时, 用正文 x + 推算 y
- *   ④ 全读不到 (整窗自绘) → 由调用方走低频盲点 (blindPoke), 点了有没有效不依赖读得到
+ * 三层都落空 (整窗自绘) → 本轮不点击, 等下一轮探测 (用户裁决: 移除盲点兜底层)。
  */
 function popupProbe() {
     var cand = null;
@@ -744,31 +744,23 @@ function startChainSidecar(task, anchor, tid, endAt) {
     var lastWatch = 0;
     var viewerTried = 0;
     var lastViewerAt = 0;
-    var lastBlind = 0;
     threads.start(function () {
         var startedAt = now();
         try {
             Transport.sendEvent(tid, "sidecar_start", {
                 popupPoint: popupPt, delayMs: GRAB_POINTS.popup.delayMs, pollMs: GRAB_POINTS.popup.pollMs,
-                blindPoke: !!GRAB_POINTS.popup.blindPoke, shizuku: LocalInjector.available()
+                shizuku: LocalInjector.available()
             });
         } catch (eE) {}
         while (now() < endAt && !CHAIN_CTL.sidecarDone) {
             if (isCancelled(tid)) break;
             // ① 弹窗处置 (首次点击 300ms 后才开始 —— 弹窗只会在点提交之后出现)
+            //    三级信号探测, 全落空则本轮不点 (无盲点层, 2026-10-10 用户裁决)
             if (now() - startedAt >= GRAB_POINTS.popup.delayMs) {
                 var hit = null;
                 try { hit = popupProbe(); } catch (ePr) {}
-                var px = 0, py = 0, via = "";
                 if (hit) {
-                    px = hit.x; py = hit.y; via = hit.via;
-                } else if (GRAB_POINTS.popup.blindPoke && now() - lastBlind >= GRAB_POINTS.popup.blindEveryMs) {
-                    // 整窗自绘读不到 → 低频盲点推算坐标 (点了有没有效不依赖读得到);
-                    // 误触观演人由下方装配自愈兜底
-                    px = popupPt.x; py = popupPt.y; via = "blind";
-                    lastBlind = now();
-                }
-                if (via) {
+                    var px = hit.x, py = hit.y, via = hit.via;
                     waitTapSlot(60);   // 与主链错开, 合计 ≤20 击/秒
                     adbPress(jitterInt(px, via === "node" ? 12 : GRAB_POINTS.popup.jitterX),
                              jitterInt(py, via === "node" ? 8 : GRAB_POINTS.popup.jitterY), 42);
