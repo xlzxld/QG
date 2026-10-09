@@ -348,7 +348,7 @@
 
   <div class="card">
     <h2><span class="ico">🫀</span>登录保活守护 <span class="stat" id="kaStatus" style="font-weight:400;color:var(--dim);font-size:12px;">读取中…</span></h2>
-    <p class="hint">开着它，专用窗口的登录就不会因为"半小时没动静"被服务器踢掉（驱动停着也照样续命）。</p>
+    <p class="hint">开着它，专用窗口的登录就不会因为"半小时没动静"被服务器踢掉（驱动停着也照样续命）。「停止」会把守护和正在跑的「测试轮」一并停掉。</p>
     <div class="row" style="align-items:center;gap:10px;">
       <button class="sec" id="kaStart">启动</button>
       <button class="sec" id="kaStop">停止</button>
@@ -1660,7 +1660,7 @@ async function loadKeepalive() {
   try {
     const st = await getJson('/api/keepalive/status');
     const el = $('kaStatus'); if (!el) return;
-    el.textContent = st.running ? `🟢 运行中（pid ${st.pid}）` : '⚪ 已停止';
+    el.textContent = st.running ? `🟢 运行中（pid ${st.pid}）` : (st.testRunning ? `🟡 测试轮进行中（pid ${st.testPid}）` : '⚪ 已停止');
     $('kaLog').textContent = (st.log || []).join(String.fromCharCode(10)) || '（暂无日志）';
   } catch { /* 桥接未响应 */ }
 }

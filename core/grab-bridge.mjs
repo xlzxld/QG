@@ -923,31 +923,88 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { platform, results: readResults(platform, limit) });
     }
 
-    /* ---------------- 登录保活守护：状态/启停/测试 ---------------- */
+    /* ---------------- 登录保活守护：状态/启停/测试 ----------------
+     * 2026-10-09 重构：状态/停止不再只认 PID 文件——
+     * ① 守护自己有控制端口（:3101，GET /ping 自报），状态以它为准，PID 文件只作兜底；
+     * ② 「停止」= 端口叫停 + PID 文件兜底 + 测试轮（一次性进程）一并停 + 停完复核；
+     * ③ 「立即测一轮」在守护活着时改为让守护加跑一轮（不再另起并行进程、日志不打架）。
+     * 背景：旧版「停止」管不到测试轮，停完它还在写「已续命」；PID 文件丢失时守护会“看不见、停不掉”。
+     */
     const KA_PID = path.join(GRAB_DIR, 'keepalive.pid');
+    const KA_TEST_PID = path.join(GRAB_DIR, 'keepalive-test.pid'); // 测试轮（一次性进程）的 PID
     const KA_LOG = path.join(GRAB_DIR, 'keepalive.log');
-    const kaAlive = () => { try { const pid = Number(fs.readFileSync(KA_PID, 'utf8').trim()); process.kill(pid, 0); return pid; } catch { return null; } };
+    const KA_CTL = `http://127.0.0.1:${Number(process.env.KEEPALIVE_CTL_PORT || 3101)}`;
+    const kaPid = (f) => { try { const pid = Number(fs.readFileSync(f, 'utf8').trim()); if (!pid) return null; process.kill(pid, 0); return pid; } catch { return null; } };
+    const kaAlive = () => kaPid(KA_PID);
+    const kaTestAlive = () => kaPid(KA_TEST_PID);
+    const kaProbeCtl = async () => { try { const r = await fetch(KA_CTL + '/ping', { signal: AbortSignal.timeout(900) }); const j = await r.json(); return j && j.ok ? j : null; } catch { return null; } };
+    const kaFileLog = (msg) => { try { fs.appendFileSync(KA_LOG, `[${new Date().toLocaleString('zh-CN', { hour12: false })}] 【控制台】${msg}\n`); } catch { /* 忽略 */ } };
     if (req.method === 'GET' && url.pathname === '/api/keepalive/status') {
-      const pid = kaAlive();
+      const viaCtl = await kaProbeCtl();
+      const filePid = kaAlive();
+      const testPid = kaTestAlive();
+      const pid = (viaCtl && viaCtl.pid) || filePid || null;
       let tail = [];
       try { tail = fs.readFileSync(KA_LOG, 'utf8').split(String.fromCharCode(10)).filter(Boolean).slice(-8); } catch { /* 无日志 */ }
-      return send(res, 200, { running: !!pid, pid, log: tail });
+      return send(res, 200, {
+        running: !!pid, pid,
+        via: viaCtl ? 'control-port' : (filePid ? 'pid-file' : null),
+        testRunning: !!testPid, testPid: testPid || null,
+        lastRoundAt: (viaCtl && viaCtl.lastRoundAt) || null,
+        nextRoundAt: (viaCtl && viaCtl.nextRoundAt) || null,
+        log: tail,
+      });
     }
     if (req.method === 'POST' && url.pathname === '/api/keepalive/start') {
-      if (kaAlive()) return send(res, 200, { ok: true, note: '已在运行（pid ' + kaAlive() + '）' });
+      const viaCtl = await kaProbeCtl();
+      const pid = (viaCtl && viaCtl.pid) || kaAlive();
+      if (pid) return send(res, 200, { ok: true, note: '已在运行（pid ' + pid + '）' });
       try { const c = spawn(process.execPath, [path.join(__dirname, 'keepalive-daemon.mjs')], { detached: true, stdio: 'ignore', windowsHide: true }); c.unref(); } catch (e) { return send(res, 500, { error: e.message }); }
-      log('保活守护已手动启动'); return send(res, 200, { ok: true });
+      log('保活守护已手动启动'); kaFileLog('点了「启动」');
+      return send(res, 200, { ok: true, note: '保活守护已启动（2 秒后自动刷新看状态）' });
     }
     if (req.method === 'POST' && url.pathname === '/api/keepalive/stop') {
-      const pid = kaAlive();
-      if (!pid) return send(res, 200, { ok: true, note: '本就没在运行' });
-      try { process.kill(pid); } catch (e) { return send(res, 500, { error: e.message }); }
-      try { fs.unlinkSync(KA_PID); } catch { /* 忽略 */ }
-      log('保活守护已手动停止'); return send(res, 200, { ok: true });
+      const parts = [];
+      // ① 优先走控制端口：让守护自己体面退出
+      let stoppedDaemon = false;
+      try { const r = await fetch(KA_CTL + '/stop', { method: 'POST', signal: AbortSignal.timeout(1200) }); if (r.ok) { stoppedDaemon = true; parts.push('守护进程'); } } catch { /* 走兜底 */ }
+      // ② 兜底：PID 文件里还有活着的就杀掉（旧版守护 / 降级模式）
+      if (!stoppedDaemon) {
+        const p = kaAlive();
+        if (p) { try { process.kill(p); stoppedDaemon = true; parts.push('守护进程'); } catch (e) { parts.push('守护进程（停不掉：' + e.message + '）'); } }
+      }
+      // ③ 测试轮一并停——它是一次性进程，以前不受「停止」管辖（就是“停了还在续命”的来源）
+      const tp = kaTestAlive();
+      if (tp) { try { process.kill(tp); parts.push('测试轮'); } catch { /* 忽略 */ } }
+      // ④ 复核 + 清理残留 PID 文件
+      await new Promise((r) => setTimeout(r, 250));
+      const stillCtl = await kaProbeCtl();
+      if (!kaAlive()) { try { fs.unlinkSync(KA_PID); } catch { /* 忽略 */ } }
+      if (!kaTestAlive()) { try { fs.unlinkSync(KA_TEST_PID); } catch { /* 忽略 */ } }
+      const note = parts.length
+        ? `已停止：${parts.join('、')}${stillCtl ? '；⚠️ 复核时仍有守护在应答，请再点一次停止' : ''}`
+        : (stillCtl ? '⚠️ 有守护在应答但不在册（异常），请再点一次或重启服务' : '本来就没有续命进程在跑');
+      log('保活停止操作：' + note); kaFileLog('点了「停止」：' + note);
+      return send(res, 200, { ok: true, note });
     }
     if (req.method === 'POST' && url.pathname === '/api/keepalive/test') {
-      try { const c = spawn(process.execPath, [path.join(__dirname, 'keepalive-daemon.mjs'), '--once'], { detached: true, stdio: 'ignore', windowsHide: true }); c.unref(); } catch (e) { return send(res, 500, { error: e.message }); }
-      return send(res, 200, { ok: true, note: '测试轮已发起，2 秒后刷新看日志' });
+      // ① 守护活着 → 让它自己加跑一轮（不另起进程，日志里带【手动测试】标记）
+      const viaCtl = await kaProbeCtl();
+      if (viaCtl) {
+        const j = await fetch(KA_CTL + '/round', { method: 'POST', signal: AbortSignal.timeout(1200) }).then((x) => x.json()).catch(() => null);
+        if (j && j.ok) { kaFileLog('点了「立即测一轮」'); return send(res, 200, { ok: true, note: j.note || '已加跑一轮测试，看下方日志' }); }
+      }
+      // ② 守护不在 → 发起一次性测试轮（PID 记到 keepalive-test.pid，刚发起就被叫停也有得杀）
+      const running = kaTestAlive();
+      if (running) return send(res, 200, { ok: true, note: '测试轮已经在跑（pid ' + running + '），稍等看日志' });
+      try {
+        const c = spawn(process.execPath, [path.join(__dirname, 'keepalive-daemon.mjs'), '--once'], { detached: true, stdio: 'ignore', windowsHide: true });
+        c.unref();
+        try { fs.writeFileSync(KA_TEST_PID, String(c.pid)); } catch { /* 忽略 */ }
+        c.on('exit', () => { try { if (fs.readFileSync(KA_TEST_PID, 'utf8').trim() === String(c.pid)) fs.unlinkSync(KA_TEST_PID); } catch { /* 忽略 */ } });
+      } catch (e) { return send(res, 500, { error: e.message }); }
+      kaFileLog('点了「立即测一轮」（一次性进程）');
+      return send(res, 200, { ok: true, note: '测试轮已发起（一次性进程，跑完自动退），2 秒后刷新看日志' });
     }
 
     // GET /api/platforms

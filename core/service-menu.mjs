@@ -5,6 +5,8 @@
  *   桥接服务  :3100   华为抢购后台（常驻；逻辑在 core/grab-launcher.mjs）
  *   手机中枢  :3120   手机抢购设备中枢（后台运行；逻辑在 core/hub-launcher.mjs）
  *                    日志文件：data/grab/device-hub.log
+ *   （另有 登录保活守护 :3101，由桥接自动拉起、平时无需手动管；「停止全部」会把
+ *     它一并停掉——否则服务都停了它还在给窗口续命，2026-10-09 起）
  *
  * 用法：
  *   node core/service-menu.mjs             → 交互菜单
@@ -25,6 +27,7 @@ const ROOT = path.resolve(__dirname, '..');
 const GRAB_DIR = path.join(ROOT, 'data', 'grab');
 const BRIDGE_URL = `http://127.0.0.1:${Number(process.env.GRAB_BRIDGE_PORT || 3100)}`;
 const HUB_URL = `http://127.0.0.1:${Number(process.env.DEVICE_HUB_PORT || 3120)}`;
+const KA_CTL_URL = `http://127.0.0.1:${Number(process.env.KEEPALIVE_CTL_PORT || 3101)}`;
 const GRAB_LAUNCHER = path.join(ROOT, 'core', 'grab-launcher.mjs');
 const HUB_LAUNCHER = path.join(ROOT, 'core', 'hub-launcher.mjs');
 const HUB_LOG = path.join(GRAB_DIR, 'device-hub.log');
@@ -129,7 +132,21 @@ async function actionStartAll() {
   await runTool(HUB_LAUNCHER, ['--start-bg']);
 }
 
+/** 停掉登录保活守护（桥接还在就优先走桥接接口，它会把「测试轮」也一并停；否则直接敲守护控制端口） */
+async function stopKeepalive() {
+  const viaBridge = await fetch(`${BRIDGE_URL}/api/keepalive/stop`, { method: 'POST', signal: AbortSignal.timeout(2500) })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (viaBridge && viaBridge.ok) return viaBridge.note || '已处理';
+  const viaCtl = await fetch(`${KA_CTL_URL}/stop`, { method: 'POST', signal: AbortSignal.timeout(1200) })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (viaCtl && viaCtl.ok) return '已停止（控制端口直连）';
+  return null; // 没在跑
+}
+
 async function actionStopAll() {
+  const kaNote = await stopKeepalive();
+  console.log(`${C.cyan}▶${C.reset} 停止登录保活守护…${kaNote ? ` ${C.dim}${kaNote}${C.reset}` : ` ${C.dim}（本来就没在跑）${C.reset}`}`);
+  console.log('');
   console.log(`${C.cyan}▶${C.reset} 停止手机中枢…`);
   await runTool(HUB_LAUNCHER, ['--stop']);
   console.log('');
