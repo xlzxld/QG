@@ -18,13 +18,16 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execSync, exec as execAsync } from 'node:child_process';
+import { execSync, exec as execAsync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { validateIdCard, validatePhone, loadAccountProfile, saveAccountProfile } from '../platforms/damai/account-manager.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const GRAB_DIR = path.join(ROOT, 'data', 'grab');
+// 数据目录默认 data/grab; 测试等场景可用 DEVICE_HUB_DATA_DIR 指向临时目录, 避免污染生产数据
+const GRAB_DIR = process.env.DEVICE_HUB_DATA_DIR
+  ? path.resolve(process.env.DEVICE_HUB_DATA_DIR)
+  : path.join(ROOT, 'data', 'grab');
 const PORT = Number(process.env.DEVICE_HUB_PORT || 3120);
 const HOST = '0.0.0.0';
 const AGENT_SCRIPT = path.join(ROOT, 'platforms', 'app', 'agent', 'main.js');
@@ -129,6 +132,177 @@ const scheduleAdbPoll = () => {
 };
 scheduleAdbPoll();
 
+/* ============ 常驻 adb shell 通道 (grab 抢购热路径专用) ============
+ * 2026-10-09 真机实测: 每次 execSync spawn adb.exe ≈ 210ms/次;
+ * 常驻 shell 经 stdin 写入命令 ≈ 29ms/次(连发) / echo 往返 3ms。
+ * 首击与提交风暴都靠它提速; 任何失败自动回落 execSync 通道。 */
+const ADB_BIN = fs.existsSync(path.join(LOCAL_ADB_DIR, 'adb.exe'))
+  ? path.join(LOCAL_ADB_DIR, 'adb.exe')
+  : 'adb';
+let adbShellProc = null;
+let adbShellSerial = null;
+
+function ensureAdbShell(serial) {
+  if (adbShellProc && adbShellSerial === serial && adbShellProc.exitCode === null && !adbShellProc.killed) return true;
+  try { if (adbShellProc) adbShellProc.kill(); } catch (e) { /* 忽略 */ }
+  adbShellProc = null;
+  try {
+    adbShellProc = spawn(ADB_BIN, ['-s', serial, 'shell'], {
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    adbShellSerial = serial;
+    adbShellProc.stdout.on('data', () => { /* 排水: 不关心输出 */ });
+    adbShellProc.stderr.on('data', () => { /* 排水 */ });
+    adbShellProc.on('exit', () => { adbShellProc = null; });
+    adbShellProc.on('error', () => { adbShellProc = null; });
+    return true;
+  } catch (e) { adbShellProc = null; return false; }
+}
+
+/** 通过常驻 shell 一次写入多行命令 (fire-and-forget, 不等待执行完成) */
+function adbWriteLines(lines) {
+  const adbList = scanAdbDevices();
+  if (!adbList.length) return false;
+  const serial = adbList[0].serial;
+  if (!ensureAdbShell(serial)) return false;
+  try {
+    adbShellProc.stdin.write(lines.map((l) => l + '\n').join(''));
+    return true;
+  } catch (e) {
+    adbShellProc = null;
+    return false;
+  }
+}
+
+/* ============ 计划击发 (hub 侧预置首击) ============
+ * 2026-10-09 实测教训: 「到点才发 HTTP 请求」不稳 —— 中枢每 5 秒的 adb 隧道维护/设备探测
+ * 会把事件循环占住 1~2 秒, T0 那一发请求可能直接超时, 首击被拖到 T0+1.7s。
+ * 解法: 手机在 T0 前把这一发"排在中枢自己的时钟上", 到点由中枢直接写常驻 shell (3ms 级), 全程不经网络。 */
+const armedTaps = new Map();   // tag -> timer
+const armResults = new Map();  // tag -> { atMs, actualMs, deltaMs, via, x, y }
+
+function armTapStrike({ tag, x, y, atMs }) {
+  const prev = armedTaps.get(tag);
+  if (prev) { clearTimeout(prev); armedTaps.delete(tag); }
+  const px = Math.round(x), py = Math.round(y);
+  const fire = () => {
+    armedTaps.delete(tag);
+    const actual = Date.now();
+    let via = 'persist';
+    if (!adbWriteLines([`input tap ${px} ${py}`])) {
+      via = 'exec';
+      try {
+        const l = scanAdbDevices();
+        if (l.length) runAdb(`adb -s ${l[0].serial} shell input tap ${px} ${py}`, 2500);
+        else via = 'fail';
+      } catch (e) { via = 'fail'; }
+    }
+    armResults.set(tag, { atMs, actualMs: actual, deltaMs: actual - atMs, via, x: px, y: py });
+    log(`[计划击发] ${tag} 落点(${px},${py}) ΔT0=${actual - atMs}ms via=${via}`);
+  };
+  const waitMs = atMs - Date.now();
+  if (waitMs <= 0) { fire(); return { immediate: true, waitMs: 0 }; }
+  const t = setTimeout(fire, waitMs);
+  if (t.unref) t.unref();
+  armedTaps.set(tag, t);
+  return { immediate: false, waitMs };
+}
+
+/* ============ 抢购保活优化 (2026-10-09: 全部可回退, 抢完一键恢复原状) ============
+ * 目的: 防手机把 Agent 冻住/降级, 导致任务下发延迟或读不到界面。
+ * 做的事(全部走 adb, 不安装任何东西):
+ *   ① 电池优化白名单 (Doze whitelist)  ← 防 Doze 冻结
+ *   ② RUN_ANY_IN_BACKGROUND allow      ← 防后台运行被限
+ *   ③ standby bucket = active          ← 防 App Standby 降级
+ *   ④ svc power stayon true            ← 插着线时屏幕常亮 (锁屏就读不到按钮了)
+ * 回退原则: 只回退"我们确实改过"的项, 原值落盘 data/grab/perf-boost-backup.json (中枢重启也不丢)。 */
+const PERF_PKG = 'org.autojs.autojs6';   // 手机端脚本运行时 (AutoJs6)
+const PERF_BACKUP_FILE = path.join(GRAB_DIR, 'perf-boost-backup.json');
+
+function adbShell(cmd, timeoutMs = 8000) {
+  const l = scanAdbDevices();
+  if (!l.length) throw new Error('无 USB 设备');
+  return runAdb(`"${ADB_BIN}" -s ${l[0].serial} shell ${cmd}`, timeoutMs);
+}
+
+function perfBoostStatus() {
+  const out = { pkg: PERF_PKG };
+  try {
+    const wl = adbShell('dumpsys deviceidle whitelist');
+    out.dozeWhitelisted = new RegExp(PERF_PKG.replace(/\./g, '\\.')).test(wl);
+  } catch (e) { out.dozeError = e.message; }
+  try { out.standbyBucket = String(adbShell(`am get-standby-bucket ${PERF_PKG}`)).trim().replace(/\s+/g, ' '); } catch (e) { out.bucketError = e.message; }
+  try {
+    const t = String(adbShell(`cmd appops get ${PERF_PKG} RUN_ANY_IN_BACKGROUND`));
+    const m = t.match(/:\s*(\w+)/);
+    out.runAnyInBg = m ? m[1] : t.trim().slice(0, 40);
+  } catch (e) { out.opError = e.message; }
+  try { out.stayOn = String(adbShell('settings get global stay_on_while_plugged_in')).trim(); } catch (e) { out.stayOnError = e.message; }
+  return out;
+}
+
+function perfBoostOn() {
+  const before = perfBoostStatus();
+  const steps = [];
+  const run = (label, cmd) => {
+    try { adbShell(cmd, 6000); steps.push(label + ' ✓'); } catch (e) { steps.push(label + ' ✗ ' + e.message); }
+  };
+  if (before.dozeWhitelisted === false) run('① 电池优化白名单', `cmd deviceidle whitelist +${PERF_PKG}`);
+  else steps.push('① 电池优化白名单: 已在（无需改）');
+  run('② 后台运行不限', `cmd appops set ${PERF_PKG} RUN_ANY_IN_BACKGROUND allow`);
+  run('③ 常驻活动桶', `am set-standby-bucket ${PERF_PKG} active`);
+  run('④ 插电屏幕常亮', 'svc power stayon true');
+  try { fs.writeFileSync(PERF_BACKUP_FILE, JSON.stringify({ at: Date.now(), before }, null, 2), 'utf8'); } catch (e) { /* 记不上也能跑 */ }
+  log(`[保活优化] 开启 → ${steps.join(' | ')}`);
+  return { before, steps, after: perfBoostStatus() };
+}
+
+function perfBoostOff() {
+  let backup = null;
+  try { if (fs.existsSync(PERF_BACKUP_FILE)) backup = JSON.parse(fs.readFileSync(PERF_BACKUP_FILE, 'utf8')); } catch (e) { /* 忽略 */ }
+  const before = (backup && backup.before) || {};
+  const steps = [];
+  const run = (label, cmd) => {
+    try { adbShell(cmd, 6000); steps.push(label + ' ✓'); } catch (e) { steps.push(label + ' ✗ ' + e.message); }
+  };
+  // 只回退"我们确实改过"的项 (原值来自备份)
+  if (before.dozeWhitelisted === false) run('① 移出电池白名单', `cmd deviceidle whitelist -${PERF_PKG}`);
+  else steps.push('① 电池白名单: 原本就在，不动');
+  if (before.runAnyInBg && /deny|ignore|default/i.test(before.runAnyInBg)) {
+    const mode = /deny/i.test(before.runAnyInBg) ? 'deny' : 'default';
+    run(`② 后台运行恢复为 ${mode}`, `cmd appops set ${PERF_PKG} RUN_ANY_IN_BACKGROUND ${mode}`);
+  } else if (before.runAnyInBg === undefined) steps.push('② 后台运行: 无备份原值，跳过');
+  else steps.push('② 后台运行: 原本就是 ' + before.runAnyInBg + '，不动');
+  if (before.standbyBucket && /^\d+$/.test(before.standbyBucket)) {
+    run(`③ 活动桶恢复为 ${before.standbyBucket}`, `am set-standby-bucket ${PERF_PKG} ${before.standbyBucket}`);
+  } else if (before.standbyBucket) {
+    const n = before.standbyBucket.match(/\d+/);
+    if (n) run('③ 活动桶恢复原值', `am set-standby-bucket ${PERF_PKG} ${n[0]}`);
+    else steps.push('③ 活动桶: 原值无法解析，跳过');
+  } else steps.push('③ 活动桶: 无备份原值，跳过');
+  if (before.stayOn !== undefined && before.stayOn !== 'null' && /^\d+$/.test(before.stayOn)) {
+    run(`④ 插电常亮恢复为 ${before.stayOn}`, `settings put global stay_on_while_plugged_in ${before.stayOn}`);
+  } else if (before.stayOn === 'null') {
+    run('④ 插电常亮恢复为默认(false)', 'svc power stayon false');
+  } else steps.push('④ 插电常亮: 无备份原值，跳过');
+  try { if (fs.existsSync(PERF_BACKUP_FILE)) fs.unlinkSync(PERF_BACKUP_FILE); } catch (e) { /* 忽略 */ }
+  log(`[保活优化] 恢复原状 → ${steps.join(' | ')}`);
+  return { restoredFrom: before, steps, after: perfBoostStatus() };
+}
+
+/* ---- 入参小工具 (grab 派发校验用) ---- */
+const clampInt = (v, lo, hi, dft) => {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : dft;
+};
+const validXY = (p) => {
+  if (!p) return null;
+  const x = Number(p.x), y = Number(p.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x <= 0 || y <= 0) return null;
+  return { x: Math.round(x), y: Math.round(y) };
+};
+
 if (!fs.existsSync(GRAB_DIR)) fs.mkdirSync(GRAB_DIR, { recursive: true });
 
 const PID_PATH = path.join(GRAB_DIR, 'device-hub.pid');
@@ -173,6 +347,7 @@ function primaryLanIp() {
 
 /* ============ 内存状态 ============ */
 const devices = new Map();          // deviceId -> info
+const deviceCancelOverride = new Map();   // deviceId -> taskId (任务记录被清理后的兜底撤销标记)
 const taskQueues = new Map();       // deviceId -> [tasks]
 const waitingPolls = new Map();     // deviceId -> { res, timer }
 const processedResults = new Set(); // `${taskId}:${seq}`
@@ -291,6 +466,8 @@ function dispatchTask(task, targetDeviceId = null) {
       taskId: task.taskId,
       mode: task.mode,
       target: task.target?.name,
+      itemId: task.target?.itemId,
+      grabMode: task.grab ? (task.grab.selfTest ? 'selftest' : task.grab.dryRun ? 'rehearsal' : 'live') : undefined,
       session: task.target?.session,
       price: task.target?.priceText,
       viewers: task.target?.viewers || [task.target?.viewer || ''],
@@ -298,7 +475,14 @@ function dispatchTask(task, targetDeviceId = null) {
     },
     receivedAt: new Date().toISOString(),
   });
-  taskStates.set(task.taskId, { task, dispatchedAt: Date.now(), result: null });
+  taskStates.set(task.taskId, {
+    task,
+    dispatchedAt: Date.now(),
+    result: null,
+    deviceId,
+    cancelRequested: false,   // 用户已请求取消 (手机可能在下一个心跳取走)
+    cancelledAt: null,
+  });
   if (taskStates.size > 30) {
     const firstKey = taskStates.keys().next().value;
     taskStates.delete(firstKey);
@@ -316,6 +500,27 @@ function dispatchTask(task, targetDeviceId = null) {
   taskQueues.get(deviceId).push(task);
   log(`[任务入队] 设备 ${deviceId} 队列深度: ${taskQueues.get(deviceId).length}`);
   return { deviceId, dispatchedImmediately: false };
+}
+
+/**
+ * 本地合成一条「已取消」结果 (任务未在手机端实际执行时使用)。
+ * 若手机稍后仍上报该任务, 心跳会继续回带取消指令兜底; 真实结果到达时会覆盖本条。
+ */
+function settleCancelled(entry, taskId, evidence) {
+  const record = {
+    taskId,
+    seq: 0, // 手机端真实结果 seq>=1, 0 不与去重集冲突
+    deviceId: entry.deviceId || 'device',
+    platform: entry.task?.platform || 'damai',
+    outcome: 'cancelled',
+    reason: 'manual_abort',
+    evidence,
+    receivedAt: new Date().toISOString(),
+  };
+  entry.result = record;
+  addRecentEvent({ deviceId: entry.deviceId || 'device', event: 'task_result', detail: record, receivedAt: record.receivedAt });
+  try { fs.appendFileSync(RESULTS_FILE, JSON.stringify(record) + '\n'); } catch (e) {}
+  log(`[任务取消] ${taskId} → 已取消 (${evidence})`);
 }
 
 /* ============ 一键设备连接 (核心流程) ============ */
@@ -456,10 +661,13 @@ const server = http.createServer(async (req, res) => {
     });
   }
   if (pathname === '/api/status' && req.method === 'GET') {
+    let hubAgentScriptSize = 0;
+    try { hubAgentScriptSize = fs.statSync(AGENT_SCRIPT).size; } catch (eS) { /* 忽略 */ }
     return sendJson(res, 200, {
       uptimeSec: Math.floor(process.uptime()),
       onlineDevices: [...devices.values()].map(d => ({ ...d, isAlive: Date.now() - d.lastSeen < 15000 })),
       lanIps: getLocalIps(),
+      hubAgentScriptSize,   // 电脑端 main.js 体积: 与设备上报的 scriptSize 对账即可判断"手机脚本是否最新"
       serverTime: Date.now(),
     });
   }
@@ -496,8 +704,43 @@ const server = http.createServer(async (req, res) => {
       dev.charging = data.charging ?? dev.charging;
       dev.accessibility = data.accessibility ?? dev.accessibility;
       dev.currentTaskId = data.taskId ?? null;
+      if (Number.isFinite(Number(data.scriptSize))) dev.scriptSize = Number(data.scriptSize);
       devices.set(data.deviceId, dev);
-      return sendJson(res, 200, { status: 'ok', serverTime: Date.now() });
+
+      // 取消指令捎带: 手机执行任务期间唯一可靠的下行通道 (执行时接收任务的长轮询是被堵住的)
+      // 只认「手机当前正在上报的任务」→ 用户取消过的任务一旦出现在心跳里, 直到结果回来前持续回带
+      let control = null;
+      const pushControl = (patch) => { control = Object.assign(control || {}, patch); };
+      if (dev.currentTaskId) {
+        const ts = taskStates.get(dev.currentTaskId);
+        if (ts && ts.cancelRequested) {
+          pushControl({ cancelTaskId: dev.currentTaskId });
+          if (!ts.cancelControlLogged) {
+            ts.cancelControlLogged = true;
+            log(`[任务取消] 心跳回带取消指令 → 设备 ${data.deviceId} 任务 ${dev.currentTaskId}`);
+          }
+        }
+        // 兜底: 任务记录可能已被清理(只留最近 30 条), 但手机还在跑 → 仍要能撤掉
+        // (2026-10-09 实测踩到: 一条测试任务被清理后撤不掉, 手机一直占着 busy)
+        if (!control && deviceCancelOverride.get(data.deviceId) === dev.currentTaskId) {
+          pushControl({ cancelTaskId: dev.currentTaskId });
+          log(`[任务取消] 兜底回带 → 设备 ${data.deviceId} 任务 ${dev.currentTaskId} (原任务记录已清理)`);
+        }
+      } else if (deviceCancelOverride.has(data.deviceId)) {
+        deviceCancelOverride.delete(data.deviceId);   // 设备空了, 兜底标记作废
+      }
+      // 停止手机端脚本 / 局域网自更新: 一次性下发, 发过即清
+      if (dev.stopRequested) {
+        pushControl({ stopAgent: true });
+        dev.stopRequested = false;
+        log(`[停止指令] 已下发「停止脚本」→ 设备 ${data.deviceId}`);
+      }
+      if (dev.selfUpdateRequested) {
+        pushControl({ selfUpdate: true });
+        dev.selfUpdateRequested = false;
+        log(`[自更新] 已下发「更新脚本」→ 设备 ${data.deviceId}`);
+      }
+      return sendJson(res, 200, { status: 'ok', serverTime: Date.now(), ...(control ? { control } : {}) });
     } catch (e) {
       return sendJson(res, 400, { error: e.message });
     }
@@ -568,6 +811,16 @@ const server = http.createServer(async (req, res) => {
       }
       processedResults.add(dedupeKey);
       const record = { ...data, receivedAt: new Date().toISOString() };
+      const ts = taskStates.get(data.taskId);
+      if (ts) {
+        // 真实结果优先: 覆盖本地合成的取消记录; 并停止心跳回带取消指令
+        if (ts.cancelRequested && data.outcome !== 'cancelled') {
+          log(`[任务取消] ${data.taskId} 在取消请求后仍收到真实结果 (outcome=${data.outcome}), 以真实结果为准`);
+          record.cancelRequestedEarlier = true;
+        }
+        ts.result = record;
+        ts.cancelRequested = false;
+      }
       addRecentEvent({
         deviceId: data.deviceId || 'device',
         event: 'task_result',
@@ -577,8 +830,6 @@ const server = http.createServer(async (req, res) => {
       try { fs.appendFileSync(RESULTS_FILE, JSON.stringify(record) + '\n'); } catch (e) {}
       log(`[结果落盘] 任务 ${data.taskId}: ${data.outcome} | ${data.evidence || data.message || ''}`);
 
-      const ts = taskStates.get(data.taskId);
-      if (ts) ts.result = record;
       updateAccountProfileFromDeviceResult(data);
       return sendJson(res, 200, { status: 'ack', recorded: true });
     } catch (e) {
@@ -595,6 +846,7 @@ const server = http.createServer(async (req, res) => {
       viewers: s.task?.target?.viewers,
       count: s.task?.target?.count,
       dispatchedAt: s.dispatchedAt,
+      cancelRequested: !!s.cancelRequested,
       result: s.result ? {
         outcome: s.result.outcome,
         message: s.result.message || s.result.evidence,
@@ -604,6 +856,73 @@ const server = http.createServer(async (req, res) => {
       } : null,
     }));
     return sendJson(res, 200, { tasks: list, serverTime: Date.now() });
+  }
+
+  /* ---- 任务手动终止 (控制台「最近任务」的 ⛔ 按钮) ---- */
+  if (pathname === '/api/tasks/cancel' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const taskId = String(body.taskId || '').trim();
+      if (!taskId) return sendJson(res, 400, { error: '缺少 taskId' });
+      const entry = taskStates.get(taskId);
+      if (!entry) {
+        // 兜底: 任务记录已被清理(只留最近 30 条), 但手机可能还在跑它 → 记一条"按设备撤销"的标记,
+        // 由下一次心跳回带 cancelTaskId (2026-10-09 补: 原先这里直接 404, 导致跑着的任务撤不掉)
+        const devId = String(body.deviceId || '').trim();
+        let target = null;
+        for (const [id, dev] of devices) {
+          if (dev.currentTaskId === taskId && (!devId || id === devId)) { target = id; break; }
+        }
+        if (!target) return sendJson(res, 404, { error: '未找到该任务 (可能已被清理, 且没有设备在跑它)' });
+        deviceCancelOverride.set(target, taskId);
+        addRecentEvent({
+          deviceId: target,
+          event: 'task_cancel_requested',
+          detail: { taskId, via: 'device-override', note: '任务记录已清理, 按设备兜底撤销' },
+          receivedAt: new Date().toISOString(),
+        });
+        log(`[任务取消] 兜底登记 → 设备 ${target} 任务 ${taskId} (记录已清理)`);
+        return sendJson(res, 200, { status: 'cancelling', scope: 'device-override', deviceId: target, taskId });
+      }
+      if (entry.result) return sendJson(res, 200, { status: 'already_done', taskId });
+      if (entry.cancelRequested) return sendJson(res, 200, { status: 'already_cancelling', taskId });
+
+      entry.cancelRequested = true;
+      entry.cancelledAt = Date.now();
+      addRecentEvent({
+        deviceId: entry.deviceId || 'device',
+        event: 'task_cancel_requested',
+        detail: { taskId, mode: entry.task?.mode, target: entry.task?.target?.name },
+        receivedAt: new Date().toISOString(),
+      });
+
+      // ① 还在队列里 (没下发) → 直接摘除并本地合成取消结果
+      const q = taskQueues.get(entry.deviceId);
+      if (q) {
+        const idx = q.findIndex(t => t.taskId === taskId);
+        if (idx >= 0) {
+          q.splice(idx, 1);
+          settleCancelled(entry, taskId, '任务尚未下发, 已在队列中取消');
+          return sendJson(res, 200, { status: 'cancelled', scope: 'queued', taskId });
+        }
+      }
+
+      // ② 手机此刻正实时执行它 → 等心跳回带取消指令 (最坏一个心跳周期)
+      const dev = entry.deviceId ? devices.get(entry.deviceId) : null;
+      const devAlive = dev && (Date.now() - dev.lastSeen < 15000);
+      const running = devAlive && dev.currentTaskId === taskId;
+      if (running) {
+        log(`[任务取消] ${taskId} 已请求取消 (设备正在执行, 等待手机心跳取走指令)`);
+        return sendJson(res, 200, { status: 'cancelling', scope: 'running', taskId });
+      }
+
+      // ③ 其他情况 (设备离线 / 空闲 / 心跳滞后): 本地立即标记取消;
+      //    若手机稍后仍上报此任务, 心跳会继续回带取消指令兜底, 真实结果到达时以真实结果为准
+      settleCancelled(entry, taskId, '设备当前未执行该任务, 已直接标记取消');
+      return sendJson(res, 200, { status: 'cancelled', scope: 'local', taskId });
+    } catch (e) {
+      return sendJson(res, 400, { error: e.message });
+    }
   }
 
   /* ---- 设备列表 (ADB + Agent 融合) ---- */
@@ -632,7 +951,9 @@ const server = http.createServer(async (req, res) => {
         });
       }
     }
-    return sendJson(res, 200, { devices: mergedList, adbDevicesCount: adbList.length, httpAgentsCount: httpList.length });
+    let hubAgentScriptSize = 0;
+    try { hubAgentScriptSize = fs.statSync(AGENT_SCRIPT).size; } catch (eS) { /* 忽略 */ }
+    return sendJson(res, 200, { devices: mergedList, adbDevicesCount: adbList.length, httpAgentsCount: httpList.length, hubAgentScriptSize });
   }
 
   /* ---- ADB 触摸注入 (Agent 手势失效时的可靠兜底通道) ---- */
@@ -642,8 +963,160 @@ const server = http.createServer(async (req, res) => {
       if (!Number.isFinite(x) || !Number.isFinite(y)) return sendJson(res, 400, { error: '缺少 x/y' });
       const adbList = scanAdbDevices();
       if (!adbList.length) return sendJson(res, 503, { error: '无 USB 设备' });
+      // 优先走常驻 shell (≈29ms/次), 失败回落 spawn 通道 (≈210ms/次)
+      if (adbWriteLines([`input tap ${Math.round(x)} ${Math.round(y)}`])) {
+        return sendJson(res, 200, { status: 'ok', via: 'persist' });
+      }
       runAdb(`adb -s ${adbList[0].serial} shell input tap ${Math.round(x)} ${Math.round(y)}`, 2500);
-      return sendJson(res, 200, { status: 'ok' });
+      return sendJson(res, 200, { status: 'ok', via: 'exec' });
+    } catch (e) {
+      return sendJson(res, 500, { error: e.message });
+    }
+  }
+
+  /* ---- 诊断快照 (兜底闸门触发时留证据: 界面树 + 截图; 只为事后复盘"为什么没识别到") ---- */
+  if (pathname === '/api/adb/diag-snapshot' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const tag = (String(body.tag || 'diag').replace(/[^\w.-]/g, '_').slice(0, 40)) || 'diag';
+      const adbList = scanAdbDevices();
+      if (!adbList.length) return sendJson(res, 503, { error: '无 USB 设备' });
+      const serial = adbList[0].serial;
+      const dir = path.join(GRAB_DIR, 'diag');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const base = path.join(dir, `${stamp}-${tag}`);
+      const out = { tag, files: [] };
+      // ① 界面树 (文字证据: 哪些节点在/不在)
+      try {
+        runAdb(`"${ADB_BIN}" -s ${serial} shell uiautomator dump /sdcard/qg-diag.xml`, 8000);
+        const xml = runAdb(`"${ADB_BIN}" -s ${serial} exec-out cat /sdcard/qg-diag.xml`, 8000);
+        if (xml && xml.length > 200) { fs.writeFileSync(base + '.xml', xml, 'utf8'); out.files.push(base + '.xml'); }
+        else out.dumpError = 'dump 内容为空';
+      } catch (e1) { out.dumpError = e1.message; }
+      // ② 截图 (二进制: 走 shell 重定向, 避免 utf8 编码把 PNG 破坏)
+      try {
+        execSync(`"${ADB_BIN}" -s ${serial} exec-out screencap -p > "${base}.png"`, { timeout: 15000, stdio: 'pipe', windowsHide: true });
+        if (fs.existsSync(base + '.png') && fs.statSync(base + '.png').size > 1000) out.files.push(base + '.png');
+      } catch (e2) { out.shotError = e2.message; }
+      log(`[诊断快照] ${tag} → ${out.files.map((f) => path.basename(f)).join(', ') || '无'}${out.dumpError ? ' (dump: ' + out.dumpError + ')' : ''}`);
+      return sendJson(res, 200, { status: 'ok', ...out });
+    } catch (e) { return sendJson(res, 500, { error: e.message }); }
+  }
+
+  /* ---- 抢购保活优化 (开关 + 一键恢复原状) ---- */
+  if (pathname === '/api/device/perf-boost' && req.method === 'GET') {
+    try { return sendJson(res, 200, { status: 'ok', ...perfBoostStatus() }); }
+    catch (e) { return sendJson(res, 500, { error: e.message }); }
+  }
+  if (pathname === '/api/device/perf-boost' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const on = !!body.on;
+      const r = on ? perfBoostOn() : perfBoostOff();
+      return sendJson(res, 200, { status: 'ok', on, ...r });
+    } catch (e) { return sendJson(res, 500, { error: e.message }); }
+  }
+
+  /* ---- 计划击发: 把 T0 首击排到中枢时钟上 (避开到点那一瞬的网络抖动) ---- */
+  if (pathname === '/api/adb/arm-tap' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const x = Number(body.x), y = Number(body.y), atMs = Number(body.atMs);
+      const tag = String(body.tag || 'arm');
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return sendJson(res, 400, { error: '缺少 x/y' });
+      if (!Number.isFinite(atMs)) return sendJson(res, 400, { error: '缺少 atMs (中枢时钟毫秒)' });
+      if (!scanAdbDevices().length) return sendJson(res, 503, { error: '无 USB 设备' });
+      if (atMs - Date.now() < -2000) return sendJson(res, 400, { error: '开抢时刻已过 2 秒以上, 拒绝预置' });
+      const r = armTapStrike({ tag, x, y, atMs });
+      return sendJson(res, 200, { status: 'armed', tag, ...r, hubNow: Date.now() });
+    } catch (e) { return sendJson(res, 500, { error: e.message }); }
+  }
+  if (pathname === '/api/adb/disarm-tap' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const tag = String(body.tag || '');
+      const t = armedTaps.get(tag);
+      if (t) { clearTimeout(t); armedTaps.delete(tag); }
+      return sendJson(res, 200, { status: t ? 'disarmed' : 'not-armed', tag });
+    } catch (e) { return sendJson(res, 500, { error: e.message }); }
+  }
+  if (pathname === '/api/adb/arm-status' && req.method === 'GET') {
+    const tag = String(url.searchParams.get('tag') || '');
+    const results = {};
+    for (const [k, v] of armResults) if (!tag || k === tag) results[k] = v;
+    return sendJson(res, 200, { hubNow: Date.now(), pending: [...armedTaps.keys()], results });
+  }
+
+  /* ---- 连发点击 (grab 连点链/提交风暴: 一次写入多枚 tap, 摊薄通道开销) ---- */
+  if (pathname === '/api/adb/tap-burst' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const x = Number(body.x), y = Number(body.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return sendJson(res, 400, { error: '缺少 x/y' });
+      const count = Math.max(1, Math.min(60, parseInt(body.count, 10) || 1));
+      const gapMs = Math.max(0, Math.min(1000, parseInt(body.gapMs, 10) || 0));
+      const jitter = Math.max(0, Math.min(24, parseInt(body.jitter, 10) || 0));
+      const pressMs = Math.max(0, Math.min(400, parseInt(body.pressMs, 10) || 0));
+      const adbList = scanAdbDevices();
+      if (!adbList.length) return sendJson(res, 503, { error: '无 USB 设备' });
+      const lines = [];
+      for (let i = 0; i < count; i++) {
+        const jx = Math.round(x + (jitter ? (Math.random() * 2 - 1) * jitter : 0));
+        const jy = Math.round(y + (jitter ? (Math.random() * 2 - 1) * jitter : 0));
+        lines.push(pressMs >= 30
+          ? `input swipe ${jx} ${jy} ${jx} ${jy} ${Math.round(pressMs)}`
+          : `input tap ${jx} ${jy}`);
+        if (gapMs > 0 && i < count - 1) lines.push(`sleep ${(gapMs / 1000).toFixed(3)}`);
+      }
+      if (adbWriteLines(lines)) {
+        return sendJson(res, 200, { status: 'ok', via: 'persist', count });
+      }
+      // 回落: 单次 adb 调用串行执行整串命令
+      runAdb(`adb -s ${adbList[0].serial} shell "${lines.join('; ')}"`, Math.max(3000, count * (gapMs + 150)));
+      return sendJson(res, 200, { status: 'ok', via: 'exec', count });
+    } catch (e) {
+      return sendJson(res, 500, { error: e.message });
+    }
+  }
+
+  /* ---- 深度链接打开商品页 (grab 就位专用; 2026-10-09 真机实证 damai://detail + itemId extra) ---- */
+  if (pathname === '/api/adb/open-item' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const itemId = String(body.itemId || '').trim();
+      // 闸门(副作用之前): 纯数字 + 必须在探针库白名单内
+      if (!/^\d{6,}$/.test(itemId)) return sendJson(res, 400, { error: 'itemId 必须为纯数字' });
+      const cat = loadDamaiCatalog();
+      const inCatalog = !!(cat && Array.isArray(cat.items) && cat.items.some((it) =>
+        String(it.itemId) === itemId ||
+        (Array.isArray(it.stations) && it.stations.some((s) => String(s.itemId) === itemId))));
+      if (!inCatalog) return sendJson(res, 403, { error: '该商品不在探针库白名单内, 请先「补采此商品」' });
+      const adbList = scanAdbDevices();
+      if (!adbList.length) return sendJson(res, 503, { error: '无 USB 设备' });
+      const serial = adbList[0].serial;
+      const variants = [
+        { name: 'damai://detail', cmd: `am start -a android.intent.action.VIEW -d 'damai://detail' --es itemId ${itemId} -p cn.damai` },
+        { name: 'damai://trade/detail', cmd: `am start -a android.intent.action.VIEW -d 'damai://trade/detail' --es itemId ${itemId} -p cn.damai` },
+        { name: 'damai://projectdetail', cmd: `am start -a android.intent.action.VIEW -d 'damai://projectdetail' --es itemId ${itemId} -p cn.damai` },
+        { name: 'https://m.damai.cn/damai/perform/item.html', cmd: `am start -a android.intent.action.VIEW -d 'https://m.damai.cn/damai/perform/item.html?itemId=${itemId}' -p cn.damai` },
+        { name: 'PRO_DETAIL', cmd: `am start -a cn.damai.intent.action.PRO_DETAIL --es itemId ${itemId} -p cn.damai` },
+      ];
+      const tried = [];
+      for (const v of variants) {
+        tried.push(v.name);
+        let out = '';
+        try { out = runAdb(`adb -s ${serial} shell "${v.cmd}"`, 4000) || ''; } catch (e) { out = String(e.stdout || e.message || e); }
+        if (!/Starting:/.test(out)) continue;
+        await new Promise((r) => setTimeout(r, 1300));
+        let top = '';
+        try { top = runAdb(`adb -s ${serial} shell "dumpsys activity activities | grep -m2 ResumedActivity"`, 4000) || ''; } catch (e) { top = ''; }
+        if (top.includes('ProjectDetailActivity')) {
+          ensureAdbShell(serial); // 顺手预热常驻通道 (给首击提速)
+          return sendJson(res, 200, { status: 'ok', hit: v.name, tried });
+        }
+      }
+      return sendJson(res, 500, { status: 'fail', tried });
     } catch (e) {
       return sendJson(res, 500, { error: e.message });
     }
@@ -792,10 +1265,21 @@ const server = http.createServer(async (req, res) => {
         : [incomingTask.target?.viewer || config.identity?.primaryAttendee || fallbackViewer];
       const ticketCount = parseInt(incomingTask.target?.count || config.selection?.ticketCount || 1, 10);
 
+      const mode = incomingTask.mode || 'test';
+      const VALID_MODES = ['test', 'dryrun', 'buy', 'monitor', 'add_viewer', 'add_address', 'grab'];
+      if (!VALID_MODES.includes(mode)) return sendJson(res, 400, { error: `未知任务模式: ${mode}` });
+      const fireAt = Number(incomingTask.timing?.fireAtEpochMs || 0) || 0;
+      if (mode === 'grab') {
+        // 闸门(副作用之前): grab 必须带合法 itemId 与开抢时间
+        const grabItemId = String(incomingTask.target?.itemId || '').trim();
+        if (!/^\d{6,}$/.test(grabItemId)) return sendJson(res, 400, { error: 'grab 模式必须提供纯数字 itemId' });
+        if (!(fireAt > 0)) return sendJson(res, 400, { error: 'grab 模式必须提供开抢时间 fireAtEpochMs' });
+      }
+
       const task = {
-        taskId: incomingTask.taskId || `t-${incomingTask.mode || 'test'}-${Date.now()}`,
+        taskId: incomingTask.taskId || `t-${mode}-${Date.now()}`,
         platform: 'damai',
-        mode: incomingTask.mode || 'test',
+        mode,
         target: {
           name: incomingTask.target?.name || config.project?.name || '大麦演练项目',
           itemId: incomingTask.target?.itemId || (config.project?.projectId ? String(config.project.projectId) : ''),
@@ -804,17 +1288,83 @@ const server = http.createServer(async (req, res) => {
           viewer: rawViewers[0] || '',
           viewers: rawViewers,
           count: ticketCount,
+          expectKeywords: Array.isArray(incomingTask.target?.expectKeywords)
+            ? incomingTask.target.expectKeywords.map((k) => String(k).trim().slice(0, 24)).filter(Boolean).slice(0, 6)
+            : [],
         },
         timing: {
-          fireAtEpochMs: incomingTask.timing?.fireAtEpochMs || 0,
+          fireAtEpochMs: fireAt,
           leadMs: incomingTask.timing?.leadMs || config.timingEngine?.leadMs || 40,
+          highFreqLeadMs: clampInt(incomingTask.timing?.highFreqLeadMs, 300, 10000, 1000),
         },
       };
+      if (mode === 'grab') {
+        // 白名单 + clamp: 控制台能调的全部点击参数在这里落闸 (未提供则给默认)
+        const ig = incomingTask.grab || {};
+        const calib = (ig.calibScreen && Number.isFinite(Number(ig.calibScreen.w)) && Number.isFinite(Number(ig.calibScreen.h)))
+          ? { w: Math.round(Number(ig.calibScreen.w)), h: Math.round(Number(ig.calibScreen.h)) }
+          : null;
+        const gapMin = clampInt(ig.gapMinMs, 0, 1000, 55);   // 间隔可到 0 (由节拍反解得出)
+        const pressMin = clampInt(ig.pressMinMs, 0, 300, 38);
+        const rateMin = clampInt(ig.rateMin, 1, 20, 8);      // 节拍下限 (击/秒)
+        task.grab = {
+          dryRun: !!ig.dryRun,
+          selfTest: !!ig.selfTest,
+          hammer: !!ig.hammer,
+          button: validXY(ig.button),
+          submit: validXY(ig.submit),
+          calibScreen: calib,
+          rateMin,
+          rateMax: Math.max(rateMin, clampInt(ig.rateMax, 1, 20, 12)),   // 硬上限 20 击/秒
+          chainMs: clampInt(ig.chainMs, 3000, 60000, 12000),
+          maxChainMs: clampInt(ig.maxChainMs, 3000, 60000, 12000),
+          humanMs: clampInt(ig.humanMs, 500, 20000, 2400),
+          rehearsalMs: clampInt(ig.rehearsalMs, 1000, 60000, 4000),
+          gapMinMs: gapMin,
+          gapMaxMs: Math.max(gapMin, clampInt(ig.gapMaxMs, 0, 2000, 85)),
+          pressMinMs: pressMin,
+          pressMaxMs: Math.max(pressMin, clampInt(ig.pressMaxMs, 0, 400, 56)),
+          jitterPx: clampInt(ig.jitterPx, 0, 24, 3),
+          jitterXPx: clampInt(ig.jitterXPx !== undefined ? ig.jitterXPx : ig.jitterPx, 0, 24, 3),
+          jitterYPx: clampInt(ig.jitterYPx !== undefined ? ig.jitterYPx : ig.jitterPx, 0, 24, 3),
+          autoRefresh: !!ig.autoRefresh,   // 开售前自动刷新 (默认关)
+          firstTapTries: clampInt(ig.firstTapTries, 1, 5, 3),
+          firstTapTimeoutMs: clampInt(ig.firstTapTimeoutMs, 200, 3000, 700),
+        };
+      }
       const result = dispatchTask(task, body.deviceId);
       return sendJson(res, 200, { status: 'dispatched', ...result, task });
     } catch (e) {
       return sendJson(res, 400, { error: e.message });
     }
+  }
+
+  /* ---- 停止手机端脚本 (局域网一键, 不用碰手机) ---- */
+  if (pathname === '/api/device/stop-agent' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const devId = String(body.deviceId || '').trim() || [...devices.keys()][0];
+      const dev = devices.get(devId);
+      if (!dev) return sendJson(res, 404, { error: '设备不在线（可能已经停掉了）' });
+      dev.stopRequested = true;
+      log(`[停止指令] 已登记 → 设备 ${devId}（下一次心跳下发, 最多 4 秒）`);
+      return sendJson(res, 200, { status: 'pending', deviceId: devId, note: '手机最多 4 秒内收到并退出脚本' });
+    } catch (e) { return sendJson(res, 500, { error: e.message }); }
+  }
+
+  /* ---- 局域网更新手机脚本 (免数据线: 手机自己从 /agent/main.js 下载并覆盖) ---- */
+  if (pathname === '/api/device/update-script-lan' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const devId = String(body.deviceId || '').trim() || [...devices.keys()][0];
+      const dev = devices.get(devId);
+      if (!dev) return sendJson(res, 404, { error: '设备不在线（手机浏览器也可直接打开 /agent/main.js 下载）' });
+      let localSize = 0;
+      try { localSize = fs.statSync(AGENT_SCRIPT).size; } catch (eS) { /* 忽略 */ }
+      dev.selfUpdateRequested = true;
+      log(`[自更新] 已登记 → 设备 ${devId}（电脑端脚本 ${Math.round(localSize / 1024)}KB）`);
+      return sendJson(res, 200, { status: 'pending', deviceId: devId, localSize, note: '手机最多 4 秒内开始下载并覆盖本地脚本, 随后自动重启' });
+    } catch (e) { return sendJson(res, 500, { error: e.message }); }
   }
 
   /* ---- 手机脚本下载（局域网更新用：手机浏览器打开 /agent/main.js 即可下载） ---- */

@@ -1,7 +1,7 @@
 /**
  * =====================================================================
  * QG-Agent 移动端全功能免依赖抢购引擎 (AutoJs6 / AutoX 独立全功能单文件版)
- * 生成时间: 2026-10-09T04:05:57.309Z
+ * 生成时间: 2026-10-09T10:39:20.128Z
  * 零 require 依赖，兼容任何目录直接运行 (彻底根除 jvm-npm 相对路径抛错)
  * =====================================================================
  */
@@ -143,8 +143,10 @@ var TimeSync = {
      * @param {number} targetEpochMs 目标开火绝对时间戳 (平台时间)
      * @param {number} leadMs 提前量 (通常 30~50ms 抵消事件注入延迟)
      * @param {function} fireCallback 到点回调
+     * @param {function} shouldAbort 可选: 返回 true 表示收到手动终止指令, 放弃击发
+     * @returns {boolean} true=已击发; false=被终止未击发
      */
-    waitToFire: function(targetEpochMs, leadMs, fireCallback) {
+    waitToFire: function(targetEpochMs, leadMs, fireCallback, shouldAbort) {
         var offset = this.cachedOffset;
         var triggerLocalEpoch = targetEpochMs - offset - leadMs;
         var now = java.lang.System.currentTimeMillis();
@@ -152,8 +154,12 @@ var TimeSync = {
 
         console.log("【倒计时启动】距离击发还剩: " + deltaMs + "ms (已扣除 lead: " + leadMs + "ms, offset: " + offset + "ms)");
 
-        // 远距离休眠，让出 CPU
+        // 远距离休眠，让出 CPU; 每轮检查手动终止 (倒计时可能长达数分钟, 必须能中途取消)
         while (deltaMs > 250) {
+            if (typeof shouldAbort === "function" && shouldAbort()) {
+                console.log("【倒计时终止】收到手动终止指令, 放弃击发");
+                return false;
+            }
             var sleepTime = Math.min(deltaMs - 200, 1000);
             sleep(sleepTime);
             now = java.lang.System.currentTimeMillis();
@@ -169,12 +175,19 @@ var TimeSync = {
             // CPU 微自旋，绝对准点出膛
         }
 
+        // 自旋结束、击发前最后一判 (临界保护)
+        if (typeof shouldAbort === "function" && shouldAbort()) {
+            console.log("【倒计时终止】临界段收到手动终止指令, 放弃击发");
+            return false;
+        }
+
         // 准点执行
         var firedAt = java.lang.System.currentTimeMillis();
         console.log("【准点击发】实际击发物理本地时间: " + firedAt);
         if (typeof fireCallback === "function") {
             fireCallback();
         }
+        return true;
     }
 };
 
@@ -257,6 +270,7 @@ var AnchorFire = {
     /**
      * T0 临界击发：单次物理触摸注入 (热路径速度优先, 抖动保留防指纹)
      * 注意: 只注入一次触摸! (旧版 click()+press() 连发两次是双击 bug)
+     * 失败原因不再静默: press 通道不成功时立即降级 click 通道, 仍失败则明确告警
      * @returns {boolean}
      */
     fire: function() {
@@ -266,15 +280,21 @@ var AnchorFire = {
             console.log("【击发出膛】注入物理坐标: (" + jx + ", " + jy + ")");
             try {
                 if (typeof press === "function") {
-                    return press(jx, jy, 30);
+                    var okP = press(jx, jy, 30);
+                    // 严格判断: 只有明确返回 false 才视为未注入并降级; true/undefined 均按"已注入"处理
+                    // (不确定返回语义时绝不重复点击 — 防双击 bug 回归)
+                    if (okP !== false) return okP;
+                    console.warn("【击发警告】press 通道明确未注入 (false), 立即降级 click 通道");
                 }
-            } catch (eP) {}
+            } catch (eP) {
+                console.warn("【击发警告】press 注入异常: " + (eP ? (eP.message || eP) : "未知") + ", 降级 click 通道");
+            }
             try {
                 if (typeof click === "function") {
                     return click(jx, jy);
                 }
             } catch (eC) {
-                console.error("【击发失败】触摸注入失败: " + eC.message);
+                console.error("【击发失败】触摸注入失败: " + (eC ? (eC.message || eC) : "未知") + " — 需要人工接管!");
             }
             return false;
         } else {
@@ -310,8 +330,12 @@ var AnchorFire = {
 var Transport = {
     hubUrls: [
         "http://127.0.0.1:3120"      // USB (adb reverse) 首选: 最稳定
-        // 局域网地址：由 hub.conf（PC 部署时写入）或自动扫描补充
+        // 局域网地址：由 hub.conf（PC 部署时写入）追加在后面（2026-10-09: 修掉"局域网被插到队首、
+        // 结果插着数据线也永远走 WiFi"的问题 —— 现在按"有线优先, 没有才 WiFi"）
     ],
+    USB_URL: "http://127.0.0.1:3120",
+    USB_PROBE_TIMEOUT_MS: 1200,      // 探测超时短一点: 没插线就立刻回落, 不拖慢启动
+    USB_PROBE_CACHE_MS: 15000,       // 探测结果缓存 15s, 避免频繁探测
     activeHubUrl: null,
     deviceId: null,
     heartbeatTimer: null,
@@ -319,6 +343,7 @@ var Transport = {
     consecutiveHeartbeatFailures: 0,
     taskState: "idle",
     currentTaskId: null,
+    cancelRequestedTaskId: null, // 中枢请求取消的任务 (经心跳响应回带; 任务执行期间唯一可靠的下行通道)
 
     init: function(customHubUrl) {
         // 读取 PC 部署时自动写入的 hub.conf (含最新局域网 IP, 多行多地址)
@@ -326,9 +351,9 @@ var Transport = {
             var confPath = "/sdcard/qg-agent/hub.conf";
             if (files.exists(confPath)) {
                 var savedUrls = String(files.read(confPath)).split(/[\n\r]+/).map(function(s) { return s.trim(); }).filter(Boolean);
-                for (var i = savedUrls.length - 1; i >= 0; i--) {
+                for (var i = 0; i < savedUrls.length; i++) {
                     if (savedUrls[i].indexOf("http") === 0 && this.hubUrls.indexOf(savedUrls[i]) < 0) {
-                        this.hubUrls.unshift(savedUrls[i]);
+                        this.hubUrls.push(savedUrls[i]);   // 追加在 USB 之后: 有线优先
                     }
                 }
                 if (savedUrls.length > 0) {
@@ -353,17 +378,56 @@ var Transport = {
     },
 
     /**
-     * 探测可用 Hub 节点（优先 Wi-Fi，失败切 USB）
+     * 探测数据线通道 (adb reverse → 127.0.0.1:3120)。
+     * 有线通道不受 WiFi 休眠/抖动影响, 是"闲置后第一个请求慢"的根治办法。
+     * @param {boolean} force 任务开始时强制重探 (绕过缓存)
      */
-    detectHub: function() {
+    probeUsb: function(force) {
+        var t = 0;
+        try { t = java.lang.System.currentTimeMillis(); } catch (eT) { t = Date.now(); }
+        if (!force && this._usbProbedAt && (t - this._usbProbedAt) < this.USB_PROBE_CACHE_MS) return !!this._usbAlive;
+        this._usbProbedAt = t;
+        try {
+            var res = http.get(this.USB_URL + "/health", { timeout: this.USB_PROBE_TIMEOUT_MS });
+            this._usbAlive = !!(res && res.statusCode === 200);
+            if (res && res.body) { try { res.body.close(); } catch (e1) {} }
+            console.log("【通道】USB 探测 " + (this._usbAlive ? ("✓ 数据线可用 " + this.USB_URL) : "✘ 不可用 → 回落 WiFi"));
+        } catch (e2) {
+            this._usbAlive = false;
+            console.log("【通道】USB 探测 ✘ " + e2.message + " → 回落 WiFi");
+        }
+        return !!this._usbAlive;
+    },
+
+    /** 通道校准: 实测一次往返耗时 (给端侧节拍换算用, 让"预估真实节拍"有据可依) */
+    calibrateChannel: function() {
+        var w = this.warmChannel(1500);
+        return { ok: !!(w && w.ok), ms: (w && w.ms) || 0, url: this.activeHubUrl || "" };
+    },
+
+    /**
+     * 探测可用 Hub 节点 —— 2026-10-09 修正为「数据线优先」:
+     *   ① 先探 USB (adb reverse 127.0.0.1) → 通了就用它
+     *   ② 没插线/隧道没建好 → 回落 hub.conf 的局域网地址
+     *   ③ 都不通 → 同网段扫描 → 兜底
+     */
+    detectHub: function(forceUsb) {
+        if (this.probeUsb(forceUsb)) {
+            var prevUsb = this.activeHubUrl;
+            this.activeHubUrl = this.USB_URL;
+            console.log("【通信建立】走数据线 (USB 反向): " + this.USB_URL);
+            if (prevUsb !== this.USB_URL || !this.hasRegistered) this.hello();
+            return true;
+        }
         for (var i = 0; i < this.hubUrls.length; i++) {
             var url = this.hubUrls[i];
+            if (url === this.USB_URL) continue;   // USB 已在上面探过, 不重复等 2.5s
             try {
                 var res = http.get(url + "/health", { timeout: 2500 });
                 if (res && res.statusCode === 200) {
                     var prevUrl = this.activeHubUrl;
                     this.activeHubUrl = url;
-                    console.log("【通信建立】成功连接至 Hub: " + url);
+                    console.log("【通信建立】成功连接至 Hub (WiFi): " + url);
                     // 重新连上后立即发起 hello 重新登记
                     if (prevUrl !== url || !this.hasRegistered) {
                         this.hello();
@@ -517,10 +581,38 @@ var Transport = {
                 battery: bat,
                 charging: chg,
                 accessibility: isAcc,
+                scriptSize: this.scriptSize(),   // 本脚本体积: 中枢据此判断"手机脚本是否最新"
                 ts: java.lang.System.currentTimeMillis()
             };
             var res = http.postJson(this.activeHubUrl + "/api/device/heartbeat", payload, { timeout: 3000 });
             var ok = res && res.statusCode === 200;
+            if (ok && res.body) {
+                // 解析响应体: 中枢可能捎带「取消当前任务」指令 (任务执行期间唯一可靠下行通道)
+                try {
+                    var hbJson = JSON.parse(res.body.string());
+                    if (hbJson && hbJson.control) {
+                        var ctl = hbJson.control;
+                        if (ctl.cancelTaskId) {
+                            if (this.cancelRequestedTaskId !== ctl.cancelTaskId) {
+                                console.warn("【终止指令】收到中枢取消请求: " + ctl.cancelTaskId);
+                            }
+                            this.cancelRequestedTaskId = ctl.cancelTaskId;
+                        }
+                        // 停止整个脚本 (2026-10-09: 电脑端一键让手机 Agent 下线, 不用碰手机)
+                        if (ctl.stopAgent && !this.stopRequested) {
+                            this.stopRequested = true;
+                            console.warn("【停止指令】收到中枢「停止脚本」请求, 本轮心跳后退出");
+                        }
+                        // 局域网自更新 (2026-10-09: 免数据线更新手机脚本)
+                        if (ctl.selfUpdate && !this.updateRequested) {
+                            this.updateRequested = true;
+                            console.warn("【自更新】收到中枢「更新脚本」请求, 下次 tick 执行");
+                        }
+                    }
+                } catch (eH) {
+                    // 解析失败不影响心跳本身
+                }
+            }
             if (res && res.body) {
                 try { res.body.close(); } catch (e) {}
             }
@@ -628,14 +720,137 @@ var Transport = {
      * 请求 PC 通过 ADB 注入一次点击 (Agent 无障碍手势失效时的可靠兜底,
      * 实测大麦 SKU 票档滚轮等自绘控件会无视 dispatchGesture 但响应 adb input)
      */
-    adbTap: function(x, y) {
+    adbTap: function(x, y, timeoutMs) {
         if (!this.activeHubUrl) this.detectHub();
         if (!this.activeHubUrl) return false;
         try {
-            var res = http.postJson(this.activeHubUrl + "/api/adb/tap", { x: Math.round(x), y: Math.round(y) }, { timeout: 2500 });
+            var res = http.postJson(this.activeHubUrl + "/api/adb/tap", { x: Math.round(x), y: Math.round(y) }, { timeout: timeoutMs || 2500 });
             return res && res.statusCode === 200;
         } catch (e) {
             return false;
+        }
+    },
+
+    /**
+     * 通道预检 (T0 前探一次路): 确认中枢可达 + 唤醒链路, 返回耗时。
+     * 首击是全场最关键的一下 —— 网络抖动时宁可提前知道, 也不要到点才发现打不出去。
+     */
+    warmChannel: function(timeoutMs) {
+        var t0 = Date.now();
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return { ok: false, ms: Date.now() - t0, reason: "无可达中枢" };
+        try {
+            var res = http.get(this.activeHubUrl + "/api/status", { timeout: timeoutMs || 1500 });
+            var ok = !!(res && res.statusCode === 200);
+            if (res && res.body) { try { res.body.close(); } catch (eC) {} }
+            return { ok: ok, ms: Date.now() - t0, reason: ok ? "" : ("HTTP " + (res ? res.statusCode : "无响应")) };
+        } catch (e) {
+            return { ok: false, ms: Date.now() - t0, reason: e.message };
+        }
+    },
+
+    /**
+     * 预置击发: 把 T0 那一发 "排在中枢时钟上" (atHubMs 走中枢时间轴 —— 就是任务里的 fireAtEpochMs)。
+     * 到点由中枢直接写常驻 shell (3ms 级), 不依赖 T0 那一瞬的网络往返。
+     */
+    armTap: function(x, y, atHubMs, tag, timeoutMs) {
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return { ok: false, reason: "无可达中枢" };
+        try {
+            var res = http.postJson(this.activeHubUrl + "/api/adb/arm-tap",
+                { x: Math.round(x), y: Math.round(y), atMs: Math.round(atHubMs), tag: String(tag || "arm") },
+                { timeout: timeoutMs || 1500 });
+            var ok = !!(res && res.statusCode === 200);
+            if (res && res.body) { try { res.body.close(); } catch (eC) {} }
+            return { ok: ok, reason: ok ? "" : ("HTTP " + (res ? res.statusCode : "无响应")) };
+        } catch (e) {
+            return { ok: false, reason: e.message };
+        }
+    },
+
+    disarmTap: function(tag, timeoutMs) {
+        if (!this.activeHubUrl) return { ok: false, reason: "无可达中枢" };
+        try {
+            var res = http.postJson(this.activeHubUrl + "/api/adb/disarm-tap", { tag: String(tag || "") }, { timeout: timeoutMs || 1200 });
+            var ok = !!(res && res.statusCode === 200);
+            if (res && res.body) { try { res.body.close(); } catch (eD) {} }
+            return { ok: ok };
+        } catch (e) {
+            return { ok: false, reason: e.message };
+        }
+    },
+
+    /** 查预置击发的实际落点偏差 (中枢侧记录, 用于验收) */
+    armStatus: function(tag, timeoutMs) {
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return null;
+        try {
+            var res = http.get(this.activeHubUrl + "/api/adb/arm-status?tag=" + encodeURIComponent(String(tag || "")), { timeout: timeoutMs || 1500 });
+            if (!res || res.statusCode !== 200 || !res.body) return null;
+            var txt = res.body.string();
+            try { res.body.close(); } catch (eS) {}
+            return JSON.parse(txt);
+        } catch (e) {
+            return null;
+        }
+    },
+    /** 让中枢存一份诊断证据 (界面树 + 截图), 返回文件路径清单; 失败返回 null (不阻塞主流程) */
+    diagSnapshot: function(tag, timeoutMs) {
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return null;
+        try {
+            var res = http.postJson(this.activeHubUrl + "/api/adb/diag-snapshot", { tag: String(tag || "diag") }, { timeout: timeoutMs || 25000 });
+            if (!res || res.statusCode !== 200 || !res.body) return null;
+            var txt = res.body.string();
+            try { res.body.close(); } catch (eC) {}
+            return JSON.parse(txt);
+        } catch (e) {
+            return null;
+        }
+    },
+
+    /** 本脚本文件路径 (自更新写入目标) */
+    myScriptPath: function() {
+        try {
+            var src = engines.myEngine().source;
+            if (src && String(src).slice(-3) === ".js" && files.exists(String(src))) return String(src);
+        } catch (e1) {}
+        return "/sdcard/qg-agent/main.js";
+    },
+
+    /** 本脚本体积 (字节; 上报给中枢做"是否最新"对账) */
+    scriptSize: function() {
+        if (this._scriptSize !== undefined) return this._scriptSize;
+        try { this._scriptSize = files.size(this.myScriptPath()); } catch (e) { this._scriptSize = 0; }
+        return this._scriptSize;
+    },
+
+    /**
+     * 局域网自更新: 从中枢 GET /agent/main.js 覆盖本地脚本 (2026-10-09)
+     * 免数据线 —— 手机只要能连到中枢(USB 反向或 WiFi)即可。
+     */
+    selfUpdate: function() {
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return { ok: false, reason: "无可达中枢" };
+        var url = this.activeHubUrl + "/agent/main.js";
+        var target = this.myScriptPath();
+        try {
+            console.log("【自更新】下载 " + url);
+            var res = http.get(url, { timeout: 40000 });
+            if (!res || res.statusCode !== 200 || !res.body) {
+                return { ok: false, reason: "HTTP " + (res ? res.statusCode : "无响应") };
+            }
+            var bytes = res.body.bytes();
+            try { res.body.close(); } catch (eC) {}
+            if (!bytes || !bytes.length) return { ok: false, reason: "下载内容为空" };
+            files.writeBytes(target, bytes);
+            var sz = 0;
+            try { sz = files.size(target); } catch (eS) {}
+            this._scriptSize = sz;
+            console.log("【自更新】已写入 " + target + " (" + Math.round(sz / 1024) + " KB, 下载 " + Math.round(bytes.length / 1024) + " KB)");
+            return { ok: sz > 1000, size: sz, path: target };
+        } catch (e) {
+            return { ok: false, reason: e.message };
         }
     },
 
@@ -648,6 +863,52 @@ var Transport = {
         try {
             var res = http.postJson(this.activeHubUrl + "/api/adb/swipe", { x1: x1, y1: y1, x2: x2, y2: y2, ms: ms || 300 }, { timeout: 3000 });
             return res && res.statusCode === 200;
+        } catch (e) {
+            return false;
+        }
+    },
+
+    /**
+     * 请求 PC 中枢用"深度链接"打开大麦商品页
+     * (2026-10-09 真机实证: damai://detail + itemId extra → ProjectDetailActivity;
+     *  原始分享链接 /shows/item.html 无法路由到 App, 由中枢统一改写并兜底多入口)
+     * @returns {{ok:boolean, hit?:string, tried?:string[], error?:string}}
+     */
+    adbOpenItem: function(itemId) {
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return { ok: false, error: "中枢离线" };
+        try {
+            var res = http.postJson(this.activeHubUrl + "/api/adb/open-item", { itemId: String(itemId) }, { timeout: 30000 });
+            if (res && res.statusCode === 200) {
+                var body = {};
+                try { body = JSON.parse(res.body.string()); } catch (eB) {}
+                return { ok: true, hit: body.hit || "", tried: body.tried || [] };
+            }
+            var msg = "";
+            try { msg = JSON.parse(res.body.string()).error || ""; } catch (eM) {}
+            return { ok: false, error: msg || ("HTTP " + (res ? res.statusCode : "?")) };
+        } catch (e) {
+            return { ok: false, error: String(e.message || e) };
+        }
+    },
+
+    /**
+     * 请求 PC 中枢连发点击 (连点链/提交风暴共用; fire-and-forget, 单次 HTTP 摊薄多枚 tap)
+     * @param {{x:number,y:number,count?:number,gapMs?:number,jitter?:number,pressMs?:number}} opts
+     */
+    adbTapBurst: function(opts) {
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return false;
+        try {
+            var res = http.postJson(this.activeHubUrl + "/api/adb/tap-burst", {
+                x: Math.round(opts.x),
+                y: Math.round(opts.y),
+                count: opts.count || 1,
+                gapMs: opts.gapMs || 0,
+                jitter: opts.jitter || 0,
+                pressMs: opts.pressMs || 0
+            }, { timeout: 2500 });
+            return !!(res && res.statusCode === 200);
         } catch (e) {
             return false;
         }
@@ -716,6 +977,14 @@ var MonitorAdapter = {
     },
 
     /**
+     * 是否收到针对该任务的手动终止指令 (指令经心跳回带, 见 transport.js)
+     */
+    _isCancelled: function(task) {
+        return !!(typeof Transport !== "undefined" && Transport.cancelRequestedTaskId &&
+                  Transport.cancelRequestedTaskId === task.taskId);
+    },
+
+    /**
      * 运行监控循环
      * @param {object} task 任务对象
      * @param {function} onStatusChange 状态变化回调
@@ -725,6 +994,11 @@ var MonitorAdapter = {
         var intervalMs = 15000; // 默认 15 秒低频轮询
 
         while (true) {
+            if (this._isCancelled(task)) {
+                console.log("【余票盯梢终止】收到手动终止指令, 退出监控循环");
+                break;
+            }
+
             var currentStatus = this.checkTicketStatus();
             console.log("【余票探测】当前状态: " + currentStatus);
 
@@ -736,8 +1010,11 @@ var MonitorAdapter = {
                 }
             }
 
-            // 遵守频率纪律，休眠
-            sleep(intervalMs);
+            // 遵守频率纪律，休眠; 分片 1 秒一片, 便于终止指令最快 1 秒内生效
+            for (var s = 0; s < Math.ceil(intervalMs / 1000); s++) {
+                if (this._isCancelled(task)) break;
+                sleep(1000);
+            }
         }
     }
 };
@@ -805,6 +1082,7 @@ function gaussianRandom(mean, stdev) {
 /**
  * 拟人化单次物理点按 (只注入一次触摸!)
  * - 坐标 ±3px 高斯微抖动, 按压 35~55ms, 规避完全几何中心的机器指纹
+ * - 返回 true=手势已注入; false=通道异常未注入 (异常不再静默, 打日志便于排查)
  */
 function humanPress(cx, cy) {
     if (!(cx > 0 && cy > 0)) return false;
@@ -814,11 +1092,22 @@ function humanPress(cx, cy) {
     if (dwellTime < 32) dwellTime = 32;
     if (dwellTime > 58) dwellTime = 58;
     try {
-        if (typeof press === "function") return press(jx, jy, dwellTime);
-    } catch (eP) {}
+        if (typeof press === "function") {
+            var r1 = press(jx, jy, dwellTime);
+            return r1 !== false; // 只有明确 false 才算未注入 (undefined/true 均按已注入)
+        }
+        console.warn("[手势] press 函数不存在, 尝试 click 通道");
+    } catch (eP) {
+        console.warn("[手势] press 注入失败: " + (eP ? (eP.message || eP) : "未知异常"));
+    }
     try {
-        if (typeof click === "function") return click(jx, jy);
-    } catch (eC) {}
+        if (typeof click === "function") {
+            var r2 = click(jx, jy);
+            return r2 !== false;
+        }
+    } catch (eC) {
+        console.warn("[手势] click 注入失败: " + (eC ? (eC.message || eC) : "未知异常"));
+    }
     return false;
 }
 
@@ -830,11 +1119,21 @@ function fastPress(cx, cy) {
     var jx = Math.round(gaussianRandom(cx, 3.0));
     var jy = Math.round(gaussianRandom(cy, 2.6));
     try {
-        if (typeof press === "function") return press(jx, jy, 30);
-    } catch (eP) {}
+        if (typeof press === "function") {
+            var r3 = press(jx, jy, 30);
+            return r3 !== false;
+        }
+    } catch (eP) {
+        console.warn("[手势] fastPress 注入失败: " + (eP ? (eP.message || eP) : "未知异常"));
+    }
     try {
-        if (typeof click === "function") return click(jx, jy);
-    } catch (eC) {}
+        if (typeof click === "function") {
+            var r4 = click(jx, jy);
+            return r4 !== false;
+        }
+    } catch (eC) {
+        console.warn("[手势] fastPress click 注入失败: " + (eC ? (eC.message || eC) : "未知异常"));
+    }
     return false;
 }
 
@@ -971,33 +1270,399 @@ function now() {
 }
 
 /**
- * 关键点击: AutoJs6 手势优先, 无效果时自动走 PC-ADB 注入兜底
+ * 查找控件但「立即返回」: 命中即给节点, 没有就立刻 null (不等待)。
+ * 用于'先秒查一次, 没有再短超时兜底'的高频路径, 替代动辄 150~800ms 的 findOne(超时)。
+ */
+function quickFind(selector) {
+    try { return selector.findOnce(); } catch (eQF) { return null; }
+}
+
+/**
+ * 轮询等待助手: 条件命中立即返回 true (替代"死等固定时长"的核心提速手段)。
+ * 超时上限保持原耐心预算 —— 页面慢时该等还是等, 只是不再浪费"命中后仍死等"的时间。
+ * 每轮顺带检查手动终止标记 (被终止时提前返回 false, 由外层复核)。
+ */
+function waitUntil(cond, timeoutMs, pollMs, tid) {
+    var t0 = now();
+    var step = pollMs || 150;
+    while (now() - t0 < timeoutMs) {
+        if (isCancelled(tid)) return false;
+        try { if (cond()) return true; } catch (eW) {}
+        sleep(step);
+    }
+    return false;
+}
+
+/** 是否收到针对该任务的手动终止指令 (取消指令经心跳响应回带, 见 transport.js) */
+function isCancelled(tid) {
+    if (!tid) return false;
+    return !!(typeof Transport !== "undefined" && Transport.cancelRequestedTaskId &&
+              Transport.cancelRequestedTaskId === tid);
+}
+
+/**
+ * 关键点击: PC-ADB 注入优先, 手机端手势兜底。
+ * 2026-10-09 真机对照实证 (vivo V2405A + 大麦):
+ *   大麦「立即预订/购买」等底栏主按钮为自绘控件 —— 手机端无障碍手势 (dispatchGesture)
+ *   注入无任何效果 (press 返回 true 但界面零变化), 而同点位 PC-ADB (input tap) 注入
+ *   立即生效 (实测: 打开了选票面板 NcovSkuActivity)。普通文字控件 (卡片/标签) 手势正常。
+ *   故关键点击统一"ADB 优先" —— 又快 (省掉手势+等待的 1~2s) 又可靠;
+ *   中枢离线时自动回退手机端手势 (普通控件仍可用)。
+ * 通道顺序:
+ *   ① PC-ADB 注入 (需中枢在线)
+ *   ② 手机端无障碍手势 (中枢离线时的唯一通道)
+ *   ③ ADB 补点一次 (偶发丢点)
+ * 失败原因分三类上报, 不再含糊。
  * @param {function} verify 点击后的效果校验 (返回 true 表示生效)
  * @param {string} label 日志标签
  */
 function criticalTap(cx, cy, verify, label, tid) {
-    // 通道 1: AutoJs6 无障碍手势
-    humanPress(cx, cy);
-    sleep(450);
-    if (verify && verify()) return true;
-    // 通道 2: 控件 ACTION_CLICK 由调用方自行尝试; 这里直接 ADB 注入兜底
-    sendLog(tid || "damai", "[兜底] " + (label || "点击") + " 手势未生效, 切换 ADB 注入通道 (" + cx + "," + cy + ")");
-    var ok = Transport.adbTap(cx, cy);
-    if (ok) {
+    var tag = tid || "damai";
+    var name = label || "点击";
+    // 通道 1 (优先): PC-ADB 注入 —— 对自绘按钮唯一有效的通道
+    var adbAvailable = Transport.adbTap(cx, cy);
+    if (adbAvailable) {
         sleep(450);
-        if (!verify || verify()) {
-            sendLog(tid || "damai", "[兜底] ✔ ADB 注入生效");
-            return true;
-        }
+        if (!verify || verify()) return true;
+        sendLog(tag, "[点击] " + name + " ADB 注入后页面未变化, 尝试手机端手势通道 (" + cx + "," + cy + ")");
+    } else {
+        sendLog(tag, "[点击] " + name + " ADB 通道不可用 (中枢离线?), 使用手机端手势通道 (" + cx + "," + cy + ")");
     }
-    // 通道 3: 再试一次 ADB (偶发丢点)
-    Transport.adbTap(cx, cy);
-    sleep(500);
-    return !verify || verify();
+    // 通道 2 (兜底): 手机端无障碍手势
+    var injected = humanPress(cx, cy);
+    if (injected) {
+        sleep(450);
+        if (verify && verify()) return true;
+        sendLog(tag, "[点击] " + name + " 手势已注入但页面未变化 (疑似自绘控件拒绝手势)");
+    } else {
+        sendLog(tag, "[点击] " + name + " 手势未注入成功 (无障碍通道异常)");
+    }
+    // 通道 3: ADB 再补一枪 (偶发丢点; 仅当 ADB 通道此前可用)
+    if (adbAvailable) {
+        Transport.adbTap(cx, cy);
+        sleep(500);
+    }
+    var finalOk = !verify || verify();
+    if (!finalOk) {
+        sendLog(tag, "[点击] ✘ " + name + " 双通道均未生效 (当前页面: " + (typeof currentActivity === "function" ? currentActivity() : "?") + ")");
+    }
+    return finalOk;
+}
+
+/* ================================================================
+ * grab (链接抢购) 模块级工具 —— 2026-10-09 重写
+ * ================================================================ */
+
+/** 整数抖动 */
+function jitterInt(base, amp) {
+    return Math.round(base + (Math.random() * 2 - 1) * amp);
+}
+
+/** 当前 Activity 名 (安全版) */
+function safeActivity() {
+    try { return String(currentActivity() || ""); } catch (e) { return ""; }
+}
+
+/** 只读检查: 目标节点中心 (命中即返回, 零等待) */
+function quickCenter(selector) {
+    var n = quickFind(selector);
+    if (n && n.bounds) {
+        try {
+            var b = n.bounds();
+            return { x: Math.floor(b.centerX()), y: Math.floor(b.centerY()) };
+        } catch (e) {}
+    }
+    return null;
+}
+
+/**
+ * 读「开售可击发」信号 —— 突变检测的唯一判据（2026-10-09 17:17 实战失败后重做）。
+ * 失败根因（预约态 dump 与开售后 dump 的差集实证）:
+ *   底栏按钮是**自绘控件**, 无障碍树里只有一个静态占位容器
+ *   (trade_project_detail_purchase_status_bar_container_fl), 开售前后它的
+ *   childCount/text/desc/clickable/中心**完全不变**;
+ *   tv_left_main_text / btn_buy / btn_buy_view 在详情页**根本不存在**。
+ *   → 老信号(容器五属性 + 那三个 id)在两态下字符串一模一样, **永远不可能触发**。
+ * 真正会变的是**页面结构**: 预约态的一整套「预约组件」在开售那一刻集体消失 ——
+ *   6 个候选(全部经真机 dump 实证为"预约态独有"):
+ *   id_new_project_normal_count_down_layout 倒计时整块 / id_project_count_sell_time 开抢时间文本 /
+ *   id_project_ticket_remind_me 预约提醒 / id_project_count_down_remind_layout 提醒条 /
+ *   id_project_count_down_layout 倒计时内层 / id_project_count_down_bg 倒计时背景
+ *   (注: tour_city_select_bg / tour_city_name 虽在预约态出现, 但实测**开售后仍存在**, 故不作候选)
+ * ⚠️ 干扰项: id_new_project_grab_tip_text 装的是"大麦全速护航中…"这类**滚动词条**,
+ *   「预售 | 本商品为预售…」也是滚动提示 —— 绝不作为信号。
+ * 出手判定见 signalChangedFrom(): 预约结构成片消失 = 开售。
+ */
+function readButtonSignal() {
+    // ① 预约结构（开售那一刻集体消失）—— 主信号。候选放宽到 6 个, 只为"一定要识别到"：
+    //    全部来自真机 dump 实证的"预约态独有"节点, 开售时成片消失。
+    var pCd = 0, pSell = 0, pRemind = 0, pRemind2 = 0, pCd2 = 0, pTour = 0;
+    var sellText = "-";
+    try { pCd = id("cn.damai:id/id_new_project_normal_count_down_layout").findOnce() ? 1 : 0; } catch (eL1) {}
+    try {
+        var sn = id("cn.damai:id/id_project_count_sell_time").findOnce();
+        if (sn) { pSell = 1; if (sn.text) sellText = String(sn.text()).slice(0, 20); }
+    } catch (eL2) {}
+    try { pRemind = id("cn.damai:id/id_project_ticket_remind_me").findOnce() ? 1 : 0; } catch (eL3) {}
+    try { pRemind2 = id("cn.damai:id/id_project_count_down_remind_layout").findOnce() ? 1 : 0; } catch (eL4) {}
+    try { pCd2 = id("cn.damai:id/id_project_count_down_layout").findOnce() ? 1 : 0; } catch (eL5) {}
+    try { pTour = id("cn.damai:id/id_project_count_down_bg").findOnce() ? 1 : 0; } catch (eL6) {}   // 倒计时背景
+    // 原 6 号候选 tour_city_select_bg 已剔除: 实测**开售后仍然存在**(非预约独有), 留着会误导。
+    var presaleFlags = [pCd, pSell, pRemind, pRemind2, pCd2, pTour];
+
+    // ② 底栏自绘容器（占位视图：只作日志与兜底，不是主信号）
+    var tvText = "-";
+    var tv = null;
+    try { tv = id("cn.damai:id/tv_left_main_text").findOnce(); } catch (e1) {}
+    if (tv && tv.text) { try { tvText = String(tv.text()); } catch (e2) {} }
+
+    var hasContainer = false;
+    var center = null;
+    var cAttrs = "-";
+    var c = null;
+    try { c = id("cn.damai:id/trade_project_detail_purchase_status_bar_container_fl").findOnce(); } catch (e3) {}
+    if (c) {
+        hasContainer = true;
+        var cc = 0, ct = "", cd = "", ck = false;
+        try { cc = c.childCount ? c.childCount() : 0; } catch (e4) {}
+        try { ct = c.text ? String(c.text()) : ""; } catch (e5) {}
+        try { cd = c.contentDescription ? String(c.contentDescription()) : ""; } catch (e6) {}
+        try { ck = c.clickable ? !!c.clickable() : false; } catch (e7) {}
+        if (c.bounds) {
+            try {
+                var b = c.bounds();
+                center = { x: Math.floor(b.centerX()), y: Math.floor(b.centerY()) };
+            } catch (e8) {}
+        }
+        cAttrs = cc + ":" + ct + ":" + cd + ":" + (ck ? 1 : 0) + ":" + (center ? (center.x + "x" + center.y) : "-");
+    }
+
+    var buy = 0, buv = 0;
+    try { buy = id("cn.damai:id/btn_buy").findOnce() ? 1 : 0; } catch (e9) {}
+    try { buv = id("cn.damai:id/btn_buy_view").findOnce() ? 1 : 0; } catch (e10) {}
+
+    return {
+        sig: "presale=" + presaleFlags.join("") + "|sell=" + sellText +
+             "|tv=" + tvText + "|c=" + cAttrs + "|buy=" + buy + "|buv=" + buv,
+        presale: presaleFlags,
+        hasContainer: hasContainer,
+        cAttrs: cAttrs,
+        center: center,
+        tvText: tvText,
+        buy: buy,
+        buv: buv,
+        sellText: sellText,
+        cdOn: pCd,
+        sellOn: pSell,
+        remindOn: pRemind
+    };
+}
+
+/**
+ * 是否该出手。base = 锚定时刻的**信号快照对象**（不是字符串）。
+ *   ① 预约结构成片消失（6 个候选里 ≥2 项 从有到无）= 开售的结构标志
+ *   ② 底栏容器属性变化（兜底，别的页面变体可能靠它）
+ *   ③ 无容器时：tv / btn_buy / btn_buy_view 出现
+ * 若锚定时就没有预约结构（页面本就是开售态），①不成立，只能靠兜底（锚定阶段会打告警）。
+ */
+function signalChangedFrom(s, base) {
+    if (!base) return false;
+    var a = base.presale || [], b = s.presale || [];
+    var baseCount = 0, gone = 0;
+    for (var i = 0; i < a.length; i++) {
+        if (a[i]) baseCount++;
+        if (a[i] && !b[i]) gone++;
+    }
+    // 结构信号只在"页面确实还读到"(底栏容器在)时才算数 —— 否则整页读失败会伪装成"开售"
+    if (s.hasContainer && gone >= 2) return true;
+    if (s.hasContainer && baseCount === 1 && gone === 1) return true;
+    if (s.hasContainer && base.cAttrs && base.cAttrs !== "-" && s.cAttrs !== base.cAttrs) return true;
+    if (!s.hasContainer && (s.tvText !== "-" || s.buy || s.buv)) return true;
+    return false;
+}
+
+/** ADB 优先按击 (自绘控件只认 ADB); pressMs>=30 时用"同点按压"模拟人类按压时长 */
+function adbPress(x, y, pressMs) {
+    if (pressMs && pressMs >= 30) {
+        // 抖动统一由调用方 (humanTap) 施加, 这里不再叠加, 否则 jitterPx 参数会失真
+        return Transport.adbTapBurst({ x: x, y: y, count: 1, pressMs: pressMs, jitter: 0 });
+    }
+    return Transport.adbTap(x, y);
+}
+
+/* ===== 抢购点击参数 (控制台可下发; 未下发用默认) =====
+ * 2026-10-09 用户口径: ① 首击只求"快且有效", 且**绝不盲点** ② 后续连点必须有抖动, 1 秒不超过 20 下
+ * 前台只填"最少/最多 几下每秒", 间隔与按压由 deriveCadence() 反解 (见下)。 */
+var CLICK_CFG = {
+    rateMin: 8, rateMax: 12,          // 连点节拍 (击/秒), 硬上限 20
+    rttMs: 40,                        // 手机↔电脑实测往返 (通道预检实测; 缺省 40)
+    gapMinMs: 55, gapMaxMs: 85,       // 连点间隔抖动区间 (ms) —— 由 deriveCadence 反解
+    pressMinMs: 38, pressMaxMs: 56,   // 按压时长抖动区间 (ms) —— 由 deriveCadence 反解
+    jitterPx: 3,                      // 落点抖动 (px) —— 兼容旧字段: 未分轴时两轴都用它
+    jitterXPx: 3,                     // 落点抖动 X 轴 (px)
+    jitterYPx: 3,                     // 落点抖动 Y 轴 (px)
+    chainMs: 12000,                   // 抖动连点链总时长 (ms)
+    rehearsalMs: 4000,                // 彩排连点时长 (ms)
+    watchHardCapMs: 60000,            // 盯梢兜底闸门 (ms, 1 分钟; 用户 2026-10-09 拍板): 只为防任务永久挂住, 不是"观察窗"
+    autoRefresh: false,               // 【默认关】开售前自动刷新页面 (T-30s / T-12s 各一次), 解决"页面状态陈旧"
+    firstTapTries: 3,                 // 首击最多发几发
+    firstTapTimeoutMs: 700            // 首击单发超时 (ms)
+};
+
+/**
+ * 第三重兜底：页面文案扫描（2026-10-09 加入）
+ * ================================================================
+ * 为什么需要它: 结构信号盯的是"预约组件集体消失", 万一哪天大麦把结构改了(换 id/改布局),
+ *   结构信号会失效; 而"页面文案"是最贴近用户肉眼判断的东西(主流开源脚本也正是盯按钮/文案)。
+ * 怎么做到便宜: **一次遍历**取全部 TextView 文本(约 10~40ms), 在 JS 里做字符串匹配,
+ *   不是每个关键词查一次(那样 7 次要几百 ms)。因此它**降频跑**(每 ~100ms 一次), 只当兜底。
+ * 判据(必须"变化方向"正确, 否则会误报):
+ *   · 正向: 开售后才该出现的字样 **从无到有**（立即购买/立即预订/立即抢购/选座购买/缺货登记/已售罄/无票）
+ *   · 反向: 预约态才有的字样（"…开抢"）**从有到无**
+ *   注意: 「预售 | 本商品为预售…」「大麦全速护航中…」这类**滚动词条已排除**, 不作判据。
+ */
+var LIVE_POS_TEXTS = [];   // ★ 真机实测(2026-10-09, 开售后页): 立即购买/立即预订/缺货登记 等**一个都读不到**
+                           //   —— 它们和按钮一样是画在画布上的。故此处留空: 不再依赖未实证的判据。
+var LIVE_NEG_TEXTS = ["开抢"];   // 反方向(有实证): 预约态那行"…开抢"开售后从可读文本里消失
+                                 // 注: 它与第一重的 sell 节点是同一条证据, 但**按文字找、不按 id 找** —— 改版换 id 时仍有效
+
+function scanTexts() {
+    var joined = "";
+    try {
+        var list = className("android.widget.TextView").find();
+        if (list) {
+            var parts = [];
+            for (var i = 0; i < list.length; i++) {
+                try { var t = list[i].text(); if (t) parts.push(String(t)); } catch (eI) {}
+            }
+            joined = parts.join(" | ");
+        }
+    } catch (eF) {}
+    var pos = 0, neg = 0;
+    for (var p = 0; p < LIVE_POS_TEXTS.length; p++) { if (joined.indexOf(LIVE_POS_TEXTS[p]) >= 0) pos++; }
+    for (var n = 0; n < LIVE_NEG_TEXTS.length; n++) { if (joined.indexOf(LIVE_NEG_TEXTS[n]) >= 0) neg++; }
+    return { pos: pos, neg: neg, sample: joined.slice(0, 100) };
+}
+
+/** 文案是否"朝开售方向"变了 (正向字样出现 / 开抢字样消失) */
+function textSignalFired(cur, base) {
+    if (!base) return false;
+    return (cur.pos > base.pos) || (cur.neg < base.neg);
+}
+
+function cfgInt(v, lo, hi, dft) {
+    var n = parseInt(v, 10);
+    if (!isFinite(n)) return dft;
+    return Math.max(lo, Math.min(hi, n));
+}
+
+/**
+ * 节拍反解: 由"目标击数/秒"算出间隔与按压 (纯函数, 单测直取)。
+ *   单发路径每击墙钟 = max(间隔 + 往返, 按压 + input进程开销)
+ *   → press = clamp(min(56, T-30), 6, 56); gap = max(0, T - rtt)   (T = 1000/目标)
+ * @returns {{gapMinMs,gapMaxMs,pressMinMs,pressMaxMs,estPerSec,ceilingPerSec}}
+ */
+function deriveCadence(rateMin, rateMax, rttMs) {
+    var OVERHEAD = 30;                       // 设备端 input 进程开销经验值 (ms)
+    var rMin = cfgInt(rateMin, 1, 20, 8);
+    var rMax = Math.max(rMin, cfgInt(rateMax, 1, 20, 12));
+    var rtt = cfgInt(rttMs, 0, 2000, 40);
+    var Tmax = 1000 / rMax;                  // 最快时的每击预算
+    var Tmin = 1000 / rMin;                  // 最慢时的每击预算
+    var pressMax = Math.max(6, Math.min(56, Math.floor(Tmax - OVERHEAD)));
+    var pressMin = Math.max(6, pressMax - 18);
+    var pAvg = (pressMin + pressMax) / 2;
+    var gapMin = Math.max(0, Math.floor(Tmax - rtt));
+    var gapMax = Math.max(gapMin, Math.floor(Tmin - rtt));
+    var cycle = Math.max(gapMin + rtt, pAvg + OVERHEAD);
+    return {
+        gapMinMs: gapMin,
+        gapMaxMs: gapMax,
+        pressMinMs: pressMin,
+        pressMaxMs: pressMax,
+        estPerSec: Math.max(1, Math.round(1000 / Math.max(1, cycle))),
+        ceilingPerSec: Math.floor(1000 / Math.max(1, rtt))
+    };
+}
+
+/** 用任务里的 grab 参数覆盖默认 (每个任务开始前调一次); rttMs 为实测往返 (可选) */
+function applyClickCfg(g, rttMs) {
+    if (!g) return;
+    if (rttMs > 0) CLICK_CFG.rttMs = cfgInt(rttMs, 0, 2000, CLICK_CFG.rttMs);
+    CLICK_CFG.jitterXPx = cfgInt(g.jitterXPx !== undefined ? g.jitterXPx : g.jitterPx, 0, 24, CLICK_CFG.jitterXPx);
+    CLICK_CFG.jitterYPx = cfgInt(g.jitterYPx !== undefined ? g.jitterYPx : g.jitterPx, 0, 24, CLICK_CFG.jitterYPx);
+    CLICK_CFG.jitterPx = Math.max(CLICK_CFG.jitterXPx, CLICK_CFG.jitterYPx);   // 旧字段保持"最大轴"语义
+    CLICK_CFG.chainMs = cfgInt(g.chainMs, 3000, 60000, CLICK_CFG.chainMs);
+    CLICK_CFG.rehearsalMs = cfgInt(g.rehearsalMs, 1000, 60000, CLICK_CFG.rehearsalMs);
+    CLICK_CFG.firstTapTries = cfgInt(g.firstTapTries, 1, 5, CLICK_CFG.firstTapTries);
+    CLICK_CFG.firstTapTimeoutMs = cfgInt(g.firstTapTimeoutMs, 200, 3000, CLICK_CFG.firstTapTimeoutMs);
+    CLICK_CFG.autoRefresh = !!g.autoRefresh;   // 开售前自动刷新 (默认关)
+    // 节拍: 优先用"击数/秒"反解; 未提供才退回旧的 gap/press 显式值 (兼容回滚)
+    if (g.rateMin || g.rateMax) {
+        var cad = deriveCadence(g.rateMin, g.rateMax, CLICK_CFG.rttMs);
+        CLICK_CFG.gapMinMs = cad.gapMinMs;
+        CLICK_CFG.gapMaxMs = cad.gapMaxMs;
+        CLICK_CFG.pressMinMs = cad.pressMinMs;
+        CLICK_CFG.pressMaxMs = cad.pressMaxMs;
+    } else {
+        CLICK_CFG.gapMinMs = cfgInt(g.gapMinMs, 0, 1000, CLICK_CFG.gapMinMs);
+        CLICK_CFG.gapMaxMs = Math.max(CLICK_CFG.gapMinMs, cfgInt(g.gapMaxMs, 0, 2000, CLICK_CFG.gapMaxMs));
+        CLICK_CFG.pressMinMs = cfgInt(g.pressMinMs, 0, 300, CLICK_CFG.pressMinMs);
+        CLICK_CFG.pressMaxMs = Math.max(CLICK_CFG.pressMinMs, cfgInt(g.pressMaxMs, 0, 400, CLICK_CFG.pressMaxMs));
+    }
+}
+
+/** 坐标按标定分辨率换算到本机 (保底坐标才是写死的; 自动锚定取实时容器中心, 与分辨率无关) */
+function scaleToDevice(pt, task) {
+    if (!pt) return pt;
+    var cal = task && task.grab ? task.grab.calibScreen : null;
+    if (!cal || !(cal.w > 0) || !(cal.h > 0)) return pt;
+    var dw = 0, dh = 0;
+    try { dw = device.width || 0; dh = device.height || 0; } catch (eD) { return pt; }
+    if (!(dw > 0) || !(dh > 0) || (cal.w === dw && cal.h === dh)) return pt;
+    return {
+        x: Math.round(pt.x * dw / cal.w),
+        y: Math.round(pt.y * dh / cal.h),
+        scaledFrom: cal.w + "x" + cal.h + " -> " + dw + "x" + dh
+    };
+}
+
+/**
+ * 拟人单点: 落点抖动 ±jitterPx + 按压时长在 [pressMinMs, pressMaxMs] 内抖动, 只发 1 枚。
+ * 节拍由调用方用 humanGapMs() 控制 —— 关键约束: 1 秒内不超过 20 下。
+ */
+function humanTap(x, y, ampX, ampY) {
+    var ax = (ampX === undefined) ? CLICK_CFG.jitterXPx : ampX;
+    var ay = (ampY === undefined) ? CLICK_CFG.jitterYPx : ampY;
+    var span = CLICK_CFG.pressMaxMs - CLICK_CFG.pressMinMs;
+    var press = CLICK_CFG.pressMinMs + (span > 0 ? Math.floor(Math.random() * (span + 1)) : 0);
+    return adbPress(jitterInt(x, ax), jitterInt(y, ay), press);
+}
+
+/** 连点节拍 (抖动间隔): [gapMinMs, gapMaxMs]; gapMinMs 下限 50ms 即 20 击/秒的硬上限 */
+function humanGapMs() {
+    var span = CLICK_CFG.gapMaxMs - CLICK_CFG.gapMinMs;
+    return CLICK_CFG.gapMinMs + (span > 0 ? Math.floor(Math.random() * (span + 1)) : 0);
+}
+
+/**
+ * 最近 1 秒窗口内的最大击数 (连点节拍合规证据)
+ */
+function peakPerSec(stamps) {
+    var peak = 0;
+    for (var i = 0; i < stamps.length; i++) {
+        var c = 0;
+        for (var j = i; j < stamps.length && stamps[j] - stamps[i] < 1000; j++) c++;
+        if (c > peak) peak = c;
+    }
+    return peak;
 }
 
 var DamaiAdapter = {
     packageName: "cn.damai",
+
+    /** 应用控制台下发的点击参数 (runner 在任务开始时调一次) */
+    applyClickCfg: function(g) { applyClickCfg(g); },
 
     /* ================================================================
      * 0. 弹窗与广告自愈 (开屏广告 / 首页弹窗 / 须知 / 权限 / 努力刷新)
@@ -1006,7 +1671,7 @@ var DamaiAdapter = {
         var handled = false;
         try {
             // 1. 开屏广告 (GKD 真机快照实证 id)
-            var adSkip = id("cn.damai:id/homepage_advert_pb").findOne(200);
+            var adSkip = quickFind(id("cn.damai:id/homepage_advert_pb"));
             if (adSkip) {
                 console.log("[弹窗自愈] 关闭开屏广告");
                 humanClick(adSkip);
@@ -1014,7 +1679,7 @@ var DamaiAdapter = {
                 handled = true;
             }
             // 2. 首页弹窗广告
-            var popupClose = id("cn.damai:id/homepage_popup_window_close_btn").findOne(200);
+            var popupClose = quickFind(id("cn.damai:id/homepage_popup_window_close_btn"));
             if (popupClose) {
                 console.log("[弹窗自愈] 关闭首页弹窗广告");
                 humanClick(popupClose);
@@ -1022,8 +1687,8 @@ var DamaiAdapter = {
                 handled = true;
             }
             // 3. 业务提示/须知弹窗 (确定/我知道了/知道啦/好的)
-            var btnNotice = id("cn.damai:id/damai_theme_dialog_confirm_btn").findOne(200) ||
-                            safeTextMatches(/^(确定|我知道了|知道啦|好的|知道了)$/).findOne(200);
+            var btnNotice = quickFind(id("cn.damai:id/damai_theme_dialog_confirm_btn")) ||
+                            quickFind(safeTextMatches(/^(确定|我知道了|知道啦|好的|知道了)$/));
             if (btnNotice) {
                 console.log("[弹窗自愈] 确认业务提示弹窗");
                 humanClick(btnNotice);
@@ -1031,7 +1696,7 @@ var DamaiAdapter = {
                 handled = true;
             }
             // 4. 系统权限弹窗
-            var btnPerm = text("允许").findOne(150) || text("本次使用时允许").findOne(150) || text("始终允许").findOne(150);
+            var btnPerm = quickFind(text("允许")) || quickFind(text("本次使用时允许")) || quickFind(text("始终允许"));
             if (btnPerm) {
                 console.log("[弹窗自愈] 允许系统权限请求");
                 humanClick(btnPerm);
@@ -1039,7 +1704,7 @@ var DamaiAdapter = {
                 handled = true;
             }
             // 5. 加载失败「努力刷新」
-            var refresh = safeTextMatches(/努力刷新/).findOne(150);
+            var refresh = quickFind(safeTextMatches(/努力刷新/));
             if (refresh) {
                 console.log("[弹窗自愈] 点击努力刷新");
                 humanClick(refresh);
@@ -1136,26 +1801,23 @@ var DamaiAdapter = {
             try { app.launch(this.packageName); } catch (e2) {}
         }
 
-        // 等待回到前台 (最多 8s)
-        for (var i = 0; i < 16; i++) {
-            sleep(500);
-            if (this.isDamaiForeground()) {
-                sleep(400);
-                this.dismissPopupsLoop(2);
-                var st2 = this.detectPage();
-                sendLog(tid, "[唤起] 大麦已回前台, 页面: " + st2.page);
-                return true;
-            }
+        // 等待回到前台 (最多 8s, 命中即走)
+        var self = this;
+        var backFront = waitUntil(function() { return self.isDamaiForeground(); }, 8000, 300, tid);
+        if (backFront) {
+            sleep(400);
+            this.dismissPopupsLoop(2);
+            var st2 = this.detectPage();
+            sendLog(tid, "[唤起] 大麦已回前台, 页面: " + st2.page);
+            return true;
         }
         sendLog(tid, "[唤起] 警告: 大麦未能回到前台 (可能被系统限制), 再试 launchApp");
         try { app.launch(this.packageName); } catch (e3) {}
-        for (var j = 0; j < 10; j++) {
-            sleep(500);
-            if (this.isDamaiForeground()) {
-                sleep(600);
-                this.dismissPopupsLoop(3); // 冷启动后可能有开屏广告+弹窗
-                return true;
-            }
+        var backFront2 = waitUntil(function() { return self.isDamaiForeground(); }, 5000, 300, tid);
+        if (backFront2) {
+            sleep(600);
+            this.dismissPopupsLoop(3); // 冷启动后可能有开屏广告+弹窗
+            return true;
         }
         return false;
     },
@@ -1247,6 +1909,7 @@ var DamaiAdapter = {
 
     /** 通过搜索进入演出详情 (实测控件链路: 首页搜索钮 → 输入 → 建议 → 结果/城市卡 → 详情) */
     searchAndEnter: function(name, tid) {
+        if (isCancelled(tid)) return false;
         var hints = this.extractSearchHints(name);
         sendLog(tid, "[搜索] 关键字: " + hints.keyword + " 城市: " + (hints.city || "(未知)"));
 
@@ -1264,46 +1927,56 @@ var DamaiAdapter = {
                             className: "cn.damai.homepage.MainActivity",
                             flags: ["activity_reorder_to_front", "activity_new_task", "activity_single_top"]
                         });
-                        sleep(1200);
+                        sleep(800);
                     } catch (eH) {}
                     this.dismissPopupsLoop(2);
                 }
             }
             // 确保在「首页」Tab (大麦 Tab 状态跨启动保留, 可能停在「我的」)
-            var homeTab = text("首页").findOne(600) || id("cn.damai:id/tab_text").text("首页").findOne(500);
+            var homeTab = quickFind(text("首页")) || quickFind(id("cn.damai:id/tab_text").text("首页"));
             if (homeTab && homeTab.bounds) {
                 var htb = homeTab.bounds();
                 if (htb.top > device.height * 0.8) { // 底部 Tab 栏才点
                     humanClick(homeTab);
-                    sleep(700);
+                    sleep(400);
                     this.dismissPopups();
                 }
             }
             // 2. 点击首页搜索入口 (多代 id 兜底, 2026-10 实测: pioneer_homepage_header_search_btn)
-            var searchEntry = id("cn.damai:id/pioneer_homepage_header_search_btn").findOne(1200) ||
-                              id("cn.damai:id/homepage_header_search_layout").findOne(1000) ||
-                              id("cn.damai:id/search_text").findOne(800) ||
-                              id("cn.damai:id/channel_search_text").findOne(800) ||
-                              id("cn.damai:id/homepage_header_search_btn").findOne(800) ||
-                              text("搜索").findOne(800);
+            //    轮询式查找: 任一选择器命中立即继续 (替代 6 段串行 findOne 最长 5.4s)
+            var searchEntry = null;
+            waitUntil(function() {
+                searchEntry = quickFind(id("cn.damai:id/pioneer_homepage_header_search_btn")) ||
+                              quickFind(id("cn.damai:id/homepage_header_search_layout")) ||
+                              quickFind(id("cn.damai:id/search_text")) ||
+                              quickFind(id("cn.damai:id/channel_search_text")) ||
+                              quickFind(id("cn.damai:id/homepage_header_search_btn")) ||
+                              quickFind(text("搜索"));
+                return !!searchEntry;
+            }, 5000, 250, tid);
             if (!searchEntry) {
                 sendLog(tid, "[搜索] 未找到首页搜索入口");
                 return false;
             }
             humanClick(searchEntry);
-            sleep(1000);
+            // 等待搜索页输入框出现 (命中即走)
+            waitUntil(function() {
+                return !!(quickFind(id("cn.damai:id/header_search_v2_input")) || quickFind(className("android.widget.EditText")));
+            }, 2500, 200, tid);
         }
 
         // 3. 输入关键字 (必须走 IME input() 路径: setText 不触发联想建议)
-        var inputEt = id("cn.damai:id/header_search_v2_input").findOne(2500) ||
-                      className("android.widget.EditText").findOne(1500);
+        var inputEt = quickFind(id("cn.damai:id/header_search_v2_input")) ||
+                      quickFind(className("android.widget.EditText")) ||
+                      id("cn.damai:id/header_search_v2_input").findOne(600) ||
+                      className("android.widget.EditText").findOne(400);
         if (!inputEt) {
             sendLog(tid, "[搜索] 未找到搜索输入框");
             return false;
         }
         // 清空已有内容
         try {
-            var delBtn = id("cn.damai:id/header_search_v2_input_delete").findOne(500);
+            var delBtn = quickFind(id("cn.damai:id/header_search_v2_input_delete"));
             if (delBtn) humanClick(delBtn);
         } catch (eD) {}
         try { inputEt.setText(""); } catch (eC) {}
@@ -1312,12 +1985,15 @@ var DamaiAdapter = {
         try { input(hints.keyword); } catch (eI) {
             try { inputEt.setText(hints.keyword); } catch (eS) {}
         }
-        sleep(1400);
 
-        // 4. 点击匹配的搜索建议 (tv_word), 否则第一条
+        // 4. 点击匹配的搜索建议 (tv_word), 否则第一条; 等建议出现即可, 不等满
         var clicked = false;
-        var suggNodes = id("cn.damai:id/tv_word").find();
-        if (suggNodes && suggNodes.length > 0) {
+        var suggNodes = [];
+        var suggReady = waitUntil(function() {
+            suggNodes = id("cn.damai:id/tv_word").find();
+            return suggNodes && suggNodes.length > 0;
+        }, 1500, 200, tid);
+        if (suggReady && suggNodes && suggNodes.length > 0) {
             var target = null;
             var core = hints.keyword.replace(/[0-9\s年月日]/g, "");
             for (var si = 0; si < suggNodes.length; si++) {
@@ -1333,11 +2009,21 @@ var DamaiAdapter = {
             // 无建议: 直接回车搜索
             try { inputEt.imeEnter(); } catch (eE) { try { inputEt.setText(hints.keyword + "\n"); } catch (eE2) {} }
         }
-        sleep(2000);
+        // 等待结果页出现 (命中即走, 替代固定 2s)
+        waitUntil(function() {
+            return DamaiAdapter.detectPage().page === "detail" ||
+                   !!quickFind(id("cn.damai:id/tv_city")) ||
+                   !!quickFind(id("cn.damai:id/ll_search_item")) ||
+                   !!quickFind(id("cn.damai:id/ll_project_right"));
+        }, 2200, 250, tid);
         this.dismissPopups();
 
         // 5. 结果页: 城市卡 (巡演) 或 普通结果项 → 进入详情
         for (var w = 0; w < 8; w++) {
+            if (isCancelled(tid)) {
+                sendLog(tid, "[搜索] 收到终止指令, 中止搜索");
+                return false;
+            }
             if (this.detectPage().page === "detail") {
                 sendLog(tid, "[搜索] ✔ 已进入演出详情页");
                 return true;
@@ -1355,7 +2041,8 @@ var DamaiAdapter = {
                 if (!hit) hit = cityNodes[0]; // 兜底第一城
                 sendLog(tid, "[搜索] 点击巡演城市卡: " + (hit.text ? hit.text() : "(第一城)"));
                 clickAncestor(hit, 3);
-                sleep(2200);
+                // 等待详情页出现 (命中即走, 替代固定 2.2s)
+                waitUntil(function() { return DamaiAdapter.detectPage().page === "detail"; }, 2200, 250, tid);
                 this.dismissPopups();
                 if (this.detectPage().page === "detail") {
                     sendLog(tid, "[搜索] ✔ 已进入目标城市演出详情页");
@@ -1363,14 +2050,16 @@ var DamaiAdapter = {
                 }
                 continue;
             }
-            // 5b. 普通结果项
-            var item = id("cn.damai:id/ll_search_item").findOne(600) ||
-                       id("cn.damai:id/ll_project_right").findOne(600) ||
-                       id("cn.damai:id/tv_project_tourName").findOne(600);
+            // 5b. 普通结果项 (秒查 + 短兜底)
+            var item = quickFind(id("cn.damai:id/ll_search_item")) ||
+                       quickFind(id("cn.damai:id/ll_project_right")) ||
+                       quickFind(id("cn.damai:id/tv_project_tourName")) ||
+                       id("cn.damai:id/ll_search_item").findOne(400) ||
+                       id("cn.damai:id/ll_project_right").findOne(300);
             if (item) {
                 sendLog(tid, "[搜索] 点击搜索结果项");
                 clickAncestor(item, 3);
-                sleep(1800);
+                waitUntil(function() { return DamaiAdapter.detectPage().page === "detail"; }, 1800, 250, tid);
                 this.dismissPopups();
             } else {
                 sleep(600);
@@ -1416,20 +2105,23 @@ var DamaiAdapter = {
             return true;
         }
 
-        // 等待详情页加载完成 (骨架屏消失, 最多 8s)
-        for (var lw = 0; lw < 8; lw++) {
-            if (!id("cn.damai:id/id_new_skeleton").exists()) break;
-            sleep(800);
-            this.dismissPopups();
-        }
+        // 等待详情页加载完成 (骨架屏消失, 最多 6.4s, 一消失就继续)
+        waitUntil(function() { return !id("cn.damai:id/id_new_skeleton").exists(); }, 6400, 300, tid);
+        this.dismissPopups();
 
-        // 验证抽屉就位 (点击 → 排队/验证码处理 → 重试, 最多 12 轮)
-        for (var w = 0; w < 12; w++) {
+        // 验证抽屉就位 (点击 → 排队/验证码处理 → 重试)
+        // 轮数 4: 实测 1 次正确点击即可打开选票面板; 保留少量重试容错, 缺货/未开售场景快速失败
+        for (var w = 0; w < 4; w++) {
+            if (isCancelled(tid)) {
+                sendLog(tid, "[开抽屉] 收到终止指令, 停止重试");
+                sendStep(tid, "open_sku", "failed", "手动终止");
+                return false;
+            }
             this.dismissPopups();
 
             // 排队/加载失败态: 点击「努力刷新」
-            var retryBtn = id("cn.damai:id/state_view_retry_btn").findOne(300) ||
-                           safeTextMatches(/努力刷新/).findOne(300);
+            var retryBtn = quickFind(id("cn.damai:id/state_view_retry_btn")) ||
+                           quickFind(safeTextMatches(/努力刷新/));
             if (retryBtn) {
                 sendLog(tid, "[开抽屉] 页面排队/加载中, 点击努力刷新 (第 " + (w + 1) + " 轮)");
                 humanClick(retryBtn);
@@ -1447,19 +2139,22 @@ var DamaiAdapter = {
                 return true;
             }
 
-            // 每轮点击底栏购买入口 (手势 + ADB 双通道)
-            var btnBuy = id("cn.damai:id/tv_left_main_text").findOne(600);
+            // 每轮点击底栏购买入口; 坐标来源 (2026-10-09 真机实测校准):
+            //   购票状态栏容器 (trade_project_detail_purchase_status_bar_container_fl) 的中心
+            //   = 底栏主按钮 (立即预订/购票/缺货登记, 自绘控件) 的中心 —— 实测该点位可打开选票面板
+            var container = quickFind(id("cn.damai:id/trade_project_detail_purchase_status_bar_container_fl")) ||
+                            id("cn.damai:id/trade_project_detail_purchase_status_bar_container_fl").findOne(400);
             var cx, cy;
-            if (btnBuy && btnBuy.bounds) {
-                var bb = btnBuy.bounds();
-                cx = Math.floor(bb.centerX());
-                cy = Math.floor(bb.centerY());
+            if (container && container.bounds) {
+                var cb = container.bounds();
+                cx = Math.floor(cb.centerX());
+                cy = Math.floor(cb.centerY());
             } else {
-                var container = id("cn.damai:id/trade_project_detail_purchase_status_bar_container_fl").findOne(800);
-                if (container && container.bounds) {
-                    var cb = container.bounds();
-                    cx = Math.floor(cb.centerX());
-                    cy = Math.floor(cb.centerY());
+                var btnBuy = quickFind(id("cn.damai:id/tv_left_main_text"));
+                if (btnBuy && btnBuy.bounds) {
+                    var bb = btnBuy.bounds();
+                    cx = Math.floor(bb.centerX());
+                    cy = Math.floor(bb.centerY());
                 } else {
                     cx = Math.floor(device.width * 0.63);
                     cy = Math.floor(device.height * 0.962);
@@ -1473,10 +2168,23 @@ var DamaiAdapter = {
                 }
                 return false;
             }, "购买入口", tid);
-            sleep(1000);
+            // 点击后响应式等待: 抽屉一就位立即返回, 不浪费整轮重试
+            if (waitUntil(function() {
+                    return DamaiAdapter.isInSkuDrawer() || DamaiAdapter.isInOrderConfirmPage();
+                }, 1000, 200, tid)) {
+                sendLog(tid, "[开抽屉] 选票页已就位 (第 " + (w + 1) + " 轮点击后命中)");
+                sendStep(tid, "open_sku", "done");
+                return true;
+            }
         }
-        sendStep(tid, "open_sku", "failed", "抽屉未在超时内就位");
-        sendLog(tid, "[开抽屉] 超时失败! 当前: " + this.detectPage().activity);
+        var soldOutHint = "";
+        try {
+            if (text("缺货").exists() || textContains("缺货登记").exists()) {
+                soldOutHint = " —— 页面含「缺货」标识, 该场次当前无票, 没有选票面板可开 (属正常状态, 非点击故障)";
+            }
+        } catch (eSO) {}
+        sendStep(tid, "open_sku", "failed", "选票面板未出现" + (soldOutHint ? " (场次缺货)" : ""));
+        sendLog(tid, "[开抽屉] 未出现选票面板 (已尝试点击购买入口 4 轮)。当前: " + this.detectPage().activity + soldOutHint);
         return false;
     },
 
@@ -1488,6 +2196,7 @@ var DamaiAdapter = {
     selectSku: function(task) {
         var tid = task ? task.taskId : "task";
         sendStep(tid, "select_sku", "start");
+        if (isCancelled(tid)) return false;
         var targetSession = task.target && task.target.session;
         var targetPrice = task.target && task.target.priceText;
         var ticketCount = (task.target && task.target.count) || 1;
@@ -1503,6 +2212,7 @@ var DamaiAdapter = {
         };
         var sessionOk = false;
         for (var att = 0; att < 4 && !sessionOk; att++) {
+            if (isCancelled(tid)) break;
             if (priceSectionVisible()) { sessionOk = true; break; }
             var performItems = id("cn.damai:id/ll_perform_item").find();
             if (!performItems || performItems.length === 0) {
@@ -1525,6 +2235,7 @@ var DamaiAdapter = {
         // ---- 4.2 票档: 在票档流式布局中选目标或首个在售项 ---- */
         var tierOk = false;
         for (var tatt = 0; tatt < 3 && !tierOk; tatt++) {
+            if (isCancelled(tid)) break;
             var priceItems = id("cn.damai:id/ll_perform_item").find();
             // 票档项 = 票档区内的 ll_perform_item (通过 y 坐标 > 票档标题 过滤)
             var priceTitle = id("cn.damai:id/tv_price_name").findOne(400);
@@ -1607,10 +2318,22 @@ var DamaiAdapter = {
 
     /** 点击抽屉「确定」进入确认订单页 (手势 + ADB 双通道 + 到位验证) */
     confirmSkuDrawer: function(tid, urgent) {
-        var btn = id("cn.damai:id/btn_buy").findOne(urgent ? 300 : 800) ||
-                  id("cn.damai:id/btn_buy_view").findOne(urgent ? 300 : 800) ||
-                  text("确定").findOne(urgent ? 300 : 800) ||
+        var btn;
+        if (urgent) {
+            // 抢购热路径: 保持原保守查找节奏不动 (T0 毫秒级关键动作)
+            btn = id("cn.damai:id/btn_buy").findOne(300) ||
+                  id("cn.damai:id/btn_buy_view").findOne(300) ||
+                  text("确定").findOne(300) ||
                   desc("确定").findOne(300);
+        } else {
+            // 演练/普通路径: 秒查优先, 命中即用; 全落空再短兜底
+            btn = quickFind(id("cn.damai:id/btn_buy")) ||
+                  quickFind(id("cn.damai:id/btn_buy_view")) ||
+                  quickFind(text("确定")) ||
+                  quickFind(desc("确定")) ||
+                  id("cn.damai:id/btn_buy").findOne(600) ||
+                  id("cn.damai:id/btn_buy_view").findOne(400);
+        }
         if (!btn) return false;
         var b = btn.bounds();
         var cx = Math.floor(b.centerX());
@@ -1638,11 +2361,16 @@ var DamaiAdapter = {
         sendStep(tid, "order_confirm", "start");
         console.log("[订单确认] 等待进入确认订单页...");
 
+        // 等待订单页 (总预算 6s 不变, 200ms 细粒度: 取消指令响应更快)
         var reached = false;
-        for (var t = 0; t < 15; t++) {
+        for (var t = 0; t < 30; t++) {
+            if (isCancelled(tid)) {
+                sendStep(tid, "order_confirm", "failed", "手动终止");
+                return null;
+            }
             if (this.isInOrderConfirmPage()) { reached = true; break; }
             this.checkCaptcha();
-            sleep(400);
+            sleep(200);
         }
         if (!reached) {
             sendStep(tid, "order_confirm", "failed", "超时未进入确认订单页");
@@ -1665,7 +2393,8 @@ var DamaiAdapter = {
 
         // 需要的观演人数 (提示「仅需选择N位」优先)
         var neededCount = 1;
-        var tipNode = safeTextMatches(/仅需选择.*位|请选择.*位观演人/).findOne(800);
+        var tipNode = quickFind(safeTextMatches(/仅需选择.*位|请选择.*位观演人/)) ||
+                      safeTextMatches(/仅需选择.*位|请选择.*位观演人/).findOne(400);
         if (tipNode) {
             var m = (tipNode.text ? tipNode.text() : "").match(/(?:仅需选择|请选择)\s*(\d+)\s*位/);
             if (m) neededCount = parseInt(m[1], 10);
@@ -1697,8 +2426,14 @@ var DamaiAdapter = {
         }
 
         // 真实提交 (实证节奏: 5 次 x 200ms 重试)
+        // 提交前最后一道终止闸: 收到手动终止指令则放弃提交 (已提交成功的单子无法撤回, 这里尽力拦截)
         var submitBtn = null;
         for (var r = 0; r < 5 && !submitBtn; r++) {
+            if (isCancelled(tid)) {
+                sendLog(tid, "[提交] 收到终止指令, 放弃提交");
+                sendStep(tid, "submit", "failed", "提交前被手动终止");
+                return { outcome: "cancelled", reason: "manual_abort", evidence: "提交前被手动终止, 未下单" };
+            }
             submitBtn = safeTextMatches(/立即提交|提交订单|确认支付|去支付/).findOne(400);
             if (!submitBtn) sleep(200);
         }
@@ -1720,16 +2455,17 @@ var DamaiAdapter = {
      * @returns {string[]} 已选中的观演人姓名
      */
     assembleViewers: function(targetViewers, neededCount, tid) {
-        // 等待观演人列表渲染 (网络加载偶发慢, 最多 15s; 中途轻推列表触发渲染)
-        for (var w = 0; w < 30; w++) {
+        // 等待观演人列表渲染 (网络加载偶发慢; 300ms 细粒度轮询命中即走, 中途轻推列表触发渲染)
+        for (var w = 0; w < 36; w++) {
+            if (isCancelled(tid)) return [];
             if (id("cn.damai:id/text_name").find().length > 0) break;
-            if (w === 8 || w === 18) {
+            if (w === 10 || w === 22) {
                 try {
-                    var rv = id("cn.damai:id/recycler_main").findOne(500);
+                    var rv = id("cn.damai:id/recycler_main").findOne(300);
                     if (rv && rv.scrollForward) rv.scrollForward();
                 } catch (eS) {}
             }
-            sleep(500);
+            sleep(300);
         }
 
         var rows = this.getViewerRows();
@@ -1789,6 +2525,7 @@ var DamaiAdapter = {
         }
         // 勾选名单内目标
         for (var d = 0; d < desired.length && selected.length < neededCount; d++) {
+            if (isCancelled(tid)) break;
             if (selected.indexOf(desired[d]) >= 0) continue;
             var row = this.findRowByNameMasked(rows, desired[d]);
             if (row) {
@@ -1803,6 +2540,7 @@ var DamaiAdapter = {
         // 不足则按列表顺序补位
         rows = this.getViewerRows();
         for (var f = 0; f < rows.length && selected.length < neededCount; f++) {
+            if (isCancelled(tid)) break;
             if (selected.indexOf(rows[f].name) >= 0) continue;
             if (rows[f].checkbox && isChecked(rows[f].checkbox)) {
                 selected.push(rows[f].name);
@@ -2666,36 +3404,582 @@ var DamaiAdapter = {
         return null;
     },
 
-    /**
-     * 高频监测击发 (开售前 1 秒进入):
-     * 在详情页忙轮询购买按钮, 文案从「即将开售/倒计时」变为可购买状态的瞬间立即点击
-     */
-    watchAndFireOnDetail: function(task, fireAtServerMs, tid) {
-        sendLog(tid, "[高频监测] 进入按钮状态高频盯梢模式");
-        var buyStates = /立即购买|立即购票|立即预订|特惠购票|特惠购买|选座购买|立即订购|去抢票/;
-        var pendingStates = /即将开售|即将售|预约|预售|倒计时|缺货登记|售罄|已预约|不可售|即将/;
+    /* ================================================================
+     * 13. 链接抢购 (grab) —— 2026-10-09 重写 (替代旧 watchAndFireOnDetail)
+     *     链接就位 → 页面核对 → 信号锚定 → 对时 → 低频预监视
+     *     → T0-1s 高频突变检测 → 瞬间首击(纯ADB) → 拟人连点链 → 提交风暴
+     * ================================================================ */
 
-        // 最后 1 秒: 高频轮询 (每 ~50ms 一轮)
-        var lastLog = 0;
-        while (true) {
-            var tvMain = null;
-            try { tvMain = id("cn.damai:id/tv_left_main_text").findOne(0); } catch (e) {}
-            if (tvMain) {
-                var t = tvMain.text ? tvMain.text() : "";
-                if (t && buyStates.test(t) && !pendingStates.test(t)) {
-                    var b = tvMain.bounds();
-                    sendLog(tid, "[高频监测] 按钮可购! 文案「" + t + "」→ 立即击发");
-                    fastPress(Math.floor(b.centerX()), Math.floor(b.centerY()));
-                    return true;
+    /** 当前是否已在大麦商品详情页 */
+    grabOnDetailPage: function() {
+        if (safeActivity().indexOf("ProjectDetailActivity") >= 0) return true;
+        return !!quickFind(id("cn.damai:id/trade_project_detail_purchase_status_bar_container_fl"));
+    },
+
+    /** 读详情页标题文本 —— 页面身份的唯一权威（标题里同时含城市与站名，如"…- 贵阳站"） */
+    grabReadTitle: function() {
+        var ids = ["cn.damai:id/info_v2_title_tv1", "cn.damai:id/info_v2_title_tv"];
+        for (var i = 0; i < ids.length; i++) {
+            try {
+                var n = id(ids[i]).findOnce();
+                if (n && n.text) { var t = String(n.text()).trim(); if (t) return t; }
+            } catch (e) {}
+        }
+        return null;
+    },
+
+    /**
+     * 页面核对: 「目标站名 + 关键词」必须命中**标题**。
+     * ★ 2026-10-09 修掉一个会点错商品的 bug: 原来是全页搜字(textContains) —— 但巡演站选择器里
+     *   列着**所有**站名(如"厦门站"), 于是"给厦门站布防、手机却还停在贵阳站页面"也能通过核对,
+     *   脚本就不会跳转、直接在错误商品上蹲守。
+     *   现在只在标题节点里比对; 标题读不到才退化为全页搜字, 并明确上报告警(不再静默)。
+     */
+    grabKeywordsOk: function(task) {
+        var title = this.grabReadTitle();
+        var station = String((task && task.target && task.target.session) || "").trim();
+        var kws = (task && task.target && task.target.expectKeywords) || [];
+        if (title) {
+            // 站名是强判据: 目标站名不在标题里 = 跑错站, 直接否决
+            if (station && title.indexOf(station) < 0) return false;
+            for (var i = 0; i < kws.length; i++) {
+                var kw = String(kws[i] || "").trim();
+                if (!kw) continue;
+                if (title.indexOf(kw) < 0) return false;
+            }
+            return true;
+        }
+        // 退化路径: 标题节点读不到 → 全页搜字(弱校验), 但必须留痕
+        try { Transport.sendEvent(task && task.taskId, "page_id_degraded", { reason: "标题节点读不到, 退回全页搜字(弱校验)" }); } catch (eE) {}
+        if (station) { try { if (!textContains(station).findOnce()) return false; } catch (e2) { return false; } }
+        for (var j = 0; j < kws.length; j++) {
+            var kw2 = String(kws[j] || "").trim();
+            if (!kw2) continue;
+            try { if (!textContains(kw2).findOnce()) return false; } catch (e3) { return false; }
+        }
+        return true;
+    },
+
+    /** 读详情页 "X月X日 HH:MM开抢" 文本 (交叉核对 T0 用, 可选) */
+    grabReadSellTime: function() {
+        try {
+            var n = id("cn.damai:id/id_project_count_sell_time").findOnce();
+            if (n && n.text) return String(n.text());
+        } catch (e) {}
+        return null;
+    },
+
+    /** 阶段0: 链接就位 —— 已在目标页则复用; 否则请求中枢深度链接打开 */
+    grabLocate: function(task, tid) {
+        sendStep(tid, "item_open", "start");
+        var itemId = (task && task.target && task.target.itemId) ? String(task.target.itemId) : "";
+        if (!/^\d{6,}$/.test(itemId)) {
+            sendStep(tid, "item_open", "failed", "itemId 非法");
+            return { ok: false, reason: "itemId 非法" };
+        }
+        if (this.grabOnDetailPage() && this.grabKeywordsOk(task)) {
+            sendLog(tid, "[就位] 已停留在目标商品页, 跳过打开");
+            sendStep(tid, "item_open", "done", "已在目标页");
+            return { ok: true, via: "already" };
+        }
+        var r = Transport.adbOpenItem(itemId);
+        if (!r || !r.ok) {
+            var why = (r && r.error) ? r.error : "中枢离线或 ADB 不可用";
+            sendLog(tid, "[就位] ✘ 链接直达失败: " + why);
+            sendStep(tid, "item_open", "failed", why);
+            Transport.sendEvent(tid, "item_open_fail", { itemId: itemId, reason: why });
+            return { ok: false, reason: why };
+        }
+        var ok = waitUntil(function() { return DamaiAdapter.grabOnDetailPage(); }, 6000, 150, tid);
+        sendStep(tid, "item_open", ok ? "done" : "failed", (r.hit || "") + (ok ? "" : " (打开后未检测到详情页)"));
+        Transport.sendEvent(tid, "item_open_ok", { itemId: itemId, hit: r.hit || "", landed: ok, tried: r.tried || [] });
+        return { ok: ok, via: "deeplink", reason: ok ? "" : "打开后未检测到详情页" };
+    },
+
+    /** 阶段1: 页面核对闸门 (对不上 → 不动作 + 报警) */
+    grabVerify: function(task, tid) {
+        sendStep(tid, "page_verify", "start");
+        var act = safeActivity();
+        var onDetail = act.indexOf("ProjectDetailActivity") >= 0;
+        var kwOk = this.grabKeywordsOk(task);
+        var sellText = this.grabReadSellTime();
+        if (!(onDetail && kwOk)) {
+            sendLog(tid, "[核对] ✘ 页面核对失败 (activity=" + act + ", 关键词=" + (kwOk ? "命中" : "未命中") + ")");
+            sendStep(tid, "page_verify", "failed", "非目标页或关键词未命中");
+            Transport.sendEvent(tid, "page_verify_fail", { act: act, kwOk: kwOk });
+            try { device.vibrate(400); } catch (eV) {}
+            return { ok: false };
+        }
+        sendStep(tid, "page_verify", "done", sellText || "已核对");
+        Transport.sendEvent(tid, "page_verify_ok", { act: act, sellText: sellText });
+        return { ok: true, sellText: sellText };
+    },
+
+    /** 阶段2: 锚定 —— 基线信号 + 按钮坐标 (全部预取, 热路径零查找) */
+    grabAnchor: function(task, verifyInfo, tid) {
+        sendStep(tid, "anchor", "start");
+        var st = readButtonSignal();
+        var pt = null;
+        if (task && task.grab && task.grab.button) pt = scaleToDevice({ x: task.grab.button.x, y: task.grab.button.y }, task);
+        if (!pt && st.center) pt = st.center;
+        if (!pt) {
+            sendStep(tid, "anchor", "failed", "无按钮坐标 (容器缺失且未配置)");
+            return { ok: false };
+        }
+        var mode = st.hasContainer ? "smart" : "blind";
+        if (mode === "blind") {
+            Transport.sendEvent(tid, "anchor_degraded", { sig: st.sig, reason: "未捕到按钮容器, 转盲点模式" });
+            sendLog(tid, "[锚定] ⚠ 未捕到按钮容器, 转盲点模式 (定时 + 保底坐标)");
+        }
+        sendStep(tid, "anchor", "done", mode + " (" + pt.x + "," + pt.y + ")");
+        var baseTexts = scanTexts();
+        Transport.sendEvent(tid, "anchor_ok", {
+            mode: mode, sig: st.sig, x: pt.x, y: pt.y,
+            presale: st.presale.join("") + " (6 项: 倒计时块/开抢时间/预约提醒/提醒条/倒计时内层/倒计时背景)",
+            texts: baseTexts,
+            sellText: (verifyInfo && verifyInfo.sellText) || this.grabReadSellTime()
+        });
+        if (!(st.cdOn || st.sellOn || st.remindOn)) {
+            sendLog(tid, "[锚定] ⚠ 页面此刻没有预约结构(倒计时/开抢时间/预约提醒), 只能靠兜底信号判断开售");
+            Transport.sendEvent(tid, "anchor_no_presale", { sig: st.sig });
+        }
+        return {
+            ok: true, mode: mode, sig: st.sig, cx: pt.x, cy: pt.y, hasContainer: st.hasContainer,
+            // 基线快照：出手判定用（预约结构 + 容器属性 + 文案）
+            presale: st.presale, cAttrs: st.cAttrs, texts: baseTexts
+        };
+    },
+
+    /**
+     * 开售前自动刷新页面并重新锚定（默认关的开关, 控制台可开）
+     * 为什么: 页面可能"状态陈旧"(开着很久不刷新), 开售时按钮/文案不会自己变新 → 结构信号等不到变化。
+     * 怎么做: 用已验证的深链重开商品页(会重新拉取详情) → 等回到详情页 → 重新核对 → 重新锚定并更新基线。
+     * 失败就保持原页面继续盯梢(不打断), 刷新期间不做出手判定。
+     */
+    grabRefreshAndReanchor: function(task, tid, label) {
+        var itemId = (task && task.target && task.target.itemId) ? String(task.target.itemId) : "";
+        sendStep(tid, "refresh", "start", label);
+        sendLog(tid, "[" + label + "] 自动刷新页面(深链重开) —— 让开售状态变新");
+        var r = Transport.adbOpenItem(itemId);
+        if (!r || !r.ok) {
+            sendLog(tid, "[" + label + "] ✘ 刷新失败: " + ((r && r.error) || "无回应") + " → 继续用原页面盯梢");
+            sendStep(tid, "refresh", "failed", "刷新失败");
+            return null;
+        }
+        var ok = waitUntil(function () { return DamaiAdapter.grabOnDetailPage(); }, 7000, 200, tid);
+        if (!ok) {
+            sendLog(tid, "[" + label + "] ✘ 刷新后未回到详情页 → 继续用原页面");
+            sendStep(tid, "refresh", "failed", "未回到详情页");
+            return null;
+        }
+        var v = this.grabVerify(task, tid);
+        if (!v.ok) { sendLog(tid, "[" + label + "] ✘ 刷新后页面核对未通过 → 继续用原页面"); sendStep(tid, "refresh", "failed", "核对未通过"); return null; }
+        var a = this.grabAnchor(task, v, tid);
+        if (!a.ok) { sendLog(tid, "[" + label + "] ✘ 刷新后锚定失败 → 继续用原页面"); sendStep(tid, "refresh", "failed", "锚定失败"); return null; }
+        sendLog(tid, "[" + label + "] ✓ 已刷新并重新锚定: " + a.sig);
+        sendStep(tid, "refresh", "done", label + " 已刷新");
+        Transport.sendEvent(tid, "page_refreshed", { label: label, sig: a.sig });
+        return a;
+    },
+
+    /** 瞬间首击: 纯 ADB 常驻通道, 发射后不管 (不 sleep/不校验, 最快); 失败短超时重试, 不静默降级 */
+    emitFirstTap: function(anchor, tid, fireAt, offset, cause) {
+        var jx = jitterInt(anchor.cx, CLICK_CFG.jitterXPx);
+        var jy = jitterInt(anchor.cy, CLICK_CFG.jitterYPx);
+        var t0 = now();
+        var via = false;
+        var tries = 0;
+        var cmdMs = 0;
+        // 首击是全场最关键的一下 —— 网络抖动时不能默默降级成手机手势 (手势对自绘按钮无效)。
+        // 先短超时出手; 打不通立刻重试 (最多 3 发); 三发都不通才退手势兜底并告警。
+        while (tries < CLICK_CFG.firstTapTries && !via) {
+            tries++;
+            var ts = now();
+            via = Transport.adbTap(jx, jy, tries === 1 ? CLICK_CFG.firstTapTimeoutMs : (CLICK_CFG.firstTapTimeoutMs + 200));
+            cmdMs += now() - ts;
+        }
+        var t1 = now();
+        if (!via) {
+            // 中枢不可达 → 手势补一发 (对自绘按钮通常无效, 普通控件可用), 并明确告警
+            fastPress(jx, jy);
+            try { device.vibrate(600); } catch (eVib) {}
+            Transport.sendEvent(tid, "first_tap_degraded", { x: jx, y: jy, tries: tries, cmdMs: t1 - t0 });
+        }
+        var deltaMs = (t0 + offset) - fireAt;
+        sendLog(tid, "[首击] cause=" + cause + " (" + jx + "," + jy + ") via=" + (via ? "persist" : "gesture(告警)")
+            + " 第" + tries + "发 ΔT0=" + deltaMs + "ms cmd=" + cmdMs + "ms");
+        Transport.sendEvent(tid, "first_tap_sent", { x: jx, y: jy, cause: cause, via: !!via, tries: tries, deltaMs: deltaMs, cmdMs: cmdMs });
+        return { cause: cause, at: t0, deltaMs: deltaMs, via: !!via, tries: tries };
+    },
+
+    /** 微瞄准: 优先 "确定/提交" 实节点中心(便宜), 找不到回退锚点 (首击之后才用, 不影响首击延迟) */
+    grabAimRefresh: function(anchor, task) {
+        var p = quickCenter(id("cn.damai:id/btn_buy_view")) ||
+                quickCenter(text("确定")) ||
+                quickCenter(text("提交订单")) ||
+                quickCenter(text("立即提交"));
+        if (p && p.y > 1200) return p;
+        if (task && task.grab && task.grab.submit) return scaleToDevice({ x: task.grab.submit.x, y: task.grab.submit.y }, task);
+        return { x: anchor.cx, y: anchor.cy };
+    },
+
+    /**
+     * 阶段3-5: 低频预监视 → T0-1s 高频突变检测 → 瞬间首击 / 保底盲点
+     * @param {boolean} dryRun 彩排模式: 只检测不点击
+     * @returns {{fired:boolean, cancelled?:boolean, late?:boolean, detected?:boolean, cause?:string, deltaMs?:number}}
+     */
+    grabWatchAndFire: function(task, anchor, tid, dryRun) {
+        var fireAt = (task.timing && task.timing.fireAtEpochMs) || 0;
+        var offset = TimeSync.cachedOffset || 0;
+        var hotLead = (task.timing && task.timing.highFreqLeadMs) || 1000;
+        var fireLocal = fireAt - offset;
+        var hotStartLocal = fireLocal - hotLead;
+
+        // 迟到保护: 已过开抢时刻 5 秒以上则拒绝 (防误点)
+        if (now() > fireLocal + 5000) {
+            sendStep(tid, "prewatch", "failed", "已过开抢时刻超过 5 秒, 拒绝盲点");
+            return { fired: false, late: true };
+        }
+
+        // ================= 彩排分支 (2026-10-09 用户口径 v2) =================
+        // 彩排的目的不是"等按钮变化" —— 假时间点按钮本来就不会变, 检测必然空转。
+        // 改为: 不做任何变化检测, 到点直接真打 —— 极速首击 → 立刻接超高频连点,
+        //       只验证「到点能否极速出手」+「连点通道能否接上并跑出速率」。
+        // 不跑提交风暴的状态看护/微瞄准/装配观演人, 连点固定打在锚点上 (可预期、可回收)。
+        if (dryRun) {
+            sendStep(tid, "prewatch", "done", "彩排: 跳过变化检测");
+            var waitBeat = now();
+            var rehWarm = false;
+            var rehArmed = false;
+            while (now() < fireLocal) {
+                if (isCancelled(tid)) return { fired: false, cancelled: true };
+                if (!rehWarm && fireLocal - now() <= 2500) {
+                    rehWarm = true;
+                    var wReh = Transport.warmChannel();
+                    sendLog(tid, "[彩排] 通道预检 " + (wReh.ok ? ("✓ " + wReh.ms + "ms") : ("✘ " + wReh.reason)));
+                    var aReh = Transport.armTap(anchor.cx, anchor.cy, fireAt, tid);
+                    rehArmed = !!aReh.ok;
+                    sendLog(tid, "[彩排] 预置击发 " + (rehArmed ? ("✓ 已排在中枢 T0 (剩 " + Math.round(fireLocal - now()) + "ms)") : ("✘ " + aReh.reason + " → 回落请求通道")));
+                }
+                if (now() - waitBeat > 5000) {
+                    waitBeat = now();
+                    sendLog(tid, "[彩排] 静默等待 T0, 剩余约 " + Math.round((fireLocal - now()) / 1000) + "s (不检测按钮变化)");
+                }
+                sleep(Math.min(1000, Math.max(5, fireLocal - now())));
+            }
+
+            // ① 到点极速首击: 优先取中枢侧预置击发结果 (那一发不经 T0 网络), 没回执才回落请求通道
+            var rFirst = null;
+            if (rehArmed) {
+                sleep(Math.max(0, (fireLocal + 220) - now()));
+                var stReh = Transport.armStatus(tid);
+                var recReh = stReh && stReh.results ? stReh.results[tid] : null;
+                if (recReh && recReh.via !== "fail") {
+                    rFirst = { cause: "rehearsal_deadline", deltaMs: recReh.deltaMs, via: true, tries: 1, hubArmed: true };
+                    sendLog(tid, "[首击] 中枢预置击发 ΔT0=" + recReh.deltaMs + "ms via=" + recReh.via + " 落点(" + recReh.x + "," + recReh.y + ")");
+                    Transport.sendEvent(tid, "first_tap_sent", { x: recReh.x, y: recReh.y, cause: "rehearsal_deadline", via: true, hubArmed: true, tries: 1, deltaMs: recReh.deltaMs, cmdMs: 0 });
+                } else {
+                    Transport.sendEvent(tid, "channel_warn", { phase: "rehearsal", reason: "预置击发无回执" });
+                    sendLog(tid, "[首击] ⚠ 预置击发无回执, 回落请求通道");
                 }
             }
-            // 低频心跳日志 (避免刷屏)
-            if (now() - lastLog > 3000) {
-                lastLog = now();
-                sendLog(tid, "[高频监测] 盯梢中... 按钮文案: " + (tvMain && tvMain.text ? tvMain.text() : "(未渲染)"));
+            if (!rFirst) rFirst = this.emitFirstTap(anchor, tid, fireAt, offset, "rehearsal_deadline");
+            sendStep(tid, "first_tap", "done", "ΔT0 " + rFirst.deltaMs + "ms via=" + (rFirst.via ? "persist" : "gesture(告警)") + (rFirst.hubArmed ? " · 中枢预置" : " · 请求通道"));
+
+            // ② 立刻接拟人连点 (固定锚点, 不做微瞄准/状态看护 —— 彩排不打提交)
+            //    节拍: 抖动间隔, 硬上限 20 击/秒 (防超频风控)
+            var REH_MS = CLICK_CFG.rehearsalMs;
+            sendStep(tid, "tap_chain", "start", "彩排拟人连点 " + REH_MS + "ms (≤20 击/秒)");
+            var rehTaps = 0, rehFail = 0, rehStart = now();
+            var rehStamps = [];
+            while (now() - rehStart < REH_MS) {
+                if (isCancelled(tid)) { sendStep(tid, "tap_chain", "failed", "手动终止"); return { fired: true, cancelled: true, cause: "rehearsal_deadline", deltaMs: rFirst.deltaMs, taps: rehTaps }; }
+                var okReh = humanTap(anchor.cx, anchor.cy);
+                if (!okReh) { rehFail++; if (rehFail >= 3) break; } else { rehFail = 0; rehTaps++; rehStamps.push(now()); }
+                sleep(humanGapMs());
             }
-            sleep(45);
+            var rehMs = now() - rehStart;
+            var rehPerSec = Math.round(rehTaps / Math.max(0.001, rehMs / 1000));
+            var rehPeak = peakPerSec(rehStamps);
+            Transport.sendEvent(tid, "rehearsal_tap_result", {
+                firstDeltaMs: rFirst.deltaMs, firstVia: rFirst.via ? "persist" : "gesture", firstTries: rFirst.tries,
+                taps: rehTaps, burstMs: rehMs, tapsPerSec: rehPerSec, peakPerSec: rehPeak,
+                x: anchor.cx, y: anchor.cy
+            });
+            sendStep(tid, "tap_chain", "done", "彩排连点 " + rehTaps + " 击 / " + rehMs + "ms = " + rehPerSec + " 击/秒 (峰值 " + rehPeak + "/秒)");
+            sendLog(tid, "[彩排] 首击 ΔT0=" + rFirst.deltaMs + "ms (第" + rFirst.tries + "发), 连点 " + rehTaps + " 击 ("
+                + rehMs + "ms, 均 " + rehPerSec + " 击/秒, 峰值 " + rehPeak + " 击/秒), 落点 (" + anchor.cx + "," + anchor.cy + ")");
+            return {
+                fired: true, cause: "rehearsal_deadline", deltaMs: rFirst.deltaMs,
+                taps: rehTaps, tapsPerSec: rehPerSec, peakPerSec: rehPeak, burstMs: rehMs
+            };
         }
+
+        // —— 低频预监视 (只观察记录, 不动作) ——
+        sendStep(tid, "prewatch", "start", "T0 前低频观察");
+        var preChanges = [];
+        var lastBeat = now();
+        var chanWarmed = false;
+        var refreshed30 = false, refreshed12 = false;
+        while (now() < hotStartLocal) {
+            if (isCancelled(tid)) {
+                sendStep(tid, "prewatch", "failed", "手动终止");
+                return { fired: false, cancelled: true };
+            }
+            var rem = hotStartLocal - now();
+            if (rem > 4000) {
+                // 开售前自动刷新（默认关的开关）: T-30s 与 T-12s 各一次, 刷新后重新锚定并换基线
+                if (CLICK_CFG.autoRefresh) {
+                    var refA = null;
+                    if (!refreshed30 && rem <= 31000) { refreshed30 = true; refA = this.grabRefreshAndReanchor(task, tid, "T-30s"); }
+                    else if (!refreshed12 && rem <= 13000) { refreshed12 = true; refA = this.grabRefreshAndReanchor(task, tid, "T-12s"); }
+                    if (refA) { anchor = refA; preChanges.length = 0; }
+                }
+                if (now() - lastBeat > 30000) {
+                    lastBeat = now();
+                    sendLog(tid, "[预监视] 距高频窗口约 " + Math.round(rem / 1000) + "s, 按钮基线: " + anchor.sig);
+                }
+                sleep(Math.min(1500, rem - 3000));
+            } else {
+                if (!chanWarmed && rem <= 2500) {
+                    chanWarmed = true;
+                    // 通道预检: 探路 + 焐热 + 顺带拿到实测往返 (给节拍换算用)
+                    var wArm = Transport.warmChannel();
+                    if (wArm.ok && wArm.ms > 0) CLICK_CFG.rttMs = Math.max(1, wArm.ms);
+                    sendLog(tid, "[通道] 预检 " + (wArm.ok ? ("✓ " + wArm.ms + "ms (往返实测已用于节拍换算)") : ("✘ " + wArm.reason)));
+                    if (!wArm.ok) Transport.sendEvent(tid, "channel_warn", { phase: "prewatch", reason: wArm.reason });
+                    // 注: 实战分支**不做任何预置击发** —— 到点盲点会打在还没刷新的「已预约」上, 已被明确否决。
+                }
+                var s0 = readButtonSignal();
+                if (signalChangedFrom(s0, anchor)) {
+                    preChanges.push({ deltaMs: now() + offset - fireAt, sig: s0.sig });
+                    Transport.sendEvent(tid, "prewatch_change", { deltaMs: now() + offset - fireAt, sig: s0.sig });
+                }
+                sleep(300);
+            }
+        }
+        sendStep(tid, "prewatch", "done", preChanges.length ? ("预监视期变化 " + preChanges.length + " 次") : "基线稳定");
+
+        // —— 高频窗口 ——
+        var pollMs = 10;
+        sendStep(tid, "mutation", "start", "poll=" + pollMs + "ms");
+
+        // (彩排分支已上移到"迟到保护"之后: 不做变化检测, 到点直接真打)
+
+        // 实时首击: 每轮读信号与基线比对 —— 一变即发 (双读确认防单次读异常)
+        var fired = null;
+        var firstCheck = true;
+        var invalidStreak = 0;
+        var anomalyLogged = false;
+        var hotLastLog = 0;
+        var pollCount = 0;
+        while (true) {
+            if (isCancelled(tid)) {
+                sendStep(tid, "mutation", "failed", "手动终止 (未击发)");
+                return { fired: false, cancelled: true };
+            }
+            var s = readButtonSignal();
+            if (s.hasContainer) {
+                invalidStreak = 0;
+            } else if (s.tvText === "-" && !s.buy && !s.buv) {
+                invalidStreak++;
+                if (invalidStreak === 40 && !anomalyLogged) {
+                    anomalyLogged = true;
+                    Transport.sendEvent(tid, "signal_anomaly", { sig: s.sig });
+                    sendLog(tid, "[高频] ⚠ 按钮容器暂时不可读 (连续 " + invalidStreak + " 次), 继续盯梢");
+                }
+            }
+            if (signalChangedFrom(s, anchor)) {
+                sleep(80);
+                var s2 = readButtonSignal();
+                if (signalChangedFrom(s2, anchor)) {
+                    var cause = (firstCheck && preChanges.length > 0) ? "mutation_prewatch_persisted" : "mutation";
+                    fired = this.emitFirstTap(anchor, tid, fireAt, offset, cause);
+                    break;
+                }
+            }
+            firstCheck = false;
+            // 第三重兜底: 文案扫描（每 ~100ms 一次, 一次遍历取全部文本, 便宜）
+            pollCount++;
+            if (pollCount % 10 === 0) {
+                var tcur = scanTexts();
+                if (textSignalFired(tcur, anchor.texts)) {
+                    sleep(80);
+                    var tcur2 = scanTexts();
+                    if (textSignalFired(tcur2, anchor.texts)) {
+                        sendLog(tid, "[首击] 文案兜底命中(开售后字样出现/开抢字样消失): " + tcur.sample);
+                        Transport.sendEvent(tid, "text_signal_fire", { base: anchor.texts, now: tcur, sig: s.sig });
+                        fired = this.emitFirstTap(anchor, tid, fireAt, offset, "text_signal");
+                        break;
+                    }
+                }
+            }
+            if (now() > fireLocal + CLICK_CFG.watchHardCapMs) {
+                // 兜底闸门（**不是观察窗**，2026-10-09 用户拍板移除观察窗, 闸门上限 1 分钟）:
+                //   作用只是防任务永久挂住, 绝不提前放弃 —— 正常开售几秒内就会命中结构变化。
+                Transport.sendEvent(tid, "watch_timeout", { waitedMs: CLICK_CFG.watchHardCapMs, sig: s.sig, presale: s.presale });
+                sendLog(tid, "[首击] ⏱ 已连续盯梢 " + Math.round(CLICK_CFG.watchHardCapMs / 1000) + " 秒仍未检测到结构变化, 收工防挂死");
+                // 留证据: 界面树 + 截图 (事后复盘"为什么没识别到")
+                var diag = Transport.diagSnapshot("timeout-" + tid);
+                if (diag && diag.files && diag.files.length) {
+                    sendLog(tid, "[诊断] 已存证据 " + diag.files.map(function (f) { return f.split(/[\\/]/).pop(); }).join(" + "));
+                    Transport.sendEvent(tid, "diag_saved", { files: diag.files, sig: s.sig });
+                } else {
+                    sendLog(tid, "[诊断] 证据保存失败(不影响结果): " + ((diag && (diag.dumpError || diag.shotError)) || "无回应"));
+                }
+                try { device.vibrate(400); } catch (eNV) {}
+                sendStep(tid, "mutation", "failed", "盯梢超时(兜底闸门), 未点击");
+                return { fired: false, watchTimeout: true, waitedMs: CLICK_CFG.watchHardCapMs };
+            }
+            if (now() - hotLastLog > 3000) {
+                hotLastLog = now();
+                sendLog(tid, "[高频] 盯梢中: " + s.sig + " (已盯 " + Math.round((now() - fireLocal) / 1000) + "s, 一有变化立即出手)");
+            }
+            sleep(pollMs);
+        }
+        sendStep(tid, "mutation", "done", "cause=" + fired.cause + " ΔT0=" + fired.deltaMs + "ms");
+        sendStep(tid, "first_tap", "done", "ΔT0 " + fired.deltaMs + "ms via=" + (fired.via ? "persist" : "exec"));
+        return { fired: true, cause: fired.cause, deltaMs: fired.deltaMs, cancelled: false };
+    },
+
+    /**
+     * 抖动连点链 (2026-10-09 合并: 原「拟人连点 + 提交风暴」两段合一)
+     * 一条循环打到底: 按页面状态自动切换瞄准目标 ——
+     *   还在详情页 → 瞄底栏主按钮(锚点); 已跳进选票/订单页 → 瞄「确定 / 提交订单」实节点。
+     * 节拍统一走 humanTap + humanGapMs (间隔/按压/落点全抖动, ≤20 击/秒)。
+     * 终止: 出支付页 / 售罄 / 滑块 / 页面异常切换 / 总时长到 / 连续 3 次注入失败 / 手动终止。
+     */
+    grabChain: function(task, anchor, tid) {
+        var grab = (task && task.grab) || {};
+        var hammer = !!grab.hammer;
+        var end = now() + CLICK_CFG.chainMs;
+        var clicks = 0;
+        var endReason = "";
+        var captchaStrikes = 0;
+        var viewerTried = 0;
+        var lastCheck = 0;
+        var failStreak = 0;
+        var stamps = [];
+        var peak = 0;
+        var jumpLogged = false;
+        var lastDetail = true;
+        sendStep(tid, "tap_chain", "start", "抖动连点 " + CLICK_CFG.chainMs + "ms (≤20 击/秒, 瞄准自动切换)");
+        if (hammer) Transport.sendEvent(tid, "grab_blind_mode", { clicks: 0, reason: "配置为无脑高频模式" });
+
+        while (now() < end) {
+            if (isCancelled(tid)) { sendStep(tid, "tap_chain", "failed", "手动终止"); return { cancelled: true, clicks: clicks }; }
+
+            // 页面身份每 3 击核一次 (够用且便宜), 决定瞄哪里 —— 这就是原"两阶段"的全部差别
+            if (clicks % 3 === 0 || clicks === 0) lastDetail = DamaiAdapter.grabOnDetailPage();
+            if (!hammer && !lastDetail && !jumpLogged) {
+                jumpLogged = true;
+                Transport.sendEvent(tid, "jump_detected", { clicks: clicks, act: safeActivity() });
+                sendStep(tid, "tap_chain", "progress", "页面已跳转 (" + clicks + " 次连点), 转瞄确定/提交位");
+            }
+            var aim = (hammer || lastDetail) ? { x: anchor.cx, y: anchor.cy } : this.grabAimRefresh(anchor, task);
+
+            var okTap = humanTap(aim.x, aim.y);
+            if (!okTap) {
+                failStreak++;
+                if (failStreak >= 3) { endReason = "adb_down"; break; }
+            } else {
+                failStreak = 0;
+            }
+            clicks++;
+            stamps.push(now());
+            if (stamps.length > 40) stamps.shift();
+            var pk = peakPerSec(stamps);
+            if (pk > peak) peak = pk;
+
+            // 状态看护 (每 ~0.7s): 出支付页 / 售罄 / 滑块 / 观演人
+            if (now() - lastCheck > 700) {
+                lastCheck = now();
+                if (safeTextMatches(/选择支付方式|微信支付|支付宝|待付款|订单提交成功|支付剩余时间|排队中/).exists()) { endReason = "ordered"; break; }
+                var act = safeActivity();
+                var onDetail = act.indexOf("ProjectDetailActivity") >= 0;
+                if (!onDetail && !DamaiAdapter.isInSkuDrawer() && !DamaiAdapter.isInOrderConfirmPage()) { endReason = "page_shifted"; break; }
+                if (onDetail && safeTextMatches(/已售罄|无票|缺货登记/).exists()) { endReason = "no_stock"; break; }
+                try {
+                    if (id("cn.damai:id/puzzle-captcha-btn-icon").exists()) {
+                        captchaStrikes++;
+                        if (captchaStrikes >= 2) { endReason = "captcha"; break; }
+                        DamaiAdapter.checkCaptcha();
+                    }
+                } catch (eC) {}
+                try {
+                    if (viewerTried < 1 && DamaiAdapter.isInOrderConfirmPage() && safeTextMatches(/请选择.*位观演人|仅需选择.*位/).exists()) {
+                        viewerTried++;
+                        sendLog(tid, "[连点] 检测到需选观演人, 尝试快速装配一次");
+                        var vs = [];
+                        if (task.target && task.target.viewers && task.target.viewers.length) vs = task.target.viewers;
+                        else if (task.target && task.target.viewer) vs = [task.target.viewer];
+                        DamaiAdapter.assembleViewers(vs, (task.target && task.target.count) || 1, tid);
+                    }
+                } catch (eV) {}
+            }
+            sleep(humanGapMs());
+        }
+        if (!endReason) endReason = "timeout";
+        Transport.sendEvent(tid, "submit_tap_loop", { stormClicks: clicks, totalClicks: clicks, endReason: endReason, peakPerSec: peak });
+        if (endReason === "ordered") {
+            sendStep(tid, "tap_chain", "done", "已进入支付/成功页 (" + clicks + " 击, 峰值 " + peak + "/秒)");
+        } else if (endReason === "captcha") {
+            sendStep(tid, "tap_chain", "failed", "出现滑块验证码, 需人工介入 (" + clicks + " 击)");
+            try { device.vibrate(500); } catch (eVB) {}
+        } else if (endReason === "no_stock") {
+            sendStep(tid, "tap_chain", "failed", "已售罄/无票 (" + clicks + " 击)");
+        } else {
+            sendStep(tid, "tap_chain", "failed", "连点结束: " + endReason + " (" + clicks + " 击, 峰值 " + peak + "/秒)");
+        }
+        return { cancelled: false, clicks: clicks, endReason: endReason, peakPerSec: peak };
+    },
+
+    /**
+     * 检测通道自测 (布防前验证"变化必被发现"):
+     *   1) 按钮区域基线稳定性采样 3 秒 (同时统计读取速率)
+     *   2) 触发一次真实变化 (底栏「想看」↔「已想看」), 测发现延迟, 测完自动还原
+     */
+    grabSelfTest: function(task, anchor, tid) {
+        sendStep(tid, "selftest", "start");
+        var base = readButtonSignal().sig;
+        var t0 = now();
+        var reads = 0;
+        var changes = 0;
+        while (now() - t0 < 3000) {
+            if (isCancelled(tid)) break;
+            if (readButtonSignal().sig !== base) changes++;
+            reads++;
+            sleep(8);
+        }
+        var readsPerSec = Math.round(reads / Math.max(0.001, (now() - t0) / 1000));
+
+        var detectMs = -1;
+        var before = null, after = null;
+        try {
+            var node = quickFind(id("cn.damai:id/project_item_bottom_follow_text_tv_concert_type"));
+            before = node && node.text ? String(node.text()) : null;
+            var fl = quickFind(id("cn.damai:id/project_item_bottom_want_to_see_fl"));
+            if (fl && fl.bounds && before) {
+                var fb = fl.bounds();
+                var fx = Math.floor(fb.centerX()), fy = Math.floor(fb.centerY());
+                var tTap = now();
+                Transport.adbTap(fx, fy);
+                var dl = now() + 3000;
+                while (now() < dl) {
+                    if (isCancelled(tid)) break;
+                    var n2 = quickFind(id("cn.damai:id/project_item_bottom_follow_text_tv_concert_type"));
+                    var cur = n2 && n2.text ? String(n2.text()) : null;
+                    if (cur && cur !== before) { detectMs = now() - tTap; after = cur; break; }
+                    sleep(6);
+                }
+                if (detectMs >= 0) Transport.adbTap(fx, fy); // 还原想看状态
+            }
+        } catch (eST) {}
+
+        var payload = { baselineChanges: changes, readsPerSec: readsPerSec, detectMs: detectMs, before: before, after: after };
+        Transport.sendEvent(tid, "selftest_result", payload);
+        sendStep(tid, "selftest", "done", "基线变化 " + changes + " 次 · 读取 " + readsPerSec + " 次/秒 · 发现延迟 " + detectMs + "ms");
+        return payload;
     },
 
     recover: function(err) {
@@ -2746,11 +4030,33 @@ function main() {
 }
 
 /**
+ * 判断某任务是否被中枢请求终止 (取消指令经心跳响应回带, 见 transport.js sendHeartbeat)
+ */
+function isTaskCancelled(tid) {
+    return !!(typeof Transport !== "undefined" && Transport.cancelRequestedTaskId && Transport.cancelRequestedTaskId === tid);
+}
+
+/**
+ * 上报「已手动终止」结果 (手机端在检查点就地停下后调用)
+ */
+function reportCancelled(tid, evidence) {
+    console.log("【任务终止】" + tid + " 收到中枢终止指令, 就地停下");
+    Transport.sendResult({
+        taskId: tid,
+        platform: "damai",
+        outcome: "cancelled",
+        reason: "manual_abort",
+        evidence: evidence || "用户手动终止任务"
+    });
+}
+
+/**
  * 核心任务执行引擎
  */
 function handleTask(task) {
     Transport.taskState = "busy";
     Transport.currentTaskId = task.taskId;
+    Transport.cancelRequestedTaskId = null; // 清除上一轮残留的取消标记, 避免误伤新任务
     try {
         console.log("==========================================");
         console.log("🎯 开始执行任务: " + task.taskId + " [" + task.platform + "/" + task.mode + "]");
@@ -2762,7 +4068,7 @@ function handleTask(task) {
         });
 
         var platform = task.platform || "damai";
-        var mode = task.mode || "rush";
+        var mode = task.mode || "test";
 
         if (platform === "damai") {
             if (mode === "add_viewer") {
@@ -2784,8 +4090,13 @@ function handleTask(task) {
                 MonitorAdapter.runLoop(task, function(newStatus) {
                     Transport.sendEvent(task.taskId, "ticket_status_change", { status: newStatus });
                 });
+                // runLoop 能正常返回只有一种情况: 收到手动终止指令
+                if (isTaskCancelled(task.taskId)) reportCancelled(task.taskId, "余票盯梢已手动终止");
+            } else if (mode === "grab") {
+                // 链接抢购 (2026-10-09 重写): 链接就位 → 页面核对 → 锚定 → 高频突变检测 → 首击 → 连点链
+                executeDamaiGrab(task);
             } else {
-                // P0b / P1 准时击发抢票模式 / 安全演练
+                // 安全演练 / 立即购买 (直通流; 旧 rush 全自动流程已下线)
                 executeDamaiRush(task);
             }
         } else {
@@ -2806,18 +4117,20 @@ function handleTask(task) {
 }
 
 /**
- * 大麦抢票执行流水线
- * 演练/立即购买: 全流程推进 → 确认订单页 → (演练停在提交前 / buy 直通提交)
- * 定时抢购: 就位详情页 → 服务器对时 → 倒计时 → 最后 1 秒高频监测 → 瞬间击发
+ * 大麦演练/立即购买 直通流水线
+ * (旧「定时抢购 rush」全自动选票 + T0 锚定击发流程已于 2026-10-09 整体删除:
+ *  前置准备改由用户在 App 内手动完成, 抢购执行统一走 mode='grab' → 见 executeDamaiGrab)
  */
 function executeDamaiRush(task) {
     var tid = task.taskId;
 
     // 1. 唤起大麦 (热启动, 绝不重启进程)
     DamaiAdapter.ensureForeground(tid);
+    if (isTaskCancelled(tid)) { reportCancelled(tid, "唤起阶段被手动终止"); return; }
 
     // 2. 就位演出详情页 (DeepLink / 搜索兜底 / 已在选票或订单页直接复用)
     var positioned = DamaiAdapter.gotoDetail(task, tid);
+    if (isTaskCancelled(tid)) { reportCancelled(tid, "就位阶段被手动终止"); return; }
     if (!positioned) {
         Transport.sendResult({
             taskId: tid,
@@ -2831,6 +4144,7 @@ function executeDamaiRush(task) {
     // 3. 演练/立即购买模式: 直接推进全流程
     if (task.mode === "test" || task.mode === "dryrun" || task.mode === "buy") {
         var drawerOk = DamaiAdapter.openSkuDrawer(task);
+        if (isTaskCancelled(tid)) { reportCancelled(tid, "打开选票页阶段被手动终止"); return; }
         if (!drawerOk) {
             Transport.sendResult({
                 taskId: tid,
@@ -2841,10 +4155,12 @@ function executeDamaiRush(task) {
             return;
         }
         DamaiAdapter.selectSku(task);
+        if (isTaskCancelled(tid)) { reportCancelled(tid, "选票阶段被手动终止"); return; }
 
         // 点击抽屉「确定」进入确认订单页
         DamaiAdapter.confirmSkuDrawer(tid, false);
-        sleep(800);
+        if (isTaskCancelled(tid)) { reportCancelled(tid, "进入订单页前被手动终止"); return; }
+        sleep(200);
 
         var orderResult = DamaiAdapter.handleOrderConfirm(task);
         if (orderResult && typeof orderResult === "object") {
@@ -2853,6 +4169,7 @@ function executeDamaiRush(task) {
             Transport.sendResult(orderResult);
             return;
         }
+        if (isTaskCancelled(tid)) { reportCancelled(tid, "订单确认阶段被手动终止"); return; }
         var result = DamaiAdapter.readResult(task);
         result.taskId = tid;
         result.platform = "damai";
@@ -2860,55 +4177,119 @@ function executeDamaiRush(task) {
         return;
     }
 
-    // ===== 定时抢购模式 (rush) =====
-    // 4. 预热: 展开抽屉并装配 SKU, 停留在抽屉「确定」前
-    var primeOk = DamaiAdapter.openSkuDrawer(task);
-    if (primeOk) {
-        DamaiAdapter.selectSku(task);
-        // 预锚定「确定」按钮坐标 (T-0 毫秒查找击发)
-        var btn = id("cn.damai:id/btn_buy").findOne(800) ||
-                  id("cn.damai:id/btn_buy_view").findOne(800) ||
-                  text("确定").findOne(500);
-        if (btn && btn.bounds) {
-            var bb = btn.bounds();
-            AnchorFire.cachedPoint = { x: Math.floor(bb.centerX()), y: Math.floor(bb.centerY()) };
-            AnchorFire.anchoredAt = java.lang.System.currentTimeMillis();
-            sendLog(tid, "[预热] 已锚定抽屉确定按钮坐标 (" + AnchorFire.cachedPoint.x + "," + AnchorFire.cachedPoint.y + ")");
-        }
-    }
+    // (旧「定时抢购 rush」全自动选票 + T0 锚定击发流程已于 2026-10-09 整体删除:
+    //  前置准备改由用户在 App 内手动完成, 抢购执行统一走 mode='grab' → 见 executeDamaiGrab)
+}
 
-    // 5. 服务器对时
-    sendLog(tid, "[对时] 执行大麦 MTOP 毫秒级时钟采样...");
-    var syncResult = TimeSync.syncDamai();
-    Transport.sendEvent(tid, "timesync_done", syncResult);
-
-    var fireTargetEpoch = (task.timing && task.timing.fireAtEpochMs) || (java.lang.System.currentTimeMillis() + 8000);
-    var leadMs = (task.timing && task.timing.leadMs) || 40;
-
-    // 6. 倒计时 → 临界击发 (点击抽屉确定 → 进入确认订单 → 提交)
-    TimeSync.waitToFire(fireTargetEpoch, leadMs, function() {
-        sendLog(tid, "[击发] T0 到点, 击穿选票面板确定按钮!");
-        if (AnchorFire.cachedPoint) {
-            AnchorFire.fire();
-        } else {
-            DamaiAdapter.confirmSkuDrawer(tid, true);
-        }
+/**
+ * 大麦「链接抢购」执行流水线 (2026-10-09 重写)
+ * 就位(链接直达) → 页面核对 → 信号锚定 → 对时 → 低频预监视
+ * → T0-1s 高频突变检测 → 瞬间首击(纯ADB) → 拟人连点链 → 提交风暴 → 结果
+ * 彩排(dryRun) 例外: 不检测变化, 到点直接真打 (首击 + 4s 固定锚点超高频连点), 只测点击链路
+ */
+function executeDamaiGrab(task) {
+    var tid = task.taskId;
+    var grab = task.grab || {};
+    // 通道: 任务开始强制重探 (有数据线就走数据线), 并实测往返给节拍换算
+    try { Transport.detectHub(true); } catch (eHub) {}
+    var chanProbe = Transport.calibrateChannel();
+    DamaiAdapter.applyClickCfg(grab, chanProbe.ms);   // 点击参数 + 实测往返 → 反解间隔/按压
+    Transport.sendEvent(tid, "channel_probe", { ms: chanProbe.ms, ok: chanProbe.ok, url: chanProbe.url });
+    Transport.sendEvent(tid, "grab_armed", {
+        itemId: task.target && task.target.itemId,
+        dryRun: !!grab.dryRun,
+        selfTest: !!grab.selfTest,
+        hammer: !!grab.hammer,
+        fireAt: task.timing && task.timing.fireAtEpochMs
     });
 
-    sleep(600);
-    DamaiAdapter.dismissPopupsLoop(2);
+    // 0. 唤起大麦 (热启动, 绝不重启进程)
+    DamaiAdapter.ensureForeground(tid);
+    if (isTaskCancelled(tid)) { reportCancelled(tid, "就位前被手动终止"); return; }
 
-    var orderResult2 = DamaiAdapter.handleOrderConfirm(task);
-    if (orderResult2 && typeof orderResult2 === "object") {
-        orderResult2.taskId = tid;
-        orderResult2.platform = "damai";
-        Transport.sendResult(orderResult2);
+    // 1. 链接就位 (已在目标页则复用; 否则请求中枢 am start 深度链接打开)
+    var locate = DamaiAdapter.grabLocate(task, tid);
+    if (isTaskCancelled(tid)) { reportCancelled(tid, "就位阶段被手动终止"); return; }
+    if (!locate.ok) {
+        Transport.sendResult({ taskId: tid, platform: "damai", outcome: "failed", reason: "locate_failed", evidence: "链接就位失败: " + (locate.reason || "") });
         return;
     }
-    var result2 = DamaiAdapter.readResult(task);
-    result2.taskId = tid;
-    result2.platform = "damai";
-    Transport.sendResult(result2);
+
+    // 2. 页面核对闸门 (对不上 → 不动作 + 报警, 白名单纪律)
+    var verify = DamaiAdapter.grabVerify(task, tid);
+    if (!verify.ok) {
+        Transport.sendResult({ taskId: tid, platform: "damai", outcome: "failed", reason: "page_verify_fail", evidence: "页面核对不通过, 已拒绝操作" });
+        return;
+    }
+
+    // 3. 信号锚定 (基线 + 按钮坐标, 热路径零查找)
+    var anchor = DamaiAdapter.grabAnchor(task, verify, tid);
+    if (!anchor.ok) {
+        Transport.sendResult({ taskId: tid, platform: "damai", outcome: "failed", reason: "anchor_failed", evidence: "无法锚定按钮坐标 (容器缺失且未配置)" });
+        return;
+    }
+
+    // 4. 服务器对时
+    var sync = TimeSync.syncDamai();
+    Transport.sendEvent(tid, "timesync_done", sync);
+    if (isTaskCancelled(tid)) { reportCancelled(tid, "对时后被手动终止"); return; }
+
+    // 5. 通道自测分支 (盯按钮区域 + 触发一次真实变化测发现延迟)
+    if (grab.selfTest) {
+        var st = DamaiAdapter.grabSelfTest(task, anchor, tid);
+        Transport.sendResult({
+            taskId: tid, platform: "damai",
+            outcome: st && st.detectMs >= 0 ? "success" : "failed",
+            reason: "selftest",
+            message: "检测通道自测",
+            evidence: "基线变化 " + (st ? st.baselineChanges : "?") + " 次, 读取 " + (st ? st.readsPerSec : "?") + " 次/秒, 发现延迟 " + (st ? st.detectMs : "?") + "ms",
+            data: st || null
+        });
+        return;
+    }
+
+    // 6. 预监视 → 高频突变检测 → 首击 (彩排模式: 不检测变化, 到点直接真打)
+    var watch = DamaiAdapter.grabWatchAndFire(task, anchor, tid, !!grab.dryRun);
+    if (watch.cancelled) { reportCancelled(tid, "监视阶段被手动终止"); return; }
+    if (grab.dryRun) {
+        Transport.sendResult({
+            taskId: tid, platform: "damai",
+            outcome: watch.fired ? "success" : "failed",
+            reason: "rehearsal_tap",
+            message: "彩排: 到点首击 ΔT0 " + watch.deltaMs + "ms, 接拟人连点 " + (watch.taps || 0) + " 击",
+            evidence: "首击 ΔT0 " + watch.deltaMs + "ms · 连点 " + (watch.taps || 0) + " 击 / " + (watch.burstMs || 0)
+                + "ms = 均 " + (watch.tapsPerSec || 0) + " 击/秒 · 峰值 " + (watch.peakPerSec || 0) + " 击/秒"
+                + " (固定锚点 " + anchor.cx + "," + anchor.cy + ", 抖动间隔且 ≤20 击/秒, 彩排不打提交)",
+            data: { deltaMs: watch.deltaMs, taps: watch.taps, tapsPerSec: watch.tapsPerSec, peakPerSec: watch.peakPerSec, burstMs: watch.burstMs }
+        });
+        return;
+    }
+    if (watch.late) {
+        Transport.sendResult({ taskId: tid, platform: "damai", outcome: "failed", reason: "late_armed", evidence: "已过开抢时刻超过 5 秒, 拒绝出手 (防误点)" });
+        return;
+    }
+    if (!watch.fired) {
+        Transport.sendResult({
+            taskId: tid, platform: "damai",
+            outcome: "failed",
+            reason: watch.watchTimeout ? "watch_timeout" : "not_fired",
+            evidence: watch.watchTimeout
+                ? ("已连续盯梢 " + Math.round((watch.waitedMs || 0) / 60000) + " 分钟仍未检测到结构变化 —— 兜底闸门收工, 未点击 (无观察窗, 不会提前放弃)")
+                : "未完成击发"
+        });
+        return;
+    }
+    if (isTaskCancelled(tid)) { reportCancelled(tid, "首击后被手动终止"); return; }
+
+    // 7. 连点链 + 提交风暴 (拟人连点直到跳转 → 右下角超高频直到提交)
+    var chain = DamaiAdapter.grabChain(task, anchor, tid);
+    if (chain.cancelled) { reportCancelled(tid, "连点链被手动终止"); return; }
+
+    // 8. 结果读取与回传
+    var result = DamaiAdapter.readResult(task);
+    result.taskId = tid;
+    result.platform = "damai";
+    Transport.sendResult(result);
 }
 
 main();

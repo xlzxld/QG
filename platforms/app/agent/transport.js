@@ -12,8 +12,12 @@
 var Transport = {
     hubUrls: [
         "http://127.0.0.1:3120"      // USB (adb reverse) 首选: 最稳定
-        // 局域网地址：由 hub.conf（PC 部署时写入）或自动扫描补充
+        // 局域网地址：由 hub.conf（PC 部署时写入）追加在后面（2026-10-09: 修掉"局域网被插到队首、
+        // 结果插着数据线也永远走 WiFi"的问题 —— 现在按"有线优先, 没有才 WiFi"）
     ],
+    USB_URL: "http://127.0.0.1:3120",
+    USB_PROBE_TIMEOUT_MS: 1200,      // 探测超时短一点: 没插线就立刻回落, 不拖慢启动
+    USB_PROBE_CACHE_MS: 15000,       // 探测结果缓存 15s, 避免频繁探测
     activeHubUrl: null,
     deviceId: null,
     heartbeatTimer: null,
@@ -21,6 +25,7 @@ var Transport = {
     consecutiveHeartbeatFailures: 0,
     taskState: "idle",
     currentTaskId: null,
+    cancelRequestedTaskId: null, // 中枢请求取消的任务 (经心跳响应回带; 任务执行期间唯一可靠的下行通道)
 
     init: function(customHubUrl) {
         // 读取 PC 部署时自动写入的 hub.conf (含最新局域网 IP, 多行多地址)
@@ -28,9 +33,9 @@ var Transport = {
             var confPath = "/sdcard/qg-agent/hub.conf";
             if (files.exists(confPath)) {
                 var savedUrls = String(files.read(confPath)).split(/[\n\r]+/).map(function(s) { return s.trim(); }).filter(Boolean);
-                for (var i = savedUrls.length - 1; i >= 0; i--) {
+                for (var i = 0; i < savedUrls.length; i++) {
                     if (savedUrls[i].indexOf("http") === 0 && this.hubUrls.indexOf(savedUrls[i]) < 0) {
-                        this.hubUrls.unshift(savedUrls[i]);
+                        this.hubUrls.push(savedUrls[i]);   // 追加在 USB 之后: 有线优先
                     }
                 }
                 if (savedUrls.length > 0) {
@@ -55,17 +60,56 @@ var Transport = {
     },
 
     /**
-     * 探测可用 Hub 节点（优先 Wi-Fi，失败切 USB）
+     * 探测数据线通道 (adb reverse → 127.0.0.1:3120)。
+     * 有线通道不受 WiFi 休眠/抖动影响, 是"闲置后第一个请求慢"的根治办法。
+     * @param {boolean} force 任务开始时强制重探 (绕过缓存)
      */
-    detectHub: function() {
+    probeUsb: function(force) {
+        var t = 0;
+        try { t = java.lang.System.currentTimeMillis(); } catch (eT) { t = Date.now(); }
+        if (!force && this._usbProbedAt && (t - this._usbProbedAt) < this.USB_PROBE_CACHE_MS) return !!this._usbAlive;
+        this._usbProbedAt = t;
+        try {
+            var res = http.get(this.USB_URL + "/health", { timeout: this.USB_PROBE_TIMEOUT_MS });
+            this._usbAlive = !!(res && res.statusCode === 200);
+            if (res && res.body) { try { res.body.close(); } catch (e1) {} }
+            console.log("【通道】USB 探测 " + (this._usbAlive ? ("✓ 数据线可用 " + this.USB_URL) : "✘ 不可用 → 回落 WiFi"));
+        } catch (e2) {
+            this._usbAlive = false;
+            console.log("【通道】USB 探测 ✘ " + e2.message + " → 回落 WiFi");
+        }
+        return !!this._usbAlive;
+    },
+
+    /** 通道校准: 实测一次往返耗时 (给端侧节拍换算用, 让"预估真实节拍"有据可依) */
+    calibrateChannel: function() {
+        var w = this.warmChannel(1500);
+        return { ok: !!(w && w.ok), ms: (w && w.ms) || 0, url: this.activeHubUrl || "" };
+    },
+
+    /**
+     * 探测可用 Hub 节点 —— 2026-10-09 修正为「数据线优先」:
+     *   ① 先探 USB (adb reverse 127.0.0.1) → 通了就用它
+     *   ② 没插线/隧道没建好 → 回落 hub.conf 的局域网地址
+     *   ③ 都不通 → 同网段扫描 → 兜底
+     */
+    detectHub: function(forceUsb) {
+        if (this.probeUsb(forceUsb)) {
+            var prevUsb = this.activeHubUrl;
+            this.activeHubUrl = this.USB_URL;
+            console.log("【通信建立】走数据线 (USB 反向): " + this.USB_URL);
+            if (prevUsb !== this.USB_URL || !this.hasRegistered) this.hello();
+            return true;
+        }
         for (var i = 0; i < this.hubUrls.length; i++) {
             var url = this.hubUrls[i];
+            if (url === this.USB_URL) continue;   // USB 已在上面探过, 不重复等 2.5s
             try {
                 var res = http.get(url + "/health", { timeout: 2500 });
                 if (res && res.statusCode === 200) {
                     var prevUrl = this.activeHubUrl;
                     this.activeHubUrl = url;
-                    console.log("【通信建立】成功连接至 Hub: " + url);
+                    console.log("【通信建立】成功连接至 Hub (WiFi): " + url);
                     // 重新连上后立即发起 hello 重新登记
                     if (prevUrl !== url || !this.hasRegistered) {
                         this.hello();
@@ -219,10 +263,38 @@ var Transport = {
                 battery: bat,
                 charging: chg,
                 accessibility: isAcc,
+                scriptSize: this.scriptSize(),   // 本脚本体积: 中枢据此判断"手机脚本是否最新"
                 ts: java.lang.System.currentTimeMillis()
             };
             var res = http.postJson(this.activeHubUrl + "/api/device/heartbeat", payload, { timeout: 3000 });
             var ok = res && res.statusCode === 200;
+            if (ok && res.body) {
+                // 解析响应体: 中枢可能捎带「取消当前任务」指令 (任务执行期间唯一可靠下行通道)
+                try {
+                    var hbJson = JSON.parse(res.body.string());
+                    if (hbJson && hbJson.control) {
+                        var ctl = hbJson.control;
+                        if (ctl.cancelTaskId) {
+                            if (this.cancelRequestedTaskId !== ctl.cancelTaskId) {
+                                console.warn("【终止指令】收到中枢取消请求: " + ctl.cancelTaskId);
+                            }
+                            this.cancelRequestedTaskId = ctl.cancelTaskId;
+                        }
+                        // 停止整个脚本 (2026-10-09: 电脑端一键让手机 Agent 下线, 不用碰手机)
+                        if (ctl.stopAgent && !this.stopRequested) {
+                            this.stopRequested = true;
+                            console.warn("【停止指令】收到中枢「停止脚本」请求, 本轮心跳后退出");
+                        }
+                        // 局域网自更新 (2026-10-09: 免数据线更新手机脚本)
+                        if (ctl.selfUpdate && !this.updateRequested) {
+                            this.updateRequested = true;
+                            console.warn("【自更新】收到中枢「更新脚本」请求, 下次 tick 执行");
+                        }
+                    }
+                } catch (eH) {
+                    // 解析失败不影响心跳本身
+                }
+            }
             if (res && res.body) {
                 try { res.body.close(); } catch (e) {}
             }
@@ -330,14 +402,137 @@ var Transport = {
      * 请求 PC 通过 ADB 注入一次点击 (Agent 无障碍手势失效时的可靠兜底,
      * 实测大麦 SKU 票档滚轮等自绘控件会无视 dispatchGesture 但响应 adb input)
      */
-    adbTap: function(x, y) {
+    adbTap: function(x, y, timeoutMs) {
         if (!this.activeHubUrl) this.detectHub();
         if (!this.activeHubUrl) return false;
         try {
-            var res = http.postJson(this.activeHubUrl + "/api/adb/tap", { x: Math.round(x), y: Math.round(y) }, { timeout: 2500 });
+            var res = http.postJson(this.activeHubUrl + "/api/adb/tap", { x: Math.round(x), y: Math.round(y) }, { timeout: timeoutMs || 2500 });
             return res && res.statusCode === 200;
         } catch (e) {
             return false;
+        }
+    },
+
+    /**
+     * 通道预检 (T0 前探一次路): 确认中枢可达 + 唤醒链路, 返回耗时。
+     * 首击是全场最关键的一下 —— 网络抖动时宁可提前知道, 也不要到点才发现打不出去。
+     */
+    warmChannel: function(timeoutMs) {
+        var t0 = Date.now();
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return { ok: false, ms: Date.now() - t0, reason: "无可达中枢" };
+        try {
+            var res = http.get(this.activeHubUrl + "/api/status", { timeout: timeoutMs || 1500 });
+            var ok = !!(res && res.statusCode === 200);
+            if (res && res.body) { try { res.body.close(); } catch (eC) {} }
+            return { ok: ok, ms: Date.now() - t0, reason: ok ? "" : ("HTTP " + (res ? res.statusCode : "无响应")) };
+        } catch (e) {
+            return { ok: false, ms: Date.now() - t0, reason: e.message };
+        }
+    },
+
+    /**
+     * 预置击发: 把 T0 那一发 "排在中枢时钟上" (atHubMs 走中枢时间轴 —— 就是任务里的 fireAtEpochMs)。
+     * 到点由中枢直接写常驻 shell (3ms 级), 不依赖 T0 那一瞬的网络往返。
+     */
+    armTap: function(x, y, atHubMs, tag, timeoutMs) {
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return { ok: false, reason: "无可达中枢" };
+        try {
+            var res = http.postJson(this.activeHubUrl + "/api/adb/arm-tap",
+                { x: Math.round(x), y: Math.round(y), atMs: Math.round(atHubMs), tag: String(tag || "arm") },
+                { timeout: timeoutMs || 1500 });
+            var ok = !!(res && res.statusCode === 200);
+            if (res && res.body) { try { res.body.close(); } catch (eC) {} }
+            return { ok: ok, reason: ok ? "" : ("HTTP " + (res ? res.statusCode : "无响应")) };
+        } catch (e) {
+            return { ok: false, reason: e.message };
+        }
+    },
+
+    disarmTap: function(tag, timeoutMs) {
+        if (!this.activeHubUrl) return { ok: false, reason: "无可达中枢" };
+        try {
+            var res = http.postJson(this.activeHubUrl + "/api/adb/disarm-tap", { tag: String(tag || "") }, { timeout: timeoutMs || 1200 });
+            var ok = !!(res && res.statusCode === 200);
+            if (res && res.body) { try { res.body.close(); } catch (eD) {} }
+            return { ok: ok };
+        } catch (e) {
+            return { ok: false, reason: e.message };
+        }
+    },
+
+    /** 查预置击发的实际落点偏差 (中枢侧记录, 用于验收) */
+    armStatus: function(tag, timeoutMs) {
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return null;
+        try {
+            var res = http.get(this.activeHubUrl + "/api/adb/arm-status?tag=" + encodeURIComponent(String(tag || "")), { timeout: timeoutMs || 1500 });
+            if (!res || res.statusCode !== 200 || !res.body) return null;
+            var txt = res.body.string();
+            try { res.body.close(); } catch (eS) {}
+            return JSON.parse(txt);
+        } catch (e) {
+            return null;
+        }
+    },
+    /** 让中枢存一份诊断证据 (界面树 + 截图), 返回文件路径清单; 失败返回 null (不阻塞主流程) */
+    diagSnapshot: function(tag, timeoutMs) {
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return null;
+        try {
+            var res = http.postJson(this.activeHubUrl + "/api/adb/diag-snapshot", { tag: String(tag || "diag") }, { timeout: timeoutMs || 25000 });
+            if (!res || res.statusCode !== 200 || !res.body) return null;
+            var txt = res.body.string();
+            try { res.body.close(); } catch (eC) {}
+            return JSON.parse(txt);
+        } catch (e) {
+            return null;
+        }
+    },
+
+    /** 本脚本文件路径 (自更新写入目标) */
+    myScriptPath: function() {
+        try {
+            var src = engines.myEngine().source;
+            if (src && String(src).slice(-3) === ".js" && files.exists(String(src))) return String(src);
+        } catch (e1) {}
+        return "/sdcard/qg-agent/main.js";
+    },
+
+    /** 本脚本体积 (字节; 上报给中枢做"是否最新"对账) */
+    scriptSize: function() {
+        if (this._scriptSize !== undefined) return this._scriptSize;
+        try { this._scriptSize = files.size(this.myScriptPath()); } catch (e) { this._scriptSize = 0; }
+        return this._scriptSize;
+    },
+
+    /**
+     * 局域网自更新: 从中枢 GET /agent/main.js 覆盖本地脚本 (2026-10-09)
+     * 免数据线 —— 手机只要能连到中枢(USB 反向或 WiFi)即可。
+     */
+    selfUpdate: function() {
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return { ok: false, reason: "无可达中枢" };
+        var url = this.activeHubUrl + "/agent/main.js";
+        var target = this.myScriptPath();
+        try {
+            console.log("【自更新】下载 " + url);
+            var res = http.get(url, { timeout: 40000 });
+            if (!res || res.statusCode !== 200 || !res.body) {
+                return { ok: false, reason: "HTTP " + (res ? res.statusCode : "无响应") };
+            }
+            var bytes = res.body.bytes();
+            try { res.body.close(); } catch (eC) {}
+            if (!bytes || !bytes.length) return { ok: false, reason: "下载内容为空" };
+            files.writeBytes(target, bytes);
+            var sz = 0;
+            try { sz = files.size(target); } catch (eS) {}
+            this._scriptSize = sz;
+            console.log("【自更新】已写入 " + target + " (" + Math.round(sz / 1024) + " KB, 下载 " + Math.round(bytes.length / 1024) + " KB)");
+            return { ok: sz > 1000, size: sz, path: target };
+        } catch (e) {
+            return { ok: false, reason: e.message };
         }
     },
 
@@ -350,6 +545,52 @@ var Transport = {
         try {
             var res = http.postJson(this.activeHubUrl + "/api/adb/swipe", { x1: x1, y1: y1, x2: x2, y2: y2, ms: ms || 300 }, { timeout: 3000 });
             return res && res.statusCode === 200;
+        } catch (e) {
+            return false;
+        }
+    },
+
+    /**
+     * 请求 PC 中枢用"深度链接"打开大麦商品页
+     * (2026-10-09 真机实证: damai://detail + itemId extra → ProjectDetailActivity;
+     *  原始分享链接 /shows/item.html 无法路由到 App, 由中枢统一改写并兜底多入口)
+     * @returns {{ok:boolean, hit?:string, tried?:string[], error?:string}}
+     */
+    adbOpenItem: function(itemId) {
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return { ok: false, error: "中枢离线" };
+        try {
+            var res = http.postJson(this.activeHubUrl + "/api/adb/open-item", { itemId: String(itemId) }, { timeout: 30000 });
+            if (res && res.statusCode === 200) {
+                var body = {};
+                try { body = JSON.parse(res.body.string()); } catch (eB) {}
+                return { ok: true, hit: body.hit || "", tried: body.tried || [] };
+            }
+            var msg = "";
+            try { msg = JSON.parse(res.body.string()).error || ""; } catch (eM) {}
+            return { ok: false, error: msg || ("HTTP " + (res ? res.statusCode : "?")) };
+        } catch (e) {
+            return { ok: false, error: String(e.message || e) };
+        }
+    },
+
+    /**
+     * 请求 PC 中枢连发点击 (连点链/提交风暴共用; fire-and-forget, 单次 HTTP 摊薄多枚 tap)
+     * @param {{x:number,y:number,count?:number,gapMs?:number,jitter?:number,pressMs?:number}} opts
+     */
+    adbTapBurst: function(opts) {
+        if (!this.activeHubUrl) this.detectHub();
+        if (!this.activeHubUrl) return false;
+        try {
+            var res = http.postJson(this.activeHubUrl + "/api/adb/tap-burst", {
+                x: Math.round(opts.x),
+                y: Math.round(opts.y),
+                count: opts.count || 1,
+                gapMs: opts.gapMs || 0,
+                jitter: opts.jitter || 0,
+                pressMs: opts.pressMs || 0
+            }, { timeout: 2500 });
+            return !!(res && res.statusCode === 200);
         } catch (e) {
             return false;
         }

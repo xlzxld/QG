@@ -261,13 +261,9 @@
             <select id="task-mode" onchange="onModeChange()">
               <option value="test" selected>🟢 安全演练 (停在提交前, 不扣款)</option>
               <option value="buy">🛒 立即购买 (直通提交)</option>
-              <option value="rush">⏰ 定时抢票 (到点高频击发)</option>
             </select>
             <div class="hint" id="mode-hint">演练完整跑通: 详情→选票→观演人→停在「立即提交」前</div>
           </div>
-        </div>
-        <div class="frow" id="fire-row" style="display:none">
-          <div><label>开售时间 (抢票模式)</label><input id="fire-time" placeholder="2026-10-10 18:59:59"></div>
         </div>
         <div>
           <label>实名观演人席位</label>
@@ -325,6 +321,107 @@
           <div><label>详细地址</label><input id="na-detail" placeholder="不少于 4 个字"></div>
         </div>
         <div class="btnrow"><button class="btn" onclick="addAddress()">➕ 手机端自动添加收货地址</button></div>
+      </div>
+
+      <!-- 链接抢购 (grab) -->
+      <div class="card">
+        <h3>🔗 链接抢购 (大麦)
+          <span class="badge gray" id="grab-badge">未布防</span>
+          <span class="grow"></span>
+          <button class="btn sm" onclick="grabSelfTest()">🧪 检测通道自测</button>
+        </h3>
+        <div class="section-note">粘链接 + 填开抢时间就行。首击走「中枢预置击发」（排在电脑时钟上，不受开抢那一瞬的网络抖动影响）；后续连点的间隔 / 按压时长 / 抖动 / 时长全部可在「高级」里调。</div>
+        <div>
+          <label>商品链接 / ID</label>
+          <input id="grab-link" placeholder="https://m.damai.cn/shows/item.html?itemId=1085142029424&from=appshare" oninput="onGrabLinkInput()">
+          <div class="hint" id="grab-parsed">粘贴后自动解析商品</div>
+        </div>
+        <div class="frow">
+          <div><label>页面核对关键词 (逗号分隔)</label><input id="grab-keywords" placeholder="薛之谦,贵阳"></div>
+          <div><label>执行方式</label>
+            <select id="grab-exec" onchange="onGrabExecChange()">
+              <option value="live" selected>🔴 正式开抢 (变化→瞬间点击→连点到提交)</option>
+              <option value="rehearsal">🟢 彩排 (到点真打: 首击+连点, 不打提交)</option>
+              <option value="blind">⚡ 无脑高频 (不判跳转, 直接连点)</option>
+            </select>
+          </div>
+        </div>
+        <div class="frow">
+          <div id="grab-time-wrap"><label>开抢时间</label><input id="grab-time" placeholder="2026-10-09 17:17:00"></div>
+          <div id="grab-reh-wrap" style="display:none"><label>彩排时间 (仅彩排模式)</label><input id="grab-reh-time" placeholder="2026-10-09 16:45:00"></div>
+          <div><label>进入高频提前量 (毫秒)</label><input id="grab-lead" type="number" value="1000" min="300" max="10000"></div>
+        </div>
+        <div class="hint" id="grab-rate-hint"></div>
+        <details open style="margin:6px 0 10px">
+          <summary class="hint" style="cursor:pointer">⚙️ 点击参数（可直接调；收起这个条也照样生效）</summary>
+          <div class="frow" style="margin-top:8px">
+            <div><label>连点节拍 最少 (几下/秒)</label><input id="grab-rate-min" type="number" value="8" min="1" max="20" oninput="updateGrabRate()"></div>
+            <div><label>连点节拍 最多 (几下/秒)</label><input id="grab-rate-max" type="number" value="12" min="1" max="20" oninput="updateGrabRate()"></div>
+          </div>
+          <div class="frow">
+            <div style="grid-column:1/-1"><label>系统自动推算 (间隔 / 按压 / 真实节拍)</label><div class="hint" id="grab-cadence-hint">—</div></div>
+          </div>
+          <div class="frow">
+            <div><label>落点抖动 X 轴 上限 (px)</label><input id="grab-jitter-x" type="number" value="3" min="0" max="24"></div>
+            <div><label>落点抖动 Y 轴 上限 (px)</label><input id="grab-jitter-y" type="number" value="3" min="0" max="24"></div>
+          </div>
+          <div class="frow">
+            <div style="grid-column:1/-1"><label>抖动规则</label><div class="hint">每次点击都在 <b>-上限 ~ +上限</b> 之间随机（填 9 → -9~+9），<b>XY 各自独立、两轴同时生效</b>；填 0 = 该轴不抖。</div></div>
+          </div>
+          <div class="frow">
+            <div><label>首击重试次数</label><input id="grab-ft-tries" type="number" value="3" min="1" max="5"></div>
+            <div><label>首击单发超时 (ms)</label><input id="grab-ft-timeout" type="number" value="700" min="200" max="3000"></div>
+          </div>
+          <div class="frow">
+            <div><label>连点链总时长 (ms)</label><input id="grab-chain-ms" type="number" value="12000" min="3000" max="60000"></div>
+            <div><label>盯梢说明</label><div class="hint" style="margin-top:6px">开抢前 1 秒起高频盯「预约结构消失」，<b>一有变化立即出手，不会提前放弃</b>（无观察窗）</div></div>
+          </div>
+          <div class="frow">
+            <div style="grid-column:1/-1">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="grab-autorefresh" style="width:auto">
+                开售前自动刷新页面（T-30s / T-12s 各一次，默认关）
+              </label>
+              <div class="hint">用深链重开商品页让状态变新，刷新后自动重新核对+重新锚定；刷新期间不做判定。解决“页面开着很久、开售时状态还是旧的”的问题。</div>
+            </div>
+          </div>
+          <div class="frow" id="grab-reh-ms-wrap" style="display:none">
+            <div><label>彩排连点时长 (ms)</label><input id="grab-reh-ms" type="number" value="4000" min="1000" max="60000"></div>
+          </div>
+          <div class="frow">
+            <div><label>主按钮坐标 (留空=自动锚定)</label><input id="grab-btn-xy" placeholder="682,2305"></div>
+            <div><label>提交坐标 (留空=同主按钮)</label><input id="grab-sub-xy" placeholder="682,2305"></div>
+          </div>
+          <div class="hint" id="grab-calib-hint">标定分辨率：未连接设备</div>
+        </details>
+        <div class="btnrow">
+          <button class="btn" onclick="grabOpenItem()">📲 打开商品页</button>
+          <button class="btn primary" onclick="grabArm()">🚀 布防</button>
+          <button class="btn danger" style="flex:none" onclick="grabDisarm()">⛔ 解除</button>
+          <button class="btn" style="flex:none" onclick="resetGrabParams()" title="清空本机保存的参数, 恢复页面默认值">↺ 清空已存</button>
+        </div>
+        <div class="hint" id="grab-save-hint">参数会自动保存在本机浏览器（换 IP 打开控制台 = 换了一份存储）</div>
+        <div class="hint">布防 = 把这个任务下发给手机, 到点自动开抢；解除 = 立刻终止本次布防（等同「最近任务」里的 ⛔ 终止）。</div>
+      </div>
+
+      <!-- 抢购保活优化 -->
+      <div class="card">
+        <h3>⚡ 抢购保活优化
+          <span class="badge gray" id="perf-badge">未查询</span>
+        </h3>
+        <div class="section-note">抢购前点一下，防手机把脚本冻住/降级导致"任务下发慢、界面读不到"。全部走数据线、不装任何东西；<b>抢完点「恢复原状」就按原值回填</b>。</div>
+        <div class="hint" id="perf-status">点「查询」看当前状态</div>
+        <div class="hint" id="agent-script-hint">手机脚本体积：查询中…</div>
+        <div class="btnrow">
+          <button class="btn primary" onclick="perfBoost(true)">⚡ 开启优化</button>
+          <button class="btn" onclick="perfBoost(false)">↺ 恢复原状</button>
+          <button class="btn" style="flex:none" onclick="perfStatus()">查询</button>
+        </div>
+        <div class="btnrow">
+          <button class="btn" onclick="updateScriptLan()">⬇ 局域网更新脚本</button>
+          <button class="btn danger" onclick="stopAgent()">🛑 停止手机脚本</button>
+        </div>
+        <div class="hint">两个按钮都通过心跳下发（最多 4 秒生效），不用碰手机；停止后手机需手动重开脚本才会再上线。</div>
       </div>
     </div>
 
@@ -428,6 +525,22 @@ async function refreshDevices(manual) {
     $('hub-text').textContent = `服务正常 :${location.port || 3120}`;
     const area = $('dev-area');
     const list = data.devices || [];
+    const onlineDev = list.find(d => !d.isAdbOnly && d.isAlive && Array.isArray(d.screen) && d.screen.length === 2);
+    if (onlineDev) {
+      targetScreen = { w: onlineDev.screen[0], h: onlineDev.screen[1] };
+      const ch = $('grab-calib-hint');
+      if (ch) ch.textContent = `标定分辨率：${targetScreen.w}×${targetScreen.h}（保底坐标按它标定，换设备自动按比例换算）`;
+    }
+    // 手机脚本体积对账（判断"手机上的脚本是不是电脑上这一版"）
+    const sh = $('agent-script-hint');
+    if (sh) {
+      const dev = list.find(d => !d.isAdbOnly && d.isAlive);
+      const hubSz = Number(data.hubAgentScriptSize || 0);
+      const devSz = dev && Number(dev.scriptSize || 0);
+      if (!devSz) sh.textContent = '手机脚本体积：未上报（旧版脚本 / 刚重启 / 设备离线）';
+      else if (hubSz && Math.abs(devSz - hubSz) < 2048) sh.innerHTML = '手机脚本 <b>已是电脑上最新版</b>（' + (devSz / 1024).toFixed(1) + ' KB）';
+      else sh.innerHTML = '<span class="warn">⚠ 手机脚本与电脑不一致</span>（手机 ' + (devSz / 1024).toFixed(1) + ' KB / 电脑 ' + (hubSz / 1024).toFixed(1) + ' KB）→ 点「⬇ 局域网更新脚本」';
+    }
     if (!list.length) {
       area.innerHTML = `<div class="dev"><div class="icon">🔌</div><div class="info">
         <div class="name">未检测到设备</div>
@@ -499,6 +612,7 @@ async function updateScript() {
 
 /* ==================== 探针库与表单 ==================== */
 let catalog = [];
+let targetScreen = null;   // 当前在线手机的分辨率（保底坐标的标定基准）
 let profile = { viewers: [], addresses: [] };
 
 async function loadCatalog(manual) {
@@ -601,10 +715,9 @@ function onSessionChange() { }
 function onPriceChange() { }
 function onModeChange() {
   const m = $('task-mode').value;
-  $('fire-row').style.display = m === 'rush' ? '' : 'none';
   $('mode-hint').textContent = m === 'test'
     ? '演练完整跑通: 详情→选票→观演人→停在「立即提交」前'
-    : m === 'buy' ? '立即购买: 全流程直通提交订单' : '定时抢票: 到点进入高频监测, 按钮出现瞬间击发';
+    : '立即购买: 全流程直通提交订单';
 }
 function currentMode() { return $('task-mode').value; }
 
@@ -729,19 +842,10 @@ async function dispatchTask(forcedMode) {
   const count = parseInt($('target-count').value, 10) || 1;
   if (!$('target-name').value && !item) return toast('请先选择目标演出', '', 'warn');
 
-  let fireAt = 0;
-  if (mode === 'rush') {
-    const ft = $('fire-time').value.trim();
-    if (ft) {
-      fireAt = new Date(ft.replace(/-/g, '/')).getTime();
-      if (isNaN(fireAt)) return toast('开售时间格式错误', '如 2026-10-10 18:59:59', 'warn');
-    }
-  }
-
-  if (mode === 'buy' || (mode === 'rush' && fireAt)) {
+  if (mode === 'buy') {
     const ok = await confirmModal(
-      mode === 'buy' ? '🛒 确认立即购买?' : '⏰ 确认定时抢票?',
-      `目标: ${esc($('target-name').value)}\n席 位: ${esc(viewers.join(' + '))}\n张 数: ${count}\n模式: ${mode === 'buy' ? '立即购买 (将直接提交订单!)' : '定时抢票 (到点自动提交!)'}\n\n${mode === 'buy' ? '此操作会产生真实订单!' : '到点后将真实下单!'}`);
+      '🛒 确认立即购买?',
+      `目标: ${esc($('target-name').value)}\n席 位: ${esc(viewers.join(' + '))}\n张 数: ${count}\n模式: 立即购买 (将直接提交订单!)\n\n此操作会产生真实订单!`);
     if (!ok) return;
   }
 
@@ -760,10 +864,10 @@ async function dispatchTask(forcedMode) {
       viewers,
       count,
     },
-    timing: { fireAtEpochMs: fireAt, leadMs: 40 },
+    timing: { fireAtEpochMs: 0, leadMs: 40 },
   };
   try {
-    const r = await api('/api/tasks/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task }) });
+    await api('/api/tasks/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task }) });
     startTracking(task);
     toast(mode === 'test' ? '🟢 安全演练已启动' : '🚀 任务已下发',
       `${task.target.name} · ${viewers.join('+')} · ${count} 张`, 'success', 6000);
@@ -772,13 +876,13 @@ async function dispatchTask(forcedMode) {
   }
 }
 
-function confirmModal(title, text) {
+function confirmModal(title, text, yesText) {
   return new Promise(resolve => {
     $('modal-title').textContent = title;
     $('modal-body').textContent = text;
     $('modal-footer').innerHTML = '';
     const yes = document.createElement('button');
-    yes.className = 'btn danger'; yes.textContent = '确认执行';
+    yes.className = 'btn danger'; yes.textContent = yesText || '确认执行';
     yes.onclick = () => { closeModal(); resetModalFooter(); resolve(true); };
     const no = document.createElement('button');
     no.className = 'btn'; no.textContent = '取消';
@@ -791,11 +895,31 @@ function resetModalFooter() {
   $('modal-footer').innerHTML = '<button class="btn primary" onclick="closeModal()">知道了</button>';
 }
 
+/* ==================== 任务手动终止 ==================== */
+async function cancelTask(taskId) {
+  const ok = await confirmModal('⛔ 确认终止该任务?',
+    `任务: ${taskId}\n\n手机端将在几秒内停下（若正在倒计时等待开抢，也会取消击发）。\n说明: 若任务已进入提交订单环节，可能无法拦截。`,
+    '⛔ 确认终止');
+  if (!ok) return;
+  try {
+    const r = await api('/api/tasks/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId }) });
+    if (r.status === 'already_done') toast('该任务已完成', '无需终止', 'warn');
+    else if (r.status === 'already_cancelling') toast('已在取消中', '等待手机响应…', 'warn');
+    else if (r.status === 'cancelling') toast('⛔ 已发送终止指令', '等待手机响应（最多几秒）…', 'success');
+    else toast('⛔ 任务已终止', r.scope === 'queued' ? '任务尚未下发，已直接取消' : '已标记取消', 'success');
+    loadTaskStates();
+  } catch (e) { toast('终止失败', e.message, 'error'); }
+}
+
 /* ==================== 任务进度跟踪 ==================== */
 let currentTask = null;
 const STEP_NAMES = {
   wakeup: '唤起大麦 (热启动)', goto_detail: '就位演出详情页', open_sku: '打开选票页',
-  select_sku: '选择场次/票档/数量', order_confirm: '确认订单与观演人', submit: '提交订单',
+  select_sku: '选择场次/票档/数量',
+  item_open: '链接就位商品页', page_verify: '页面核对 (白名单)', anchor: '按钮锚定',
+  prewatch: '预监视 (低频)', mutation: '突变检测 (高频)', first_tap: '瞬间一击',
+  tap_chain: '连点链 (拟人)', submit: '提交订单', order_confirm: '确认订单与观演人',
+  selftest: '检测通道自测',
   add_viewer: '添加观演人', add_address: '添加收货地址',
 };
 const stepState = {};
@@ -831,12 +955,13 @@ function renderSteps() {
 function showTaskResult(r) {
   const box = $('task-result');
   const ok = r.outcome === 'success' || r.outcome === 'ordered';
+  const cancelled = r.outcome === 'cancelled';
   box.className = 'result show ' + (ok ? 'success' : r.outcome === 'failed' ? 'failed' : 'other');
-  box.innerHTML = `<div class="rt">${ok ? '✅' : r.outcome === 'failed' ? '❌' : '⚠️'} ${esc(r.outcome)}</div>
+  box.innerHTML = `<div class="rt">${ok ? '✅' : cancelled ? '⛔' : r.outcome === 'failed' ? '❌' : '⚠️'} ${esc(r.outcome)}</div>
     <div>${esc(r.message || r.evidence || '')}</div>`;
-  $('task-state-badge').textContent = ok ? '成功' : r.outcome === 'failed' ? '失败' : r.outcome;
-  $('task-state-badge').className = 'badge ' + (ok ? 'green' : r.outcome === 'failed' ? 'gray' : 'blue');
-  modal(ok ? '✅ 任务结果' : '❌ 任务结果',
+  $('task-state-badge').textContent = ok ? '成功' : cancelled ? '已取消' : r.outcome === 'failed' ? '失败' : r.outcome;
+  $('task-state-badge').className = 'badge ' + (ok ? 'green' : (cancelled || r.outcome === 'failed') ? 'gray' : 'blue');
+  modal(ok ? '✅ 任务结果' : cancelled ? '⛔ 任务已终止' : '❌ 任务结果',
     `<div style="font-size:14px;line-height:1.7"><b>结果:</b> ${esc(r.outcome)}<br><b>说明:</b> ${esc(r.message || r.evidence || '')}<br><b>任务:</b> ${esc(r.taskId || '')}</div>`);
 }
 
@@ -877,9 +1002,13 @@ function processEvent(e) {
     logLines.push({ t: time, e: '[下发]', m: `${det.mode} · ${det.target || ''} · ${det.viewers?.join('+')} × ${det.count}`, taskId: det.taskId });
   } else if (e.event === 'task_result') {
     const r = det;
-    logLines.push({ t: time, e: '[结果]', m: `${r.outcome} — ${r.message || r.evidence || ''}`, taskId: r.taskId, cls: r.outcome === 'success' || r.outcome === 'ordered' ? 'success' : r.outcome === 'failed' ? 'failed' : '' });
+    const rCls = (r.outcome === 'success' || r.outcome === 'ordered') ? 'resultline success' : r.outcome === 'failed' ? 'resultline failed' : '';
+    logLines.push({ t: time, e: '[结果]', m: `${r.outcome} — ${r.message || r.evidence || ''}`, taskId: r.taskId, cls: rCls });
     showTaskResult(r);
     if (r.outcome === 'success' && (r.data?.viewers || r.data?.addresses || String(r.taskId || '').includes('add'))) loadProfile();
+  } else if (e.event === 'task_cancel_requested') {
+    logLines.push({ t: time, e: '[终止]', m: `已请求终止任务 ${det.taskId || ''} · 等待手机响应…`, taskId: det.taskId });
+    loadTaskStates();
   } else if (e.event === 'task_started') {
     logLines.push({ t: time, e: '[开始]', m: `${det.mode} ${det.target || ''}`, taskId: e.taskId });
   } else if (e.event === 'ticket_status_change') {
@@ -917,22 +1046,395 @@ async function loadTaskStates() {
     const list = data.tasks || [];
     $('recent-tasks').innerHTML = list.map(t => {
       const r = t.result;
-      const badge = r
-        ? (r.outcome === 'success' || r.outcome === 'ordered'
-            ? '<span class="badge green">成功</span>'
-            : r.outcome === 'failed' ? '<span class="badge gray">失败</span>' : '<span class="badge blue">' + esc(r.outcome) + '</span>')
-        : '<span class="badge blue">执行中</span>';
-      return `<div class="dev" style="padding:8px 12px;margin-bottom:8px">
+      let badge, action = '';
+      if (r) {
+        badge = r.outcome === 'success' || r.outcome === 'ordered'
+          ? '<span class="badge green">成功</span>'
+          : r.outcome === 'failed' ? '<span class="badge gray">失败</span>'
+          : r.outcome === 'cancelled' ? '<span class="badge gray">已取消</span>'
+          : '<span class="badge blue">' + esc(r.outcome) + '</span>';
+      } else if (t.cancelRequested) {
+        badge = '<span class="badge gray">取消中…</span>';
+      } else {
+        badge = '<span class="badge blue">执行中</span>';
+        action = `<button class="btn danger sm" style="flex:none" onclick="cancelTask('${esc(t.taskId)}')">⛔ 终止</button>`;
+      }
+      return `<div class="dev" style="padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px">${badge} ${esc(t.mode)} · ${esc(t.target || '')}</div>
           <div class="meta" style="color:var(--muted);font-size:11px">${new Date(t.dispatchedAt).toLocaleTimeString('zh-CN', {hour12:false})} · ${esc(t.viewers?.join('+') || '')} × ${t.count}</div>
           ${r ? `<div class="meta" style="color:var(--muted);font-size:11px">${esc((r.message || r.evidence || '').slice(0, 80))}</div>` : ''}
-        </div></div>`;
+        </div>${action}</div>`;
     }).join('') || '<div class="hint">暂无</div>';
   } catch (e) { /* ignore */ }
 }
 
+/* ==================== 链接抢购 (grab) ==================== */
+let grabTask = null;
+
+/** 从分享链接/纯数字中解析商品 ID (认不出返回 null, 不兜底) */
+function parseItemId(text) {
+  const t = String(text || '').trim();
+  if (!t) return null;
+  const m = t.match(/itemId=(\d{6,})/i) || t.match(/[?&]id=(\d{6,})/i);
+  if (m) return m[1];
+  if (/^\d{6,}$/.test(t)) return t;
+  return null;
+}
+
+/** 由演出名/城市启发式生成核对关键词 (可手改) */
+function buildKeywords(item) {
+  const skip = /演唱会|音乐会|巡演|演出|门票|剧场|大剧院|站$/;
+  const tokens = String((item.name || '') + ' ' + (item.city || '') + ' ' + (item.stationName || '')).match(/[\u4e00-\u9fa5A-Za-z0-9]{2,}/g) || [];
+  const out = [];
+  for (const t of tokens) {
+    if (skip.test(t)) continue;
+    if (t.length > 8) continue;
+    if (!out.includes(t)) out.push(t);
+    if (out.length >= 3) break;
+  }
+  return out.join(',');
+}
+
+/** 从探针库的"开售提示"文本反推开抢时间预填 (如 "10月7日17:17") */
+function autoFillGrabTime(hints) {
+  if ($('grab-time').value.trim()) return;
+  const joined = (hints || []).join(' ');
+  const re = /(\d{1,2})月(\d{1,2})日[^0-9]{0,6}(\d{1,2}):(\d{2})/g;
+  let m, last = null;
+  while ((m = re.exec(joined)) !== null) last = m;
+  if (!last) return;
+  const y = new Date().getFullYear();
+  const mm = String(last[1]).padStart(2, '0');
+  const dd = String(last[2]).padStart(2, '0');
+  const hh = String(last[3]).padStart(2, '0');
+  $('grab-time').value = `${y}-${mm}-${dd} ${hh}:${last[4]}:00`;
+}
+
+function onGrabLinkInput() {
+  const hint = $('grab-parsed');
+  const itemId = parseItemId($('grab-link').value);
+  if (!itemId) {
+    hint.innerHTML = '未识别到商品 ID (支持分享链接或纯数字 ID)';
+    hint.style.color = 'var(--warn)';
+    return;
+  }
+  const item = catalog.find(x => String(x.itemId || '') === String(itemId));
+  hint.style.color = '';
+  if (item) {
+    const extra = item.saleTimeHints?.length ? ` · 开售提示: ${esc(item.saleTimeHints.join('; '))}` : '';
+    hint.innerHTML = `✔ 已识别: <b>${esc(item.name || '')}</b>${item.stationName ? ' · ' + esc(item.stationName) : ''}${extra}`;
+    autoFillGrabTime(item.saleTimeHints);
+    if (!$('grab-keywords').value.trim()) $('grab-keywords').value = buildKeywords(item);
+  } else {
+    hint.innerHTML = `✔ 已识别商品 ID: <b>${esc(itemId)}</b> — 不在探针库, <button class="btn sm" style="padding:1px 8px" onclick="grabProbe('${esc(itemId)}')">📥 采集此商品</button> (若手机已停在该页面也可直接布防)`;
+  }
+}
+
+async function grabProbe(itemId) {
+  toast('采集此商品中…', '约 10 秒', 'info', 4000);
+  try {
+    await api('/api/probe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemId: String(itemId) }) });
+    await loadCatalog();
+    onGrabLinkInput();
+    toast('采集成功', '', 'success', 2500);
+  } catch (e) { toast('采集失败', e.message, 'error', 6000); }
+}
+
+function parseXY(s) {
+  const m = String(s || '').match(/^\s*(\d{2,5})\s*[,，]\s*(\d{2,5})\s*$/);
+  if (!m) return null;
+  return { x: parseInt(m[1], 10), y: parseInt(m[2], 10) };
+}
+
+async function grabOpenItem() {
+  const itemId = parseItemId($('grab-link').value);
+  if (!itemId) return toast('请先粘贴商品链接或 ID', '', 'warn');
+  try {
+    const r = await api('/api/adb/open-item', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemId }) });
+    toast('📲 已打开商品页', (r.hit || '') + ' — 看一眼手机是否停在目标演出', 'success', 6000);
+  } catch (e) { toast('打开失败', e.message, 'error', 7000); }
+}
+
+/* ==================== 抢购参数本机保存 (localStorage) ==================== */
+const GRAB_SAVE_KEY = 'qg.grab.params.v1';
+const GRAB_FIELDS = ['grab-link', 'grab-keywords', 'grab-exec', 'grab-time', 'grab-reh-time', 'grab-lead',
+  'grab-rate-min', 'grab-rate-max', 'grab-jitter-x', 'grab-jitter-y', 'grab-ft-tries', 'grab-ft-timeout',
+  'grab-chain-ms', 'grab-reh-ms', 'grab-btn-xy', 'grab-sub-xy'];
+const GRAB_CHECKS = ['grab-autorefresh'];   // 复选框单独存 checked
+
+function saveGrabParams() {
+  try {
+    const o = {};
+    for (const id of GRAB_FIELDS) { const el = $(id); if (el) o[id] = el.value; }
+    for (const id of GRAB_CHECKS) { const el = $(id); if (el) o['#' + id] = !!el.checked; }
+    localStorage.setItem(GRAB_SAVE_KEY, JSON.stringify(o));
+    const h = $('grab-save-hint');
+    if (h) h.textContent = '✔ 已保存到本机 ' + new Date().toLocaleTimeString('zh-CN');
+  } catch (e) { /* 隐私模式等场景忽略 */ }
+}
+function loadGrabParams() {
+  const h = $('grab-save-hint');
+  try {
+    const raw = localStorage.getItem(GRAB_SAVE_KEY);
+    if (!raw) { if (h) h.textContent = '参数会自动保存在本机浏览器（换 IP 打开控制台 = 换了一份存储）'; return; }
+    const o = JSON.parse(raw);
+    for (const id of GRAB_FIELDS) { const el = $(id); if (el && o[id] !== undefined && o[id] !== null) el.value = o[id]; }
+    for (const id of GRAB_CHECKS) { const el = $(id); if (el && o['#' + id] !== undefined) el.checked = !!o['#' + id]; }
+    if (h) h.textContent = '✔ 已恢复上次保存的参数（改动会自动保存）';
+  } catch (e) { if (h) h.textContent = '参数恢复失败（本机存储不可用）'; }
+}
+function bindGrabParamAutosave() {
+  for (const id of GRAB_FIELDS.concat(GRAB_CHECKS)) {
+    const el = $(id);
+    if (!el) continue;
+    el.addEventListener('input', saveGrabParams);
+    el.addEventListener('change', saveGrabParams);
+  }
+}
+function resetGrabParams() {
+  try { localStorage.removeItem(GRAB_SAVE_KEY); } catch (e) {}
+  const opts = {
+    'grab-link': '', 'grab-keywords': '', 'grab-exec': 'live', 'grab-time': '', 'grab-reh-time': '',
+    'grab-lead': '1000', 'grab-rate-min': '8', 'grab-rate-max': '12', 'grab-jitter-x': '3', 'grab-jitter-y': '3',
+    'grab-ft-tries': '3', 'grab-ft-timeout': '700', 'grab-chain-ms': '12000', 'grab-reh-ms': '4000',
+    'grab-btn-xy': '', 'grab-sub-xy': '',
+  };
+  for (const id of Object.keys(opts)) { const el = $(id); if (el) el.value = opts[id]; }
+  if ($('grab-autorefresh')) $('grab-autorefresh').checked = false;
+  const h = $('grab-save-hint');
+  if (h) h.textContent = '已清空本机保存，恢复默认值';
+  updateGrabRate(); onGrabExecChange();
+  $('grab-parsed').textContent = '粘贴后自动解析商品';
+  toast('已清空已存参数', '恢复为页面默认值', 'success', 3000);
+}
+
+/* ==================== 抢购保活优化 (开关 + 恢复原状) ==================== */
+async function perfStatus(silent) {
+  try {
+    const r = await api('/api/device/perf-boost');
+    const on = !!r.dozeWhitelisted;
+    $('perf-badge').textContent = on ? '已开启' : '未开启';
+    $('perf-badge').className = 'badge ' + (on ? 'green' : 'gray');
+    $('perf-status').innerHTML = '电池白名单 <b>' + (on ? '✓' : '✗') + '</b>'
+      + ' · 后台运行 <b>' + esc(String(r.runAnyInBg || '?')) + '</b>'
+      + ' · 活动桶 <b>' + esc(String(r.standbyBucket || '?')) + '</b>'
+      + ' · 插电常亮 <b>' + esc(String(r.stayOn || '?')) + '</b>'
+      + (r.dozeError ? ' <span class="warn">(' + esc(r.dozeError) + ')</span>' : '');
+  } catch (e) {
+    if (!silent) toast('查询失败', e.message, 'error', 6000);
+    $('perf-status').textContent = '查询失败: ' + e.message;
+  }
+}
+async function perfBoost(on) {
+  const ok = await confirmModal(on ? '⚡ 开启保活优化?' : '↺ 恢复原状?',
+    on
+      ? '会做 4 件事（都可回退）：\n① 加入电池优化白名单（防 Doze 冻结）\n② 后台运行改为"不限"\n③ 活动桶设为 active（防 App Standby 降级）\n④ 插着数据线时屏幕常亮（锁屏就读不到界面了）\n\n改动前的原值会记录下来，随时点「恢复原状」回填。'
+      : '按开启时记录的原值逐项回填（电池白名单 / 后台运行 / 活动桶 / 插电常亮）。',
+    on ? '开启' : '恢复原状');
+  if (!ok) return;
+  try {
+    const r = await api('/api/device/perf-boost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on }) });
+    toast(on ? '⚡ 已开启优化' : '↺ 已恢复原状', (r.steps || []).join(' · ').slice(0, 170), 'success', 9000);
+    perfStatus(true);
+  } catch (e) { toast('操作失败', e.message, 'error', 7000); }
+}
+
+/* ==================== 手机脚本：停止 / 局域网更新 ==================== */
+async function stopAgent() {
+  const ok = await confirmModal('🛑 停止手机端脚本?',
+    '手机上的 AutoJs6 脚本会退出：不再发心跳、不再接任务（等于"断开服务"）。\n\n需要时在手机上重新运行脚本即可重新上线。\n（最多 4 秒生效）',
+    '停止脚本');
+  if (!ok) return;
+  try {
+    const r = await api('/api/device/stop-agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    toast('🛑 已下发停止指令', r.note || '最多 4 秒生效', 'success', 8000);
+  } catch (e) { toast('下发失败', e.message, 'error', 6000); }
+  setTimeout(refreshDevices, 7000);
+}
+async function updateScriptLan() {
+  const ok = await confirmModal('⬇ 局域网更新手机脚本?',
+    '手机会自己从电脑下载最新脚本、覆盖本地文件，然后自动重启。\n\n前提：手机能连到中枢（WiFi 或数据线都行）。\n（最多 4 秒开始下载）',
+    '开始更新');
+  if (!ok) return;
+  try {
+    const r = await api('/api/device/update-script-lan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    toast('⬇ 已下发更新指令', (r.note || '') + (r.localSize ? '（电脑端 ' + (r.localSize / 1024).toFixed(1) + ' KB）' : ''), 'success', 9000);
+  } catch (e) { toast('下发失败', e.message, 'error', 7000); }
+  setTimeout(refreshDevices, 10000);
+}
+
+/** 读一个数字输入 (带范围夹) */
+function numVal(id, lo, hi, dft) {
+  const el = $(id);
+  if (!el) return dft;                       // 元素不存在也不炸（防改版漏字段把布防整条打挂）
+  const n = parseInt(el.value, 10);
+  if (!isFinite(n)) return dft;
+  return Math.max(lo, Math.min(hi, n));
+}
+
+/** 连点节拍提示 (由"目标击数/秒"反解间隔与按压, 含预估真实节拍) */
+let lastRttMs = 0;   // 最近一次实测往返 (channel_probe)
+function deriveCadence(rateMin, rateMax, rttMs) {
+  const OVERHEAD = 30;   // 设备端 input 进程开销经验值
+  const rMin = Math.max(1, Math.min(20, parseInt(rateMin, 10) || 8));
+  const rMax = Math.max(rMin, Math.max(1, Math.min(20, parseInt(rateMax, 10) || 12)));
+  const rtt = Math.max(0, parseInt(rttMs, 10) || 40);
+  const Tmax = 1000 / rMax, Tmin = 1000 / rMin;
+  const pressMax = Math.max(6, Math.min(56, Math.floor(Tmax - OVERHEAD)));
+  const pressMin = Math.max(6, pressMax - 18);
+  const pAvg = (pressMin + pressMax) / 2;
+  const gapMin = Math.max(0, Math.floor(Tmax - rtt));
+  const gapMax = Math.max(gapMin, Math.floor(Tmin - rtt));
+  const cycle = Math.max(gapMin + rtt, pAvg + OVERHEAD);
+  return {
+    gapMin, gapMax, pressMin, pressMax,
+    estPerSec: Math.max(1, Math.round(1000 / Math.max(1, cycle))),
+    ceilingPerSec: Math.floor(1000 / Math.max(1, rtt)),
+  };
+}
+function updateGrabRate() {
+  const rMin = numVal('grab-rate-min', 1, 20, 8);
+  const rMax = Math.max(rMin, numVal('grab-rate-max', 1, 20, 12));
+  const cad = deriveCadence(rMin, rMax, lastRttMs || 40);
+  const el = $('grab-rate-hint');
+  if (el) el.textContent = '目标 ' + rMin + '~' + rMax + ' 击/秒 · 预估真实约 ' + cad.estPerSec + ' 击/秒（按往返 ' + (lastRttMs || 40) + 'ms 算）';
+  const cd = $('grab-cadence-hint');
+  if (cd) cd.textContent = '间隔 ' + cad.gapMin + '~' + cad.gapMax + 'ms · 按压 ' + cad.pressMin + '~' + cad.pressMax + 'ms · 单发路径上限约 ' + cad.ceilingPerSec + ' 击/秒';
+}
+
+/** 执行方式切换: 彩排时间 / 彩排连点时长 只有彩排模式能设 */
+function onGrabExecChange() {
+  const isReh = $('grab-exec').value === 'rehearsal';
+  $('grab-reh-wrap').style.display = isReh ? '' : 'none';
+  $('grab-time-wrap').style.display = isReh ? 'none' : '';
+  $('grab-reh-ms-wrap').style.display = isReh ? '' : 'none';
+  if (isReh && !$('grab-reh-time').value.trim()) {
+    const t = $('grab-time').value.trim();
+    if (t) $('grab-reh-time').value = t;   // 顺手从开抢时间带过来, 再自己改
+  }
+}
+
+async function grabArm() {
+  const itemId = parseItemId($('grab-link').value);
+  if (!itemId) return toast('请先粘贴商品链接或 ID', '', 'warn');
+  const exec = $('grab-exec').value;
+  const dryRun = exec === 'rehearsal';
+  const hammer = exec === 'blind';
+  const ft = (dryRun ? $('grab-reh-time').value : $('grab-time').value).trim();
+  if (!ft) return toast(dryRun ? '请填写彩排时间' : '请填写开抢时间', '如 2026-10-09 17:17:00', 'warn');
+  const fireAt = new Date(ft.replace(/-/g, '/')).getTime();
+  if (isNaN(fireAt)) return toast('时间格式错误', '如 2026-10-09 17:17:00', 'warn');
+  if (fireAt - Date.now() < 8000) return toast('时间太近', '距离现在不足 8 秒, 来不及就位', 'warn');
+
+  // 前置检查: USB 设备 + 手机 Agent 在线 (关键点击依赖电脑 ADB 通道)
+  try {
+    const dv = await api('/api/devices');
+    if (!(dv.adbDevicesCount > 0)) return toast('布防被拦下', '未检测到 USB 设备 — 关键点击依赖电脑 ADB, 请先插好手机', 'error', 8000);
+    const online = (dv.devices || []).filter(d => d.isAlive && !d.isAdbOnly);
+    if (!online.length) return toast('布防被拦下', '手机 Agent 未在线 — 请先「一键连接设备」', 'error', 8000);
+    if (!targetScreen && online[0].screen) targetScreen = { w: online[0].screen[0], h: online[0].screen[1] };
+  } catch (e) { return toast('布防被拦下', '无法连接中枢: ' + e.message, 'error', 7000); }
+
+  const lead = numVal('grab-lead', 300, 10000, 1000);
+  const rateMin = numVal('grab-rate-min', 1, 20, 8);
+  const rateMax = Math.max(rateMin, numVal('grab-rate-max', 1, 20, 12));
+  const cad = deriveCadence(rateMin, rateMax, lastRttMs || 40);
+  const jitterX = numVal('grab-jitter-x', 0, 24, 3);
+  const jitterY = numVal('grab-jitter-y', 0, 24, 3);
+  const realMs = numVal('grab-reh-ms', 1000, 60000, 4000);
+  const ftTries = numVal('grab-ft-tries', 1, 5, 3);
+  const btnXY = parseXY($('grab-btn-xy').value);
+  const subXY = parseXY($('grab-sub-xy').value);
+  const keywords = $('grab-keywords').value.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 6);
+  const item = catalog.find(x => String(x.itemId || '') === String(itemId));
+  const rate = `目标 ${rateMin}~${rateMax} 击/秒 → 预估真实 ${cad.estPerSec} 击/秒`;
+  const execText = dryRun
+    ? `彩排 (到点真打: 首击 + ${realMs}ms 连点; 不检测变化、不走提交)`
+    : hammer ? '无脑高频连点 (不判跳转)' : '正式开抢 (变化→瞬间首击→连点到提交订单)';
+
+  const ok = await confirmModal('🚀 确认布防?',
+    `目标: ${item?.name || ('商品 ' + itemId)}\n商品ID: ${itemId}\n时间: ${ft}\n方式: ${execText}\n`
+    + `连点节拍: ${rate} (间隔 ${cad.gapMin}~${cad.gapMax}ms, 按压 ${cad.pressMin}~${cad.pressMax}ms, 抖动 X${jitterX}px / Y${jitterY}px)\n`
+    + `首击: 中枢预置 + 最多 ${ftTries} 发重试\n`
+    + `保底坐标: ${btnXY ? (btnXY.x + ',' + btnXY.y) : '自动锚定'} @ ${targetScreen ? (targetScreen.w + '×' + targetScreen.h) : '未知分辨率'}\n\n`
+    + (dryRun ? '彩排会真实点击按钮区域 + 连点, 但不会点提交。' : '到点后将真实点击, 连点到提交订单!'),
+    dryRun ? '🟢 开始彩排' : '🚀 布防 (真实抢购)');
+  if (!ok) return;
+
+  const task = {
+    taskId: 't-grab-' + Date.now(),
+    platform: 'damai',
+    mode: 'grab',
+    target: {
+      name: item?.name || ('商品 ' + itemId),
+      itemId,
+      session: item?.stationName || '',
+      priceText: '',
+      viewer: '',
+      viewers: [],
+      count: 1,
+      expectKeywords: keywords,
+    },
+    timing: { fireAtEpochMs: fireAt, highFreqLeadMs: lead },
+    grab: {
+      dryRun, hammer, button: btnXY, submit: subXY, calibScreen: targetScreen,
+      gapMinMs: cad.gapMin, gapMaxMs: cad.gapMax,
+      pressMinMs: cad.pressMin, pressMaxMs: cad.pressMax,
+      jitterPx: Math.max(jitterX, jitterY), jitterXPx: jitterX, jitterYPx: jitterY,
+      rateMin: rateMin, rateMax: rateMax,
+      autoRefresh: $('grab-autorefresh').checked,
+      chainMs: numVal('grab-chain-ms', 3000, 60000, 12000),
+      rehearsalMs: realMs,
+      firstTapTries: ftTries,
+      firstTapTimeoutMs: numVal('grab-ft-timeout', 200, 3000, 700),
+    },
+  };
+  try {
+    await api('/api/tasks/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task }) });
+    grabTask = task;
+    $('grab-badge').textContent = dryRun ? '彩排中' : '已布防';
+    $('grab-badge').className = 'badge green';
+    startTracking(task);
+    toast(dryRun ? '🟢 彩排已启动' : '🚀 已布防', `${task.target.name} · ${ft}`, 'success', 7000);
+  } catch (e) { toast('布防失败', e.message, 'error', 7000); }
+}
+
+async function grabDisarm() {
+  if (!grabTask) return toast('本页没有进行中的布防', '可在「最近任务」里对任意任务点「⛔ 终止」', 'warn');
+  await cancelTask(grabTask.taskId);
+}
+
+async function grabSelfTest() {
+  const itemId = parseItemId($('grab-link').value);
+  if (!itemId) return toast('请先粘贴商品链接或 ID', '自测需要脚本先就位商品页', 'warn');
+  const item = catalog.find(x => String(x.itemId || '') === String(itemId));
+  const ok = await confirmModal('🧪 检测通道自测?',
+    `脚本会: ①就位商品页 → ②采样按钮基线 3 秒 → ③点一次底栏「想看」触发真实变化, 测量"发现延迟" → ④自动还原。\n\n商品: ${esc(item?.name || itemId)}`,
+    '开始自测');
+  if (!ok) return;
+  const task = {
+    taskId: 't-grab-selftest-' + Date.now(),
+    platform: 'damai',
+    mode: 'grab',
+    target: { name: '检测通道自测', itemId, session: '', priceText: '', viewer: '', viewers: [], count: 1, expectKeywords: [] },
+    timing: { fireAtEpochMs: Date.now() + 3600000, highFreqLeadMs: 1000 },
+    grab: { selfTest: true },
+  };
+  try {
+    await api('/api/tasks/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task }) });
+    startTracking(task);
+    toast('🧪 自测已下发', '看「任务执行状态」时间线: 读取速率 + 发现延迟', 'success', 7000);
+  } catch (e) { toast('自测下发失败', e.message, 'error', 7000); }
+}
+
 /* ==================== 初始化 ==================== */
+loadGrabParams();          // 先恢复上次保存的参数（在下面依赖输入的渲染之前）
+bindGrabParamAutosave();
+updateGrabRate();
+onGrabExecChange();
+if ($('grab-link').value.trim()) onGrabLinkInput();
+perfStatus(true);          // 静默查一次保活优化状态
 refreshDevices();
 loadCatalog();
 loadProfile();

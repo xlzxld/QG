@@ -74,6 +74,7 @@ var AnchorFire = {
     /**
      * T0 临界击发：单次物理触摸注入 (热路径速度优先, 抖动保留防指纹)
      * 注意: 只注入一次触摸! (旧版 click()+press() 连发两次是双击 bug)
+     * 失败原因不再静默: press 通道不成功时立即降级 click 通道, 仍失败则明确告警
      * @returns {boolean}
      */
     fire: function() {
@@ -83,15 +84,21 @@ var AnchorFire = {
             console.log("【击发出膛】注入物理坐标: (" + jx + ", " + jy + ")");
             try {
                 if (typeof press === "function") {
-                    return press(jx, jy, 30);
+                    var okP = press(jx, jy, 30);
+                    // 严格判断: 只有明确返回 false 才视为未注入并降级; true/undefined 均按"已注入"处理
+                    // (不确定返回语义时绝不重复点击 — 防双击 bug 回归)
+                    if (okP !== false) return okP;
+                    console.warn("【击发警告】press 通道明确未注入 (false), 立即降级 click 通道");
                 }
-            } catch (eP) {}
+            } catch (eP) {
+                console.warn("【击发警告】press 注入异常: " + (eP ? (eP.message || eP) : "未知") + ", 降级 click 通道");
+            }
             try {
                 if (typeof click === "function") {
                     return click(jx, jy);
                 }
             } catch (eC) {
-                console.error("【击发失败】触摸注入失败: " + eC.message);
+                console.error("【击发失败】触摸注入失败: " + (eC ? (eC.message || eC) : "未知") + " — 需要人工接管!");
             }
             return false;
         } else {

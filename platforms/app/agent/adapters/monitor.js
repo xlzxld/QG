@@ -23,6 +23,14 @@ var MonitorAdapter = {
     },
 
     /**
+     * 是否收到针对该任务的手动终止指令 (指令经心跳回带, 见 transport.js)
+     */
+    _isCancelled: function(task) {
+        return !!(typeof Transport !== "undefined" && Transport.cancelRequestedTaskId &&
+                  Transport.cancelRequestedTaskId === task.taskId);
+    },
+
+    /**
      * 运行监控循环
      * @param {object} task 任务对象
      * @param {function} onStatusChange 状态变化回调
@@ -32,6 +40,11 @@ var MonitorAdapter = {
         var intervalMs = 15000; // 默认 15 秒低频轮询
 
         while (true) {
+            if (this._isCancelled(task)) {
+                console.log("【余票盯梢终止】收到手动终止指令, 退出监控循环");
+                break;
+            }
+
             var currentStatus = this.checkTicketStatus();
             console.log("【余票探测】当前状态: " + currentStatus);
 
@@ -43,8 +56,11 @@ var MonitorAdapter = {
                 }
             }
 
-            // 遵守频率纪律，休眠
-            sleep(intervalMs);
+            // 遵守频率纪律，休眠; 分片 1 秒一片, 便于终止指令最快 1 秒内生效
+            for (var s = 0; s < Math.ceil(intervalMs / 1000); s++) {
+                if (this._isCancelled(task)) break;
+                sleep(1000);
+            }
         }
     }
 };

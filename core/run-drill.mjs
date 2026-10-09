@@ -31,7 +31,12 @@ async function main() {
   const price = config.selection?.priceTierTarget || '';
   const viewer = config.identity?.primaryAttendee || '';
   const count = config.selection?.ticketCount || 1;
-  const mode = process.argv.includes('--rush') ? 'rush' : 'test';
+  if (process.argv.includes('--rush')) {
+    console.log('⚠️ 「定时抢票(--rush)」已下线 (2026-10-09 大麦抢购重写): 正式抢购请在控制台 (:3120) 使用「🔗 链接抢购」卡片 —— 粘贴链接 + 填开抢时间 → 布防。');
+    console.log('   本命令行工具现在只保留「安全演练」用途。');
+    process.exit(1);
+  }
+  const mode = 'test';
 
   console.log(`📋 当前演练配置参数:`);
   console.log(`   - 目标演出: ${targetName}`);
@@ -39,7 +44,7 @@ async function main() {
   console.log(`   - 目标票档: ${price || '(自适应在售票档)'}`);
   console.log(`   - 实名观演人: ${viewer} (严格锁定)`);
   console.log(`   - 购票张数: ${count} 张`);
-  console.log(`   - 执行模式: ${mode === 'test' ? '🟢 安全演练 (停在提单前)' : '🚀 正式抢票'}`);
+  console.log(`   - 执行模式: 🟢 安全演练 (停在提单前)`);
   console.log('------------------------------------------------------------');
 
   const task = {
@@ -48,6 +53,7 @@ async function main() {
     mode,
     target: {
       name: targetName,
+      itemId: config.project?.projectId ? String(config.project.projectId) : '',
       session,
       priceText: price,
       viewer,

@@ -1,12 +1,12 @@
 {
   "_说明": "大麦演出项目已探测库。探针真实采集（H5 详情接口），控制台直接下拉选择。巡演按 tourId 分组，含多城市站。",
-  "updatedAt": "2026-10-09T05:49:11.413Z",
+  "updatedAt": "2026-10-09T09:19:53.106Z",
   "items": [
     {
       "id": "st-1085142029424",
       "itemId": "1085142029424",
       "projectId": "240256009",
-      "tourId": "5850",
+      "tourId": "",
       "tourName": "薛之谦“万兽之王”巡回演唱会",
       "stationName": "贵阳站",
       "name": "贵阳·薛之谦“万兽之王”巡回演唱会- 贵阳站",
@@ -14,9 +14,9 @@
       "venue": "贵阳奥林匹克体育中心体育场",
       "venueAddr": "贵阳市观山湖区云潭南路",
       "showTime": "2026.10.17-10.25",
-      "stationShowTime": "10.17-10.25",
-      "saleStatus": "预约",
-      "status": "预约",
+      "stationShowTime": "",
+      "saleStatus": "",
+      "status": "在售",
       "priceRange": "317-1717",
       "purchaseLimit": "4",
       "duration": "约150分钟，仅供参考，最终以现场实际时长为准",
@@ -28,7 +28,7 @@
       ],
       "fullData": true,
       "source": "damai-h5-live",
-      "updatedAt": "2026-10-09T05:49:11.413Z",
+      "updatedAt": "2026-10-09T09:19:53.106Z",
       "sessions": [
         {
           "id": "p1",
@@ -52,32 +52,7 @@
         }
       ],
       "priceTiers": [],
-      "stations": [
-        {
-          "stationName": "贵阳站",
-          "itemId": "1085142029424",
-          "saleStatus": "预约",
-          "showTime": "10.17-10.25",
-          "tourId": "5850",
-          "current": false
-        },
-        {
-          "stationName": "厦门站",
-          "itemId": "1083650546473",
-          "saleStatus": "预约",
-          "showTime": "10.31-11.08",
-          "tourId": "5850",
-          "current": false
-        },
-        {
-          "stationName": "成都站",
-          "itemId": "1076554197906",
-          "saleStatus": "缺货",
-          "showTime": "10.10-10.11",
-          "tourId": "5850",
-          "current": true
-        }
-      ]
+      "stations": []
     },
     {
       "id": "st-1083650546473",
