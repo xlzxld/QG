@@ -410,6 +410,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/health' && req.method === 'GET') {
     return sendJson(res, 200, {
       status: 'ok', service: 'device-hub',
+      pid: process.pid,
       uptimeSec: Math.floor(process.uptime()),
       onlineDevices: devices.size,
       lanIps: getLocalIps(),

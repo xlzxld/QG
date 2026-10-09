@@ -54,4 +54,44 @@ describe('跨平台 (macOS Darwin / Windows Win32) 兼容性测试', () => {
     expect(restartScript).not.toContain("ROOT + 'data\\\\grab\\\\'");
     expect(restartScript).toContain("path.join(ROOT, 'data', 'grab'");
   });
+
+  it('5. Windows .bat 启动脚本：CRLF 换行 + 编码安全（纯 ASCII 或 GBK+chcp 936）', () => {
+    const bats = [
+      '启动.bat',
+      '停止服务.bat',
+      '重启服务.bat',
+      '启动-手机中枢.bat',
+      '停止抢购中枢.bat',
+      '自检-Windows环境.bat',
+      '今早抢购-手动武装.bat',
+      path.join('tools', 'mobile', 'prepare-device.bat'),
+    ];
+    for (const file of bats) {
+      const fullPath = path.join(ROOT, file);
+      expect(fs.existsSync(fullPath), `${file} 应存在`).toBe(true);
+      const buf = fs.readFileSync(fullPath);
+      const raw = buf.toString('latin1'); // 逐字节透明视图
+
+      // 1) 不允许裸 LF —— 必须 CRLF
+      expect(/(?<!\r)\n/.test(raw), `${file} 存在单独的 LF，应统一为 CRLF`).toBe(false);
+
+      // 2) 不允许 UTF-8 BOM（会顶掉第一行 @echo off）
+      const hasBom = buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf;
+      expect(hasBom, `${file} 不应带 UTF-8 BOM`).toBe(false);
+
+      // 3) 非 ASCII 内容 ⇒ 必须 GBK 可解码 + chcp 936，且不得 chcp 65001
+      const hasNonAscii = /[^\x00-\x7f]/.test(raw);
+      if (hasNonAscii) {
+        let decodable = true;
+        try {
+          new TextDecoder('gbk', { fatal: true }).decode(buf);
+        } catch {
+          decodable = false;
+        }
+        expect(decodable, `${file} 含非 ASCII 但非合法 GBK —— 疑似 UTF-8 中文陷阱`).toBe(true);
+        expect(raw).toContain('chcp 936');
+        expect(raw).not.toContain('chcp 65001');
+      }
+    }
+  });
 });

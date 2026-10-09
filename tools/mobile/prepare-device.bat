@@ -1,5 +1,5 @@
 @echo off
-chcp 65001 >nul
-echo 姝ｅ湪杩愯 Android 鐪熸満鏁村鑴氭湰...
+chcp 936 >nul 2>&1
+echo 正在运行 Android 真机整备脚本...
 node "%~dp0prepare-device.mjs"
 pause

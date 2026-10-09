@@ -1,16 +1,17 @@
 @echo off
 rem ==================================================================
-rem  Stop the QG grab hub (device-hub :3120)  (ASCII only, on purpose)
+rem  Windows environment self-check  (ASCII only, on purpose)
+rem  Companion of the macOS self-check (check-macos-env.sh)
 rem ------------------------------------------------------------------
-rem  Double-click to stop the hub. Safe to run even when the hub is
-rem  not running, or when its PID file is stale / missing.
-rem  The logic lives in core\hub-launcher.mjs (PID file -> port scan).
+rem  Double-click this file to run the Windows readiness check:
+rem  system / winget / Node.js / Chrome / ADB / phone / deps+ports.
+rem  The real logic lives in check-windows-env.mjs (Chinese output).
 rem ==================================================================
 
 chcp 65001 >nul 2>&1
 
 setlocal
-title Stop QG Grab Hub
+title QG Env Self-Check (Windows)
 
 cd /d "%~dp0"
 
@@ -30,14 +31,16 @@ if not defined NODE_EXE (
 )
 if not defined NODE_EXE (
     echo.
-    echo   [ERROR] Node.js not found - cannot stop the hub safely.
-    echo           Install Node.js first: https://nodejs.org/
+    echo   [ERROR] Node.js not found - the self-check needs Node.js 18 or newer.
+    echo           Install it first, then double-click this file again.
+    echo           Download: https://nodejs.org/  -  choose the LTS build.
     echo.
     pause
     exit /b 1
 )
 
-"%NODE_EXE%" "core\hub-launcher.mjs" --stop
+"%NODE_EXE%" "check-windows-env.mjs"
+set "EXITCODE=%ERRORLEVEL%"
 
 echo.
 pause

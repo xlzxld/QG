@@ -3,7 +3,7 @@ rem ==================================================================
 rem  Stop the bridge service  (ASCII only, on purpose)
 rem ------------------------------------------------------------------
 rem  Double-click to shut down the background bridge process.
-rem  Start it again with 启动.bat (or Restart Service).
+rem  Start it again with the normal start bat, or use Restart Service.
 rem ==================================================================
 
 chcp 65001 >nul 2>&1

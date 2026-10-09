@@ -6,6 +6,8 @@
 
 ```bash
 npm run hub            # 启动设备中枢 (控制台 http://localhost:3120)
+node core/hub-launcher.mjs --start|--stop|--status   # 中枢启停/状态（「启动/停止-手机中枢」bat 的内核）
+node check-windows-env.mjs                           # Windows 环境自检（或双击 自检-Windows环境.bat）
 npm run drill          # 向手机下发大麦安全演练 (停在提交前)
 npm run drill:rush     # 下发正式抢票
 npm run agent:build    # 重新打包手机端 Agent 单文件 main.js (源码在 platforms/app/agent/)
@@ -30,6 +32,8 @@ npm test               # 单元测试 (vitest)
 - 添加观演人/地址任务依赖手机 `/sdcard/qg-agent/regions.json` (一键连接时自动推送)
 - 大麦部分自绘控件 (SKU 票档滚轮) 无视无障碍手势，Agent 已内置 PC-ADB 注入兜底通道
 - 测试: `npm test`；提交前必须全绿
+- Windows .bat 规范：一律 CRLF；含中文的 bat 必须 GBK 编码 + `chcp 936`（禁止 UTF-8 / BOM + `chcp 65001` 组合——cmd 解析会错位甚至直接崩退）；纯 ASCII 的 bat 内不要写中文，中文输出交给 node 脚本打印
+- 手机中枢启停走 `core/hub-launcher.mjs`（勿在 bat 里写进程查找——PowerShell 转义极易写错）；环境自检逻辑在 `check-windows-env.mjs`
 
 ## Skill routing
 
