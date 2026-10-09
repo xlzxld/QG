@@ -519,7 +519,7 @@ function applyChannel(ch, adbFallback) {
     hint.textContent = m === 'usb'
       ? '通道: USB (ADB) — 全部能力可用（含中枢预置击发 / 保活优化）'
       : m === 'wifi'
-        ? '通道: Wi-Fi — 可用（打开商品页 / 自测 / 抢购 / 停止 / 更新脚本）；点击走手机本地手势，大麦自绘按钮可能无效；中枢预置击发与保活优化需插数据线'
+        ? '通道: Wi-Fi — 可用（打开商品页 / 自测 / 抢购 / 停止 / 更新脚本）；点击优先走手机本地 Shizuku 注入（未启用则退无障碍手势，大麦自绘按钮可能无效）；中枢预置击发与保活优化需插数据线'
         : '通道: 未连接 — 插 USB 数据线，或在同一 Wi-Fi 下启动手机脚本';
     hint.style.color = m === 'wifi' ? 'var(--warn)' : '';
   }
@@ -614,6 +614,7 @@ async function refreshDevices(manual) {
           <span>状态 <b>${esc(state)}</b></span>
           <span>电量 <b>${d.battery != null ? d.battery + '%' : '--'}</b></span>
           <span>无障碍 <b style="color:${d.accessibility ? 'var(--ok)' : 'var(--err)'}">${d.accessibility ? '正常' : '未开启'}</b></span>
+          <span>自主点击 <b style="color:${d.shizuku === 'active' ? 'var(--ok)' : 'var(--warn)'}" title="Shizuku 本地注入: 免数据线点击自绘控件">${d.shizuku === 'active' ? 'Shizuku ✓' : '未启用'}</b></span>
         </div></div></div>`;
     }).join('');
     if (manual) toast('设备已刷新', `${list.length} 台设备`, 'success', 2000);

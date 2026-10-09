@@ -1,7 +1,7 @@
 /**
  * =====================================================================
  * QG-Agent 移动端全功能免依赖抢购引擎 (AutoJs6 / AutoX 独立全功能单文件版)
- * 生成时间: 2026-10-09T16:21:12.444Z
+ * 生成时间: 2026-10-09T16:37:52.140Z
  * 零 require 依赖，兼容任何目录直接运行 (彻底根除 jvm-npm 相对路径抛错)
  * =====================================================================
  */
@@ -544,6 +544,16 @@ var Transport = {
         return null;
     },
 
+    /** Shizuku 状态快照 (上报中枢: 控制台据此显示"手机自主点击"能力; 详见 docs.autojs6.com/#/shizuku) */
+    shizukuState: function () {
+        try {
+            if (typeof shizuku === "undefined") return "none";
+            var st = shizuku.state;
+            if (st && typeof st.isOperational === "boolean") return st.isOperational ? "active" : "inactive";
+        } catch (e) {}
+        return "unknown";
+    },
+
     /**
      * 设备注册握手
      */
@@ -563,6 +573,7 @@ var Transport = {
                 screen: [sw, sh],
                 accessibility: isAcc,
                 battery: bat,
+                shizuku: this.shizukuState(),   // 手机自主点击能力 (本地 input 注入, 免 PC)
                 bootAt: java.lang.System.currentTimeMillis()
             };
             var res = http.postJson(this.activeHubUrl + "/api/device/hello", payload, { timeout: 4000 });
@@ -605,6 +616,7 @@ var Transport = {
                 battery: bat,
                 charging: chg,
                 accessibility: isAcc,
+                shizuku: this.shizukuState(),   // 状态可能变化 (服务被杀/重启失效), 心跳随行
                 scriptSize: this.scriptSize(),   // 本脚本体积: 中枢据此判断"手机脚本是否最新"
                 ts: java.lang.System.currentTimeMillis()
             };
@@ -1578,7 +1590,50 @@ function signalChangedFrom(s, base) {
     return false;
 }
 
-/** ADB 优先按击 (自绘控件只认 ADB); 无 ADB (WiFi 通道) 时回落手机本地无障碍手势。
+/* ===== 本地注入通道 (2026-10-10 新增): 手机自主点击, 不依赖电脑 =====
+ * 成熟方案 = AutoJs6 内置 shizuku 全局函数 (官方文档 docs.autojs6.com/#/shizuku, 6.4.0+):
+ *   设备装 Shizuku App 并启动服务 (安卓 11+ 走无线调试配对, 免 PC) + AutoJs6 抽屉开启 Shizuku 开关,
+ *   之后 shizuku('input tap x y') 以 ADB 特权**本地**注入 —— 与 PC-ADB input tap 完全同级,
+ *   对大麦自绘控件同样有效 (无障碍手势点不动的按钮它能点动), 且断开电脑照常工作。
+ * 已知限制: 手机重启后 Shizuku 服务失效, 需重新激活 (无线调试端口会变)。
+ * 状态探测: shizuku.state.isOperational (6.7.0+); 旧版本回退试跑 echo; 失败自动降级手势。 */
+var LocalInjector = {
+    _probedAt: 0,
+    _ok: false,
+    /** 是否可用 (结果缓存 5s, 失败立即重探) */
+    available: function () {
+        var t = now();
+        if (this._probedAt && (t - this._probedAt) < 5000) return this._ok;
+        this._probedAt = t;
+        this._ok = false;
+        try {
+            if (typeof shizuku === "undefined") return false;
+            var st = (shizuku.state && typeof shizuku.state === "object") ? shizuku.state : null;
+            if (st && typeof st.isOperational === "boolean") {
+                this._ok = !!st.isOperational;
+            } else {
+                var r = shizuku("echo ok");          // 旧版本无 state: 试跑一条验证
+                this._ok = !!(r && (r.code === undefined || r.code === 0));
+            }
+        } catch (eS) { this._ok = false; }
+        if (this._ok) console.log("[本地注入] Shizuku 通道可用 (手机自主点击, 免 PC)");
+        return this._ok;
+    },
+    /** 本地 input 注入一次点击; pressMs>=30 用同点 swipe 模拟按压时长 */
+    tap: function (x, y, pressMs) {
+        try {
+            var r = (pressMs && pressMs >= 30)
+                ? shizuku("input swipe " + x + " " + y + " " + x + " " + y + " " + Math.min(300, pressMs))
+                : shizuku("input tap " + x + " " + y);
+            var okr = !!(r && (r.code === undefined || r.code === 0));
+            if (!okr) this._probedAt = 0;            // 失败立刻重探
+            return okr;
+        } catch (eT) { this._probedAt = 0; return false; }
+    }
+};
+
+/** ADB 优先按击 (自绘控件只认 input 注入); 通道链:
+ *  ① PC-ADB (USB, 最快) → ② 本地 Shizuku 注入 (免 PC, 同级能力) → ③ 手机无障碍手势 (最后兜底)。
  *  pressMs>=30 时用"同点按压"模拟人类按压时长 */
 function adbPress(x, y, pressMs) {
     if (pressMs && pressMs >= 30) {
@@ -1587,8 +1642,9 @@ function adbPress(x, y, pressMs) {
     } else if (Transport.adbTap(x, y)) {
         return true;
     }
-    // ★ 2026-10-09: ADB 通道不可用 (WiFi: 中枢没有 adb; 或中枢离线) → 回落手机本地手势。
-    //   普通控件手势有效; 大麦自绘按钮可能无效 —— 只告警一次, 不静默, 也不假装成功。
+    // ② 本地 Shizuku 注入 (WiFi/无 USB 时的"自主点击"通道; 与 PC-ADB 同级, 自绘按钮有效)
+    if (LocalInjector.available() && LocalInjector.tap(x, y, pressMs)) return true;
+    // ③ 无障碍手势兜底 (自绘控件可能无效 —— 只告警一次, 不静默, 也不假装成功)
     var local = false;
     try {
         if (pressMs && pressMs >= 30 && typeof press === "function") local = press(x, y, pressMs) !== false;
@@ -1598,7 +1654,7 @@ function adbPress(x, y, pressMs) {
     if (!local) local = fastPress(x, y);
     if (!adbPress._wifiWarned && typeof Transport !== "undefined" && Transport.remoteUsb && !Transport.remoteUsb()) {
         adbPress._wifiWarned = true;
-        console.warn("[通道] WiFi 通道: 点击已改用手机无障碍手势 (大麦自绘按钮可能无效, 建议插数据线走 ADB)");
+        console.warn("[通道] 已退到无障碍手势 (自绘按钮可能无效; 建议启用 Shizuku 或插数据线)");
     }
     return local;
 }
@@ -1637,9 +1693,37 @@ var GRAB_POINTS = {
     calib: { w: 1080, h: 2400 },
     anchor: { x: 841, y: 2310 },       // 统一锚点: 一个点通吃 立即预订/确定/立即提交
     jitterCap: { x: 100, y: 40 },      // 锚点抖动上限 (超过必出按钮; 推荐 X 20~40, Y 8~16)
-    popup: { x: 540, y: 1382, jitterX: 80, jitterY: 18, delayMs: 300, pollMs: 60 },
+    popup: { x: 540, y: 1382, jitterX: 80, jitterY: 18, delayMs: 300, pollMs: 60, blindPoke: true, blindEveryMs: 600 },
     popupFromSubmit: { dx: -301, dy: -928 }   // 无 popup 配置时: 提交锚点 + 此偏移 推算弹窗按钮
 };
+
+/**
+ * 弹窗多信号探测 (2026-10-10) —— 自绘也兜得住:
+ *   ① 按钮 text 节点 (最准; 弹窗按钮大概率是原生 TextView, 与底栏自绘主按钮不同类)
+ *   ② textContains 宽匹配
+ *   ③ 正文关键词节点 ("别放弃"/"抢票人数") —— 按钮自绘但正文可读时, 用正文 x + 推算 y
+ *   ④ 全读不到 (整窗自绘) → 由调用方走低频盲点 (blindPoke), 点了有没有效不依赖读得到
+ */
+function popupProbe() {
+    var cand = null;
+    try { cand = text("继续尝试").findOnce(); } catch (e1) {}
+    if (!cand) { try { cand = textContains("继续尝试").findOnce(); } catch (e2) {} }
+    if (cand && cand.bounds) {
+        try {
+            var b = cand.bounds();
+            if (b && b.width() > 40 && b.height() > 12) return { x: b.centerX(), y: b.centerY(), via: "node" };
+        } catch (e3) {}
+    }
+    var body = null;
+    try { body = textContains("别放弃").findOnce() || textContains("抢票人数").findOnce(); } catch (e4) {}
+    if (body && body.bounds) {
+        try {
+            var bb = body.bounds();
+            if (bb && bb.width() > 40) return { x: bb.centerX(), y: GRAB_POINTS.popup.y, via: "body-text" };
+        } catch (e5) {}
+    }
+    return null;
+}
 
 /** 击发间距 (全局): 主链与弹窗侧车共用, 任意两击(不分流)间隔 ≥50ms → 合计 ≤20 击/秒 */
 var TAP_SPACING = { lastAt: 0 };
@@ -1652,8 +1736,8 @@ function waitTapSlot(minGapMs) {
 }
 
 /** 连点链旁路控制: 主链热路径只认这个布尔, 识别/看护全在侧车线程 */
-var CHAIN_CTL = { stop: false, stopReason: "", sidecarDone: false, popupClicks: 0 };
-function chainReset() { CHAIN_CTL.stop = false; CHAIN_CTL.stopReason = ""; CHAIN_CTL.sidecarDone = false; CHAIN_CTL.popupClicks = 0; }
+var CHAIN_CTL = { stop: false, stopReason: "", sidecarDone: false, popupClicks: 0, lastPopupVia: "" };
+function chainReset() { CHAIN_CTL.stop = false; CHAIN_CTL.stopReason = ""; CHAIN_CTL.sidecarDone = false; CHAIN_CTL.popupClicks = 0; CHAIN_CTL.lastPopupVia = ""; }
 
 /**
  * 第三重兜底：页面文案扫描（2026-10-09 加入）
@@ -1790,30 +1874,37 @@ function startChainSidecar(task, anchor, tid, endAt) {
     var popupPt = popupPointFor(task);
     var lastWatch = 0;
     var viewerTried = 0;
+    var lastViewerAt = 0;
+    var lastBlind = 0;
     threads.start(function () {
         var startedAt = now();
         try {
             Transport.sendEvent(tid, "sidecar_start", {
-                popupPoint: popupPt, delayMs: GRAB_POINTS.popup.delayMs, pollMs: GRAB_POINTS.popup.pollMs
+                popupPoint: popupPt, delayMs: GRAB_POINTS.popup.delayMs, pollMs: GRAB_POINTS.popup.pollMs,
+                blindPoke: !!GRAB_POINTS.popup.blindPoke, shizuku: LocalInjector.available()
             });
         } catch (eE) {}
         while (now() < endAt && !CHAIN_CTL.sidecarDone) {
             if (isCancelled(tid)) break;
             // ① 弹窗处置 (首次点击 300ms 后才开始 —— 弹窗只会在点提交之后出现)
             if (now() - startedAt >= GRAB_POINTS.popup.delayMs) {
-                var dlg = null;
-                try { dlg = text("继续尝试").findOnce(); } catch (eD) {}
-                if (dlg) {
-                    var px = 0, py = 0, via = "point";
-                    try {
-                        var b = dlg.bounds();
-                        if (b) { px = b.centerX(); py = b.centerY(); via = "node"; }
-                    } catch (eB) {}
-                    if (!(px > 0 && py > 0)) { px = popupPt.x; py = popupPt.y; via = "point"; }
+                var hit = null;
+                try { hit = popupProbe(); } catch (ePr) {}
+                var px = 0, py = 0, via = "";
+                if (hit) {
+                    px = hit.x; py = hit.y; via = hit.via;
+                } else if (GRAB_POINTS.popup.blindPoke && now() - lastBlind >= GRAB_POINTS.popup.blindEveryMs) {
+                    // 整窗自绘读不到 → 低频盲点推算坐标 (点了有没有效不依赖读得到);
+                    // 误触观演人由下方装配自愈兜底
+                    px = popupPt.x; py = popupPt.y; via = "blind";
+                    lastBlind = now();
+                }
+                if (via) {
                     waitTapSlot(60);   // 与主链错开, 合计 ≤20 击/秒
                     adbPress(jitterInt(px, via === "node" ? 12 : GRAB_POINTS.popup.jitterX),
                              jitterInt(py, via === "node" ? 8 : GRAB_POINTS.popup.jitterY), 42);
                     CHAIN_CTL.popupClicks++;
+                    CHAIN_CTL.lastPopupVia = via;
                     if (CHAIN_CTL.popupClicks <= 3 || CHAIN_CTL.popupClicks % 5 === 0) {
                         sendLog(tid, "[弹窗] 继续尝试 第" + CHAIN_CTL.popupClicks + " 击 (" + px + "," + py + " via=" + via + ")");
                         try { Transport.sendEvent(tid, "popup_retry_click", { n: CHAIN_CTL.popupClicks, x: px, y: py, via: via }); } catch (eP) {}
@@ -1838,10 +1929,11 @@ function startChainSidecar(task, anchor, tid, endAt) {
                     if (id("cn.damai:id/puzzle-captcha-btn-icon").exists()) {
                         CHAIN_CTL.stop = true; CHAIN_CTL.stopReason = "captcha"; break;
                     }
-                    // 观演人装配兜底 (原连点链内的看护, 平移到侧车; 每任务最多试一次)
-                    if (viewerTried < 1 && DamaiAdapter.isInOrderConfirmPage() && safeTextMatches(/请选择.*位观演人|仅需选择.*位/).exists()) {
-                        viewerTried++;
-                        sendLog(tid, "[侧车] 检测到需选观演人, 尝试快速装配一次");
+                    // 观演人装配兜底 (平移到侧车; 最多 3 次, 间隔 ≥2.5s —— 兜住盲点误勾观演人的自愈)
+                    if (viewerTried < 3 && now() - lastViewerAt > 2500
+                        && DamaiAdapter.isInOrderConfirmPage() && safeTextMatches(/请选择.*位观演人|仅需选择.*位/).exists()) {
+                        viewerTried++; lastViewerAt = now();
+                        sendLog(tid, "[侧车] 检测到需选观演人, 尝试装配 (第 " + viewerTried + " 次)");
                         var vs = [];
                         if (task.target && task.target.viewers && task.target.viewers.length) vs = task.target.viewers;
                         else if (task.target && task.target.viewer) vs = [task.target.viewer];

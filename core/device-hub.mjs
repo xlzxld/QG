@@ -797,6 +797,7 @@ const server = http.createServer(async (req, res) => {
       dev.battery = data.battery ?? dev.battery;
       dev.charging = data.charging ?? dev.charging;
       dev.accessibility = data.accessibility ?? dev.accessibility;
+      if (data.shizuku) dev.shizuku = data.shizuku;   // 手机自主点击能力 (Shizuku 本地注入) 状态随心跳更新
       dev.currentTaskId = data.taskId ?? null;
       if (Number.isFinite(Number(data.scriptSize))) dev.scriptSize = Number(data.scriptSize);
       devices.set(data.deviceId, dev);

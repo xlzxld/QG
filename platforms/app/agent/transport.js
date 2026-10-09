@@ -226,6 +226,16 @@ var Transport = {
         return null;
     },
 
+    /** Shizuku 状态快照 (上报中枢: 控制台据此显示"手机自主点击"能力; 详见 docs.autojs6.com/#/shizuku) */
+    shizukuState: function () {
+        try {
+            if (typeof shizuku === "undefined") return "none";
+            var st = shizuku.state;
+            if (st && typeof st.isOperational === "boolean") return st.isOperational ? "active" : "inactive";
+        } catch (e) {}
+        return "unknown";
+    },
+
     /**
      * 设备注册握手
      */
@@ -245,6 +255,7 @@ var Transport = {
                 screen: [sw, sh],
                 accessibility: isAcc,
                 battery: bat,
+                shizuku: this.shizukuState(),   // 手机自主点击能力 (本地 input 注入, 免 PC)
                 bootAt: java.lang.System.currentTimeMillis()
             };
             var res = http.postJson(this.activeHubUrl + "/api/device/hello", payload, { timeout: 4000 });
@@ -287,6 +298,7 @@ var Transport = {
                 battery: bat,
                 charging: chg,
                 accessibility: isAcc,
+                shizuku: this.shizukuState(),   // 状态可能变化 (服务被杀/重启失效), 心跳随行
                 scriptSize: this.scriptSize(),   // 本脚本体积: 中枢据此判断"手机脚本是否最新"
                 ts: java.lang.System.currentTimeMillis()
             };
