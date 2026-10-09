@@ -30,10 +30,117 @@ function main() {
         handleTask(task);
     });
 
+    // 5. 控制指令消费 (停止脚本 / 自更新) —— 2026-10-09 新增
+    //    修复: 中枢下发的 stopAgent / selfUpdate 以前只置了标志位、没人消费 → 两个按钮形同无效
+    setInterval(consumeControl, 1000);
+
     try {
         toast("⚡ QG-Agent 抢购引擎就绪！\n已连接控制台中枢: " + (Transport.activeHubUrl || "局域网待命"));
     } catch (eT) {}
     console.log("🎉 Agent 就绪！进入待命状态，等待 PC 派发抢购或新增任务...");
+}
+
+/**
+ * 控制指令消费 (1s tick) —— 中枢 «停止手机脚本» / «更新手机脚本并重启» 的唯一落地点。
+ * 两个指令都经心跳响应回带 (见 transport.js sendHeartbeat 的 control 分支)。
+ */
+function consumeControl() {
+    try {
+        if (typeof Transport === "undefined") return;
+        if (Transport.updateRequested) { Transport.updateRequested = false; restartWithLatestScript(); }
+        if (Transport.stopRequested) { Transport.stopRequested = false; stopAgentNow(); }
+    } catch (e) {
+        console.error("【控制】指令消费异常: " + (e ? (e.message || e) : "?"));
+    }
+}
+
+/**
+ * 自更新: 从中枢 /agent/main.js 下载最新脚本覆盖本地 → 重启脚本让新代码生效。
+ * 前提: 手机能连到中枢 (USB 反向或 WiFi 都行)。
+ */
+function restartWithLatestScript() {
+    console.log("【自更新】开始下载并覆盖本地脚本…");
+    var r = null;
+    try { r = Transport.selfUpdate(); } catch (e) { r = { ok: false, reason: (e ? (e.message || e) : "?") }; }
+    if (!r || !r.ok) {
+        var why = (r && r.reason) || "未知";
+        console.warn("【自更新】失败: " + why);
+        try { Transport.sendEvent(null, "log", { msg: "【自更新】下载失败: " + why }); } catch (e1) {}
+        return;
+    }
+    var kb = Math.round((r.size || 0) / 1024);
+    console.log("【自更新】已覆盖本地脚本 " + kb + " KB, 重启中…");
+    try { Transport.sendEvent(null, "log", { msg: "【自更新】已覆盖本地脚本 " + kb + " KB, 重启脚本" }); } catch (e2) {}
+    sleep(400);
+    try {
+        var src = String(engines.myEngine().source);
+        engines.execScriptFile(src);   // 先起新引擎 (新代码先跑起来)
+        sleep(600);
+        engines.myEngine().forceStop(); // 再停旧引擎, 避免"先停后起"中间断线
+        return;
+    } catch (e3) {
+        console.warn("【自更新】自动重启失败, 请在手机上重开脚本: " + (e3 ? (e3.message || e3) : "?"));
+        try { Transport.sendEvent(null, "log", { msg: "【自更新】脚本已更新, 自动重启失败, 请手动重开脚本" }); } catch (e4) {}
+    }
+}
+
+/** 停止脚本: 先把在跑的任务收尾上报 (避免控制台一直显示"执行中"), 再退出 */
+function stopAgentNow() {
+    var tid = Transport.currentTaskId || null;
+    console.warn("【停止】收到中枢停止指令, 脚本退出" + (tid ? " (同时终止任务 " + tid + ")" : ""));
+    try {
+        if (tid) Transport.sendResult({ taskId: tid, platform: "damai", outcome: "cancelled", reason: "manual_abort", evidence: "控制台停止手机脚本, 任务随之终止" });
+    } catch (e1) {}
+    try { Transport.sendEvent(null, "log", { msg: "【停止】收到中枢停止指令, 脚本退出" }); } catch (e2) {}
+    try { toast("🛑 已按控制台指令停止脚本"); } catch (e3) {}
+    sleep(500);
+    try { engines.stopAll(); } catch (e4) {}
+    try { exit(); } catch (e5) {}
+}
+
+/** 手机本地手势 (WiFi 通道下 phone_op/gesture 用; 不需要 ADB) */
+function localGesture(x, y, pressMs) {
+    try {
+        if (typeof press === "function") return press(x, y, pressMs || 40) !== false;
+        if (typeof click === "function") return click(x, y) !== false;
+    } catch (e) {}
+    return false;
+}
+
+/**
+ * 手机本地执行指令 (mode=phone_op) —— 2026-10-09 新增。
+ * 中枢在 WiFi 通道下没有 ADB, 无法代为操作手机; 改为把指令下发到端侧, 由本地能力执行。
+ * 支持的 op: open_item (本地 deep-link 打开商品页) / gesture (本地无障碍手势)
+ */
+function executePhoneOp(task) {
+    var tid = task.taskId;
+    var op = task.op;
+    var p = task.params || {};
+    var out = { taskId: tid, platform: "damai", outcome: "failed", reason: op || "phone_op" };
+    try {
+        Transport.sendEvent(tid, "task_started", { mode: "phone_op", target: op || "" });
+        if (op === "open_item") {
+            Transport.sendEvent(tid, "step", { step: "item_open", status: "start" });
+            var r = Transport.openItemLocal(String(p.itemId || ""));
+            var landed = !!(r && r.ok) && DamaiAdapter.grabOnDetailPage();
+            out.outcome = landed ? "success" : "failed";
+            out.message = "本地 deep-link 打开商品页";
+            out.evidence = landed ? ("已打开 (" + (r.hit || "") + ")") : ("未落到详情页: " + ((r && r.error) || ""));
+            out.data = { hit: (r && r.hit) || "", tried: (r && r.tried) || [], via: "local" };
+            Transport.sendEvent(tid, "step", { step: "item_open", status: landed ? "done" : "failed", detail: out.evidence });
+        } else if (op === "gesture") {
+            var gx = Number(p.x), gy = Number(p.y);
+            var okG = (isFinite(gx) && isFinite(gy)) ? localGesture(gx, gy, Number(p.pressMs) || 40) : false;
+            out.outcome = okG ? "success" : "failed";
+            out.message = "手机本地无障碍手势";
+            out.evidence = okG ? ("已注入手势 (" + gx + "," + gy + ")") : "手势注入失败 (无障碍通道异常)";
+        } else {
+            out.evidence = "未知 phone_op: " + op;
+        }
+    } catch (e) {
+        out.evidence = "phone_op 执行异常: " + (e ? (e.message || e) : "?");
+    }
+    Transport.sendResult(out);
 }
 
 /**
@@ -78,6 +185,11 @@ function handleTask(task) {
         var mode = task.mode || "test";
 
         if (platform === "damai") {
+            if (mode === "phone_op") {
+                // 中枢 WiFi 通道下的"代操作"降级入口 (打开商品页 / 本地手势)
+                executePhoneOp(task);
+                return;
+            }
             if (mode === "add_viewer") {
                 var addVRes = DamaiAdapter.addViewer(task);
                 addVRes.taskId = task.taskId;

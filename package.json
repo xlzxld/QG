@@ -11,7 +11,8 @@
     "drill:rush": "node core/run-drill.mjs --rush",
     "agent:build": "node tools/mobile/bundle-agent.mjs",
     "device:prepare": "node tools/mobile/prepare-device.mjs",
-    "huawei:slots-check": "node tools/check-slot-logins.mjs"
+    "huawei:slots-check": "node tools/check-slot-logins.mjs",
+    "captcha": "python3 tools/mobile/damai_captcha.py"
   },
   "dependencies": {
     "china-division": "^2.7.0",

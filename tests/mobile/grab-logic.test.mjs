@@ -207,7 +207,7 @@ describe('grab 信号元组与突变判定 (源文件直取)', () => {
     expect(hubSrc).toMatch(/jitterXPx/);                      // 中枢白名单带上分轴字段
   });
 
-  it('14. 护栏: 手机脚本可"局域网停止 / 局域网更新"(全链路在位)', () => {
+  it('14. 护栏: 手机脚本可"局域网停止 / 局域网更新"(全链路在位, 2026-10-09 通道化改版)', () => {
     expect(hubSrc).toMatch(/\/api\/device\/stop-agent/);          // 中枢: 停止脚本端点
     expect(hubSrc).toMatch(/\/api\/device\/update-script-lan/);   // 中枢: 局域网更新端点
     expect(hubSrc).toMatch(/stopAgent: true/);                    // 中枢: 心跳回带停止指令
@@ -216,8 +216,27 @@ describe('grab 信号元组与突变判定 (源文件直取)', () => {
     expect(transportSrc).toMatch(/stopRequested/);                // 端侧: 接收停止指令
     expect(transportSrc).toMatch(/selfUpdate: function/);         // 端侧: 自更新实现
     expect(transportSrc).toMatch(/scriptSize: this\.scriptSize\(\)/); // 端侧: 上报脚本体积
-    expect(consoleSrc).toMatch(/stopAgent\(/);                    // 控制台: 停止按钮
-    expect(consoleSrc).toMatch(/updateScriptLan\(/);              // 控制台: 局域网更新按钮
+    expect(transportSrc).toMatch(/updateRequested/);              // 端侧: 接收自更新指令
+    expect(transportSrc).toMatch(/remoteUsb/);                    // 端侧: 统一通道判定
+    // 修复闭环: 标志位必须有人消费 (否则停止/更新按钮永远无效) — 消费点在 runner.js 的 1s 控制 tick
+    expect(transportSrc).toMatch(/hubChannel/);                   // 心跳回带通道, 端侧据此短路 ADB 调用
+    // 控制台: 停止按钮 + 更新按钮(已合并局域网更新, 按通道自动选)
+    expect(consoleSrc).toMatch(/stopAgent\(/);
+    expect(consoleSrc).toMatch(/update-script-lan/);
+    expect(consoleSrc).not.toMatch(/updateScriptLan\(/);          // 独立「局域网更新」按钮已并入「更新手机脚本并重启」
+  });
+
+  it('15. 护栏: 统一通道 (USB 优先 → WiFi 降级) 全链路在位', () => {
+    expect(hubSrc).toMatch(/function resolveChannel/);            // 中枢: 通道解析
+    expect(hubSrc).toMatch(/\/api\/channel/);                     // 中枢: 通道查询端点
+    expect(hubSrc).toMatch(/\/api\/phone\/cmd/);                  // 中枢: 统一代操作入口
+    expect(hubSrc).toMatch(/dispatchPhoneOp/);                    // 中枢: WiFi 降级 = 下发 phone_op
+    expect(hubSrc).toMatch(/mode: 'phone_op'/);                   // phone_op 是合法任务模式
+    expect(hubSrc).toMatch(/usb_auto_connect/);                   // USB 插入自动一键连接
+    expect(hubSrc).toMatch(/openItemGate/);                       // 白名单闸门(通道无关, 先于通道判定)
+    expect(consoleSrc).toMatch(/applyChannel/);                   // 控制台: 通道渲染
+    expect(consoleSrc).toMatch(/requireChannel/);                 // 控制台: 按钮通道预检
+    expect(consoleSrc).toMatch(/\/api\/phone\/cmd/);              // 控制台: 打开商品页走统一入口
   });
 
   it('9. jitterInt 抖动在设定幅度内', () => {

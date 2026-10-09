@@ -201,6 +201,7 @@
   </div>
   <div class="grow"></div>
   <span class="pill"><span class="dot" id="hub-dot"></span><span id="hub-text">连接中…</span></span>
+  <span class="pill">通道 <span class="badge gray" id="chan-badge">检测中</span></span>
   <span class="pill">Wi-Fi <span class="mono" title="点击复制" onclick="copyText('http://${LAN_IP}:${PORT}','局域网地址已复制')">http://${LAN_IP}:${PORT}</span></span>
   <span class="pill">USB <span class="mono">127.0.0.1:${PORT}</span></span>
 </div>
@@ -220,8 +221,12 @@
           <button class="btn ok" id="btn-connect" onclick="connectDevice()">⚡ 一键连接设备 (全自动)</button>
           <button class="btn" id="btn-update" onclick="updateScript()">📦 更新手机脚本并重启 Agent</button>
         </div>
+        <div class="btnrow">
+          <button class="btn danger" id="btn-stop-agent" onclick="stopAgent()">🛑 停止手机脚本</button>
+        </div>
         <div class="connect-steps" id="connect-steps"></div>
         <div class="hint" style="margin-top:8px">一键连接 = USB 检测 → 端口代理 → 写入通信配置 → 推送脚本与省市区数据 → 拉起 AutoJs6 运行 → 验证上线。全程无需操作手机。</div>
+        <div class="hint" id="chan-hint">通道判定中…</div>
       </div>
 
       <!-- 演出配置 -->
@@ -326,7 +331,7 @@
       <!-- 链接抢购 (grab) -->
       <div class="card">
         <h3>🔗 链接抢购 (大麦)
-          <span class="badge gray" id="grab-badge">未布防</span>
+      <span class="badge gray" id="grab-badge">未抢购</span>
           <span class="grow"></span>
           <button class="btn sm" onclick="grabSelfTest()">🧪 检测通道自测</button>
         </h3>
@@ -396,12 +401,12 @@
         </details>
         <div class="btnrow">
           <button class="btn" onclick="grabOpenItem()">📲 打开商品页</button>
-          <button class="btn primary" onclick="grabArm()">🚀 布防</button>
-          <button class="btn danger" style="flex:none" onclick="grabDisarm()">⛔ 解除</button>
+          <button class="btn primary" onclick="grabArm()">🚀 抢购</button>
+          <button class="btn danger" style="flex:none" onclick="grabDisarm()">⛔ 停止</button>
           <button class="btn" style="flex:none" onclick="resetGrabParams()" title="清空本机保存的参数, 恢复页面默认值">↺ 清空已存</button>
         </div>
         <div class="hint" id="grab-save-hint">参数会自动保存在本机浏览器（换 IP 打开控制台 = 换了一份存储）</div>
-        <div class="hint">布防 = 把这个任务下发给手机, 到点自动开抢；解除 = 立刻终止本次布防（等同「最近任务」里的 ⛔ 终止）。</div>
+        <div class="hint">抢购 = 把这个任务下发给手机, 到点自动开抢；停止 = 立刻终止本次抢购（等同「最近任务」里的 ⛔ 终止）。</div>
       </div>
 
       <!-- 抢购保活优化 -->
@@ -413,15 +418,11 @@
         <div class="hint" id="perf-status">点「查询」看当前状态</div>
         <div class="hint" id="agent-script-hint">手机脚本体积：查询中…</div>
         <div class="btnrow">
-          <button class="btn primary" onclick="perfBoost(true)">⚡ 开启优化</button>
-          <button class="btn" onclick="perfBoost(false)">↺ 恢复原状</button>
-          <button class="btn" style="flex:none" onclick="perfStatus()">查询</button>
+          <button class="btn primary" id="perf-boost-on" onclick="perfBoost(true)">⚡ 开启优化</button>
+          <button class="btn" id="perf-boost-off" onclick="perfBoost(false)">↺ 恢复原状</button>
         </div>
-        <div class="btnrow">
-          <button class="btn" onclick="updateScriptLan()">⬇ 局域网更新脚本</button>
-          <button class="btn danger" onclick="stopAgent()">🛑 停止手机脚本</button>
-        </div>
-        <div class="hint">两个按钮都通过心跳下发（最多 4 秒生效），不用碰手机；停止后手机需手动重开脚本才会再上线。</div>
+        <div class="hint" id="perf-chan-hint"></div>
+        <div class="hint">通过心跳下发（最多 4 秒生效），不用碰手机。状态在页面加载和开启/恢复后自动刷新。</div>
       </div>
     </div>
 
@@ -440,8 +441,8 @@
       <div class="card">
         <h3>📜 实时日志
           <span class="grow"></span>
-          <label style="display:flex;align-items:center;gap:5px;font-size:12px;margin:0">
-            <input type="checkbox" id="only-task" style="width:auto" onchange="renderLogs()">只看当前任务
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;margin:0" title="只显示最近一次任务的日志行 (勾选后从勾选时刻起算)">
+            <input type="checkbox" id="only-task" style="width:auto" onchange="renderLogs()">只看本次任务
           </label>
           <button class="btn sm" onclick="clearLogs()">清空日志</button>
         </h3>
@@ -493,6 +494,49 @@ async function api(path, opts) {
   return data;
 }
 
+/* ==================== 统一通道 (USB 优先 → WiFi 降级) ====================
+ * 口径: 连了 USB → 一切照旧 (ADB 注入最快最可靠);
+ *       只有 WiFi → 依旧可用的: 打开商品页 / 自测 / 抢购 / 停止 / 更新脚本
+ *                  (手机端用本地 deep-link + 无障碍手势兜底, 中枢下发 phone_op 任务);
+ *       只有 USB 才行的: 中枢预置击发 / adb shell 保活优化 / 界面树+截图取证。
+ */
+let chanState = { mode: 'none', usb: false, wifi: false };
+
+function applyChannel(ch, adbFallback) {
+  chanState = ch || { mode: adbFallback ? 'usb' : 'none', usb: !!adbFallback, wifi: false };
+  const m = chanState.mode;
+  const badge = $('chan-badge');
+  if (badge) {
+    badge.textContent = m === 'usb' ? 'USB' : m === 'wifi' ? 'Wi-Fi' : '未连接';
+    badge.className = 'badge ' + (m === 'usb' ? 'green' : m === 'wifi' ? 'blue' : 'gray');
+  }
+  const hint = $('chan-hint');
+  if (hint) {
+    hint.textContent = m === 'usb'
+      ? '通道: USB (ADB) — 全部能力可用（含中枢预置击发 / 保活优化）'
+      : m === 'wifi'
+        ? '通道: Wi-Fi — 可用（打开商品页 / 自测 / 抢购 / 停止 / 更新脚本）；点击走手机本地手势，大麦自绘按钮可能无效；中枢预置击发与保活优化需插数据线'
+        : '通道: 未连接 — 插 USB 数据线，或在同一 Wi-Fi 下启动手机脚本';
+    hint.style.color = m === 'wifi' ? 'var(--warn)' : '';
+  }
+  // 保活优化 = adb shell 独占: WiFi 下按钮置灰并说明, 不点了才报错
+  const usbOnly = m !== 'usb';
+  for (const id of ['perf-boost-on', 'perf-boost-off']) {
+    const b = $(id);
+    if (b) { b.disabled = usbOnly; b.title = usbOnly ? '保活优化依赖 adb shell, 需要 USB 数据线' : ''; }
+  }
+  const pc = $('perf-chan-hint');
+  if (pc) pc.textContent = usbOnly ? '⚠ 此卡片功能需要 USB 数据线（依赖 adb shell），Wi-Fi 通道下不可用' : '';
+}
+
+/** 点击依赖通道的操作前统一预检; 返回 null=放行, 否则已弹提示 */
+function requireChannel(need) {
+  const m = chanState.mode;
+  if (m === 'none') { toast('手机未连接', '插 USB 数据线, 或在同一 Wi-Fi 下启动手机脚本', 'error', 7000); return 'none'; }
+  if (need === 'usb' && m !== 'usb') { toast('该功能需要 USB 数据线', 'Wi-Fi 通道做不到（依赖电脑 ADB shell）', 'warn', 7000); return 'wifi'; }
+  return null;
+}
+
 /* ==================== 校验 ==================== */
 function validateIdCard(id) {
   const str = String(id || '').trim().toUpperCase();
@@ -523,6 +567,7 @@ async function refreshDevices(manual) {
     const data = await api('/api/devices');
     $('hub-dot').classList.remove('off');
     $('hub-text').textContent = `服务正常 :${location.port || 3120}`;
+    applyChannel(data.channel, data.adbDevicesCount > 0);
     const area = $('dev-area');
     const list = data.devices || [];
     const onlineDev = list.find(d => !d.isAdbOnly && d.isAlive && Array.isArray(d.screen) && d.screen.length === 2);
@@ -539,7 +584,7 @@ async function refreshDevices(manual) {
       const devSz = dev && Number(dev.scriptSize || 0);
       if (!devSz) sh.textContent = '手机脚本体积：未上报（旧版脚本 / 刚重启 / 设备离线）';
       else if (hubSz && Math.abs(devSz - hubSz) < 2048) sh.innerHTML = '手机脚本 <b>已是电脑上最新版</b>（' + (devSz / 1024).toFixed(1) + ' KB）';
-      else sh.innerHTML = '<span class="warn">⚠ 手机脚本与电脑不一致</span>（手机 ' + (devSz / 1024).toFixed(1) + ' KB / 电脑 ' + (hubSz / 1024).toFixed(1) + ' KB）→ 点「⬇ 局域网更新脚本」';
+      else sh.innerHTML = '<span class="warn">⚠ 手机脚本与电脑不一致</span>（手机 ' + (devSz / 1024).toFixed(1) + ' KB / 电脑 ' + (hubSz / 1024).toFixed(1) + ' KB）→ 点「📦 更新手机脚本并重启 Agent」';
     }
     if (!list.length) {
       area.innerHTML = `<div class="dev"><div class="icon">🔌</div><div class="info">
@@ -592,21 +637,48 @@ async function connectDevice() {
   }
 }
 
+/**
+ * 更新手机脚本并重启 Agent —— 统一通道 (2026-10-09 合并原「局域网更新脚本」):
+ *   USB (中枢有 ADB) → 走数据线推送+重启 (最快最稳)
+ *   Wi-Fi            → 心跳下发 selfUpdate, 手机自己从中枢下载覆盖后重启 (免数据线)
+ */
 async function updateScript() {
   const btn = $('btn-update');
+  if (requireChannel()) return;
+  const viaWifi = chanState.mode === 'wifi';
+  const okGo = await confirmModal('📦 更新手机脚本并重启 Agent?',
+    viaWifi
+      ? '当前 Wi-Fi 通道：手机会自己从电脑下载最新脚本、覆盖本地文件，然后自动重启。\n（前提手机能连到中枢；最多 4 秒开始下载）'
+      : '当前 USB 通道：电脑直接把最新脚本推给手机并重启 Agent。',
+    viaWifi ? '开始更新 (Wi-Fi)' : '开始更新 (USB)');
+  if (!okGo) return;
   btn.disabled = true; btn.textContent = '⏳ 正在推送并重启…';
   $('connect-steps').innerHTML = '';
   try {
-    const r = await api('/api/device/update-script', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    $('connect-steps').innerHTML = (r.steps || []).map(s =>
-      `<div class="cs ${s.ok ? 'ok' : 'bad'}">${esc(s.name)}${s.detail ? ' — ' + esc(s.detail) : ''}</div>`).join('');
-    if (r.ok) toast('脚本已更新', 'Agent 已使用最新脚本重启', 'success');
-    else toast('更新未完成', r.error || '', 'error');
+    const r = await api(viaWifi ? '/api/device/update-script-lan' : '/api/device/update-script',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (viaWifi) {
+      toast('⬇ 已下发更新指令', (r.note || '手机将自行下载并重启') + (r.localSize ? '（电脑端 ' + (r.localSize / 1024).toFixed(1) + ' KB）' : ''), 'success', 9000);
+      $('connect-steps').innerHTML = '<div class="cs ok">Wi-Fi 自更新 — 指令已随心跳下发，手机将下载覆盖并自动重启</div>';
+    } else {
+      $('connect-steps').innerHTML = (r.steps || []).map(s =>
+        `<div class="cs ${s.ok ? 'ok' : 'bad'}">${esc(s.name)}${s.detail ? ' — ' + esc(s.detail) : ''}</div>`).join('');
+      if (r.ok) toast('脚本已更新', 'Agent 已使用最新脚本重启', 'success');
+      else toast('更新未完成', r.error || '', 'error');
+    }
   } catch (e) {
     toast('更新脚本失败', e.message, 'error');
+    // USB 推送失败时自动回落 Wi-Fi 自更新 (fallback)
+    if (!viaWifi && chanState.wifi) {
+      try {
+        const r2 = await api('/api/device/update-script-lan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        toast('USB 推送失败, 已改走 Wi-Fi 自更新', r2.note || '手机将自行下载并重启', 'warn', 9000);
+      } catch (e2) { toast('Wi-Fi 自更新也失败', e2.message, 'error'); }
+    }
   } finally {
     btn.disabled = false; btn.textContent = '📦 更新手机脚本并重启 Agent';
     refreshDevices();
+    if (viaWifi) setTimeout(refreshDevices, 10000);
   }
 }
 
@@ -1021,8 +1093,12 @@ function processEvent(e) {
 
 function renderLogs() {
   const box = $('logbox');
-  const only = $('only-task').checked && currentTask;
-  const lines = only ? logLines.filter(l => !l.taskId || l.taskId === currentTask.taskId) : logLines;
+  // 「只看本次任务」= 过滤出最近一条带 taskId 的日志所属任务 (含 currentTask, 兜住"还没来日志"的情况)
+  const anchor = currentTask?.taskId
+    || [...logLines].reverse().find(l => l.taskId)?.taskId
+    || null;
+  const only = $('only-task').checked && anchor;
+  const lines = only ? logLines.filter(l => !l.taskId || l.taskId === anchor) : logLines;
   box.innerHTML = lines.slice(-300).map(l =>
     `<div class="loge ${l.cls || ''}"><span class="t">${l.t}</span><span class="e">${esc(l.e)}</span><span>${esc(l.m)}</span></div>`).join('')
     || '<div class="hint" style="padding:8px">暂无日志</div>';
@@ -1127,7 +1203,7 @@ function onGrabLinkInput() {
     autoFillGrabTime(item.saleTimeHints);
     if (!$('grab-keywords').value.trim()) $('grab-keywords').value = buildKeywords(item);
   } else {
-    hint.innerHTML = `✔ 已识别商品 ID: <b>${esc(itemId)}</b> — 不在探针库, <button class="btn sm" style="padding:1px 8px" onclick="grabProbe('${esc(itemId)}')">📥 采集此商品</button> (若手机已停在该页面也可直接布防)`;
+    hint.innerHTML = `✔ 已识别商品 ID: <b>${esc(itemId)}</b> — 不在探针库, <button class="btn sm" style="padding:1px 8px" onclick="grabProbe('${esc(itemId)}')">📥 采集此商品</button> (若手机已停在该页面也可直接抢购)`;
   }
 }
 
@@ -1147,12 +1223,18 @@ function parseXY(s) {
   return { x: parseInt(m[1], 10), y: parseInt(m[2], 10) };
 }
 
+/** 打开商品页 —— 统一通道: USB→中枢 ADB deep-link; Wi-Fi→下发 phone_op 到手机本地 deep-link */
 async function grabOpenItem() {
   const itemId = parseItemId($('grab-link').value);
   if (!itemId) return toast('请先粘贴商品链接或 ID', '', 'warn');
+  if (requireChannel()) return;
   try {
-    const r = await api('/api/adb/open-item', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemId }) });
-    toast('📲 已打开商品页', (r.hit || '') + ' — 看一眼手机是否停在目标演出', 'success', 6000);
+    const r = await api('/api/phone/cmd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'open_item', params: { itemId } }) });
+    if (r.via === 'wifi') {
+      toast('📲 已下发到手机 (Wi-Fi 通道)', '手机正用本地 deep-link 打开商品页 — 结果看「任务执行状态」', 'success', 7000);
+    } else {
+      toast('📲 已打开商品页', (r.hit || '') + ' — 看一眼手机是否停在目标演出', 'success', 6000);
+    }
   } catch (e) { toast('打开失败', e.message, 'error', 7000); }
 }
 
@@ -1213,6 +1295,13 @@ function resetGrabParams() {
 async function perfStatus(silent) {
   try {
     const r = await api('/api/device/perf-boost');
+    // WiFi 通道: 中枢直接回 unavailable (保活优化只能 adb shell) —— 如实展示, 不再伪装成"未开启"
+    if (r.status === 'unavailable') {
+      $('perf-badge').textContent = '需 USB';
+      $('perf-badge').className = 'badge gray';
+      $('perf-status').innerHTML = '<span class="warn">' + esc(r.error || '保活优化需要 USB 数据线') + '</span>';
+      return;
+    }
     const on = !!r.dozeWhitelisted;
     $('perf-badge').textContent = on ? '已开启' : '未开启';
     $('perf-badge').className = 'badge ' + (on ? 'green' : 'gray');
@@ -1227,6 +1316,7 @@ async function perfStatus(silent) {
   }
 }
 async function perfBoost(on) {
+  if (requireChannel('usb')) return;
   const ok = await confirmModal(on ? '⚡ 开启保活优化?' : '↺ 恢复原状?',
     on
       ? '会做 4 件事（都可回退）：\n① 加入电池优化白名单（防 Doze 冻结）\n② 后台运行改为"不限"\n③ 活动桶设为 active（防 App Standby 降级）\n④ 插着数据线时屏幕常亮（锁屏就读不到界面了）\n\n改动前的原值会记录下来，随时点「恢复原状」回填。'
@@ -1240,10 +1330,11 @@ async function perfBoost(on) {
   } catch (e) { toast('操作失败', e.message, 'error', 7000); }
 }
 
-/* ==================== 手机脚本：停止 / 局域网更新 ==================== */
+/* ==================== 手机脚本：停止 (设备模块, USB/WiFi 通用) ==================== */
 async function stopAgent() {
+  if (requireChannel()) return;
   const ok = await confirmModal('🛑 停止手机端脚本?',
-    '手机上的 AutoJs6 脚本会退出：不再发心跳、不再接任务（等于"断开服务"）。\n\n需要时在手机上重新运行脚本即可重新上线。\n（最多 4 秒生效）',
+    '手机上的 AutoJs6 脚本会退出：不再发心跳、不再接任务（等于"断开服务"）。\n\n若当时有任务在跑，手机退出前会先把任务上报为「已取消」。\n需要时点「一键连接设备」或在手机上重开脚本即可重新上线。\n（最多 4 秒生效）',
     '停止脚本');
   if (!ok) return;
   try {
@@ -1251,17 +1342,6 @@ async function stopAgent() {
     toast('🛑 已下发停止指令', r.note || '最多 4 秒生效', 'success', 8000);
   } catch (e) { toast('下发失败', e.message, 'error', 6000); }
   setTimeout(refreshDevices, 7000);
-}
-async function updateScriptLan() {
-  const ok = await confirmModal('⬇ 局域网更新手机脚本?',
-    '手机会自己从电脑下载最新脚本、覆盖本地文件，然后自动重启。\n\n前提：手机能连到中枢（WiFi 或数据线都行）。\n（最多 4 秒开始下载）',
-    '开始更新');
-  if (!ok) return;
-  try {
-    const r = await api('/api/device/update-script-lan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    toast('⬇ 已下发更新指令', (r.note || '') + (r.localSize ? '（电脑端 ' + (r.localSize / 1024).toFixed(1) + ' KB）' : ''), 'success', 9000);
-  } catch (e) { toast('下发失败', e.message, 'error', 7000); }
-  setTimeout(refreshDevices, 10000);
 }
 
 /** 读一个数字输入 (带范围夹) */
@@ -1327,14 +1407,14 @@ async function grabArm() {
   if (isNaN(fireAt)) return toast('时间格式错误', '如 2026-10-09 17:17:00', 'warn');
   if (fireAt - Date.now() < 8000) return toast('时间太近', '距离现在不足 8 秒, 来不及就位', 'warn');
 
-  // 前置检查: USB 设备 + 手机 Agent 在线 (关键点击依赖电脑 ADB 通道)
+  // 前置检查 (统一通道): USB 或 Wi-Fi 任一在线即可 —— Wi-Fi 时点击自动降级为手机本地手势
+  if (requireChannel()) return;
   try {
     const dv = await api('/api/devices');
-    if (!(dv.adbDevicesCount > 0)) return toast('布防被拦下', '未检测到 USB 设备 — 关键点击依赖电脑 ADB, 请先插好手机', 'error', 8000);
     const online = (dv.devices || []).filter(d => d.isAlive && !d.isAdbOnly);
-    if (!online.length) return toast('布防被拦下', '手机 Agent 未在线 — 请先「一键连接设备」', 'error', 8000);
-    if (!targetScreen && online[0].screen) targetScreen = { w: online[0].screen[0], h: online[0].screen[1] };
-  } catch (e) { return toast('布防被拦下', '无法连接中枢: ' + e.message, 'error', 7000); }
+    if (chanState.mode === 'wifi' && !online.length) return toast('抢购被拦下', '手机 Agent 未在线 — 请先「一键连接设备」或启动手机脚本', 'error', 8000);
+    if (!targetScreen && online[0]?.screen) targetScreen = { w: online[0].screen[0], h: online[0].screen[1] };
+  } catch (e) { return toast('抢购被拦下', '无法连接中枢: ' + e.message, 'error', 7000); }
 
   const lead = numVal('grab-lead', 300, 10000, 1000);
   const rateMin = numVal('grab-rate-min', 1, 20, 8);
@@ -1352,14 +1432,18 @@ async function grabArm() {
   const execText = dryRun
     ? `彩排 (到点真打: 首击 + ${realMs}ms 连点; 不检测变化、不走提交)`
     : hammer ? '无脑高频连点 (不判跳转)' : '正式开抢 (变化→瞬间首击→连点到提交订单)';
+  const chanLine = chanState.mode === 'wifi'
+    ? '\n⚠ 当前 Wi-Fi 通道: 首击/连点走手机无障碍手势, 大麦自绘按钮可能无效 (建议插数据线)'
+    : '\n通道: USB (ADB 注入, 最可靠)';
 
-  const ok = await confirmModal('🚀 确认布防?',
+  const ok = await confirmModal('🚀 确认抢购?',
     `目标: ${item?.name || ('商品 ' + itemId)}\n商品ID: ${itemId}\n时间: ${ft}\n方式: ${execText}\n`
     + `连点节拍: ${rate} (间隔 ${cad.gapMin}~${cad.gapMax}ms, 按压 ${cad.pressMin}~${cad.pressMax}ms, 抖动 X${jitterX}px / Y${jitterY}px)\n`
     + `首击: 中枢预置 + 最多 ${ftTries} 发重试\n`
-    + `保底坐标: ${btnXY ? (btnXY.x + ',' + btnXY.y) : '自动锚定'} @ ${targetScreen ? (targetScreen.w + '×' + targetScreen.h) : '未知分辨率'}\n\n`
+    + `保底坐标: ${btnXY ? (btnXY.x + ',' + btnXY.y) : '自动锚定'} @ ${targetScreen ? (targetScreen.w + '×' + targetScreen.h) : '未知分辨率'}\n`
+    + chanLine + '\n\n'
     + (dryRun ? '彩排会真实点击按钮区域 + 连点, 但不会点提交。' : '到点后将真实点击, 连点到提交订单!'),
-    dryRun ? '🟢 开始彩排' : '🚀 布防 (真实抢购)');
+    dryRun ? '🟢 开始彩排' : '🚀 抢购 (真实抢购)');
   if (!ok) return;
 
   const task = {
@@ -1393,15 +1477,15 @@ async function grabArm() {
   try {
     await api('/api/tasks/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task }) });
     grabTask = task;
-    $('grab-badge').textContent = dryRun ? '彩排中' : '已布防';
+    $('grab-badge').textContent = dryRun ? '彩排中' : '已抢购';
     $('grab-badge').className = 'badge green';
     startTracking(task);
-    toast(dryRun ? '🟢 彩排已启动' : '🚀 已布防', `${task.target.name} · ${ft}`, 'success', 7000);
-  } catch (e) { toast('布防失败', e.message, 'error', 7000); }
+    toast(dryRun ? '🟢 彩排已启动' : '🚀 已下发抢购', `${task.target.name} · ${ft}${chanState.mode === 'wifi' ? ' · Wi-Fi 通道' : ' · USB 通道'}`, 'success', 7000);
+  } catch (e) { toast('抢购下发失败', e.message, 'error', 7000); }
 }
 
 async function grabDisarm() {
-  if (!grabTask) return toast('本页没有进行中的布防', '可在「最近任务」里对任意任务点「⛔ 终止」', 'warn');
+  if (!grabTask) return toast('本页没有进行中的抢购', '可在「最近任务」里对任意任务点「⛔ 终止」', 'warn');
   await cancelTask(grabTask.taskId);
 }
 

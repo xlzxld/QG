@@ -361,6 +361,57 @@ function addRecentEvent(evt) {
   if (recentEvents.length > 400) recentEvents.shift();
 }
 
+/* ============ 统一通道解析 (2026-10-09 新增) ============
+ * 问题: 原来所有"中枢代为操作手机"的接口都硬依赖 ADB —— 手机只用 WiFi 连中枢时,
+ *       点「打开商品页 / 检测通道自测 / 保活优化」全都被 503「无 USB 设备」挡掉。
+ * 口径: **USB(ADB) 优先 → 无 USB 时降级 WiFi(手机 Agent 本地执行)**。
+ *   能走 WiFi 的: 打开商品页 / 手势点击 / 界面自测 / 停止 / 更新脚本 → 统一走 phone_op 任务下发
+ *   只能走 USB 的: input tap 注入 / adb shell 保活 / 中枢时钟预置击发 / 界面树+截图取证
+ *                 → 明确返回 needUsb, 不再笼统报「无USB」(避免让人以为是手机没连上)
+ */
+function liveAgents(explicitDeviceId) {
+  const list = [...devices.values()].filter(d => !d.isAdbOnly && (Date.now() - d.lastSeen < 20000));
+  if (!explicitDeviceId) return list;
+  const hit = list.find(d => d.deviceId === explicitDeviceId);
+  return hit ? [hit] : list;
+}
+
+function resolveChannel(explicitDeviceId) {
+  const adb = scanAdbDevices();
+  const agent = liveAgents(explicitDeviceId)[0] || null;
+  const usb = adb.length > 0;
+  const mode = usb ? 'usb' : (agent ? 'wifi' : 'none');
+  return {
+    mode,                      // 'usb' | 'wifi' | 'none'
+    usb, usbCount: adb.length,
+    wifi: !!agent,
+    deviceId: agent ? agent.deviceId : null,
+    connectionMode: agent ? (agent.connectionMode || '') : (usb ? 'USB (adb reverse)' : ''),
+    caps: {
+      // 打开商品页 / 手势点击 / 自测: 两条通道都能做 (WiFi 走手机本地能力)
+      openItem: mode !== 'none',
+      gesture: mode !== 'none',
+      gestureReliable: usb,    // 只有 ADB input 注入对大麦自绘按钮可靠 (真机实证), WiFi 靠无障碍手势
+      armTap: usb,             // 中枢时钟预置击发 = 常驻 adb shell, USB 独占
+      perfBoost: usb,          // deviceidle/appops/standby 只能 adb shell, USB 独占
+      diagSnapshot: usb,       // uiautomator dump + screencap, USB 独占
+    },
+  };
+}
+
+/** 把一条「手机本地执行」的指令下发给 Agent (WiFi 降级通道) */
+function dispatchPhoneOp(op, params, deviceId) {
+  const task = {
+    taskId: `t-op-${op}-${Date.now()}`,
+    platform: 'damai',
+    mode: 'phone_op',
+    op,
+    params: params || {},
+  };
+  const r = dispatchTask(task, deviceId || null);
+  return { ...r, task };
+}
+
 // 启动预热: 去重集 + 事件历史
 if (fs.existsSync(RESULTS_FILE)) {
   try {
@@ -632,6 +683,49 @@ async function generateRegionsFile() {
   log(`[区划数据] 已生成 regions.json (${tree.length} 省级单位)`);
 }
 
+/* ---- 打开商品页: 入参/白名单闸门 (副作用之前, USB 与 WiFi 通道共用) ---- */
+function openItemGate(itemId) {
+  if (!/^\d{6,}$/.test(itemId)) return { ok: false, status: 400, error: 'itemId 必须为纯数字' };
+  const cat = loadDamaiCatalog();
+  const inCatalog = !!(cat && Array.isArray(cat.items) && cat.items.some((it) =>
+    String(it.itemId) === itemId ||
+    (Array.isArray(it.stations) && it.stations.some((s) => String(s.itemId) === itemId))));
+  if (!inCatalog) return { ok: false, status: 403, error: '该商品不在探针库白名单内, 请先「补采此商品」' };
+  return { ok: true };
+}
+
+/* ============ 打开商品页 (USB/ADB 通道实现; WiFi 通道由手机本地 deep-link 兜底) ============
+ * 2026-10-09: 从 /api/adb/open-item 抽出来, 供统一入口 /api/phone/cmd 复用。 */
+async function openItemViaAdb(itemId) {
+  const g = openItemGate(itemId);
+  if (!g.ok) return { ok: false, status: g.status, error: g.error };
+  const adbList = scanAdbDevices();
+  if (!adbList.length) return { ok: false, status: 503, needUsb: true, error: '中枢当前没有 USB 设备 (adb 不可用)' };
+  const serial = adbList[0].serial;
+  const variants = [
+    { name: 'damai://detail', cmd: `am start -a android.intent.action.VIEW -d 'damai://detail' --es itemId ${itemId} -p cn.damai` },
+    { name: 'damai://trade/detail', cmd: `am start -a android.intent.action.VIEW -d 'damai://trade/detail' --es itemId ${itemId} -p cn.damai` },
+    { name: 'damai://projectdetail', cmd: `am start -a android.intent.action.VIEW -d 'damai://projectdetail' --es itemId ${itemId} -p cn.damai` },
+    { name: 'https://m.damai.cn/damai/perform/item.html', cmd: `am start -a android.intent.action.VIEW -d 'https://m.damai.cn/damai/perform/item.html?itemId=${itemId}' -p cn.damai` },
+    { name: 'PRO_DETAIL', cmd: `am start -a cn.damai.intent.action.PRO_DETAIL --es itemId ${itemId} -p cn.damai` },
+  ];
+  const tried = [];
+  for (const v of variants) {
+    tried.push(v.name);
+    let out = '';
+    try { out = runAdb(`adb -s ${serial} shell "${v.cmd}"`, 4000) || ''; } catch (e) { out = String(e.stdout || e.message || e); }
+    if (!/Starting:/.test(out)) continue;
+    await new Promise((r) => setTimeout(r, 1300));
+    let top = '';
+    try { top = runAdb(`adb -s ${serial} shell "dumpsys activity activities | grep -m2 ResumedActivity"`, 4000) || ''; } catch (e) { top = ''; }
+    if (top.includes('ProjectDetailActivity')) {
+      ensureAdbShell(serial); // 顺手预热常驻通道 (给首击提速)
+      return { ok: true, hit: v.name, tried, via: 'usb' };
+    }
+  }
+  return { ok: false, status: 500, tried, via: 'usb', error: '所有 deep-link 变体都未能落到详情页' };
+}
+
 /* ============ HTTP 服务 ============ */
 const server = http.createServer(async (req, res) => {
   const clientIp = req.socket.remoteAddress || '';
@@ -683,7 +777,7 @@ const server = http.createServer(async (req, res) => {
         state: 'idle', lastSeen: Date.now(), registeredAt: Date.now(),
       });
       log(`[设备上线] ${deviceId} [${connMode}] 分辨率:${JSON.stringify(data.screen || [])} 电量:${data.battery ?? '?'}%`);
-      return sendJson(res, 200, { status: 'registered', deviceId, connectionMode: connMode, serverTime: Date.now() });
+      return sendJson(res, 200, { status: 'registered', deviceId, connectionMode: connMode, serverTime: Date.now(), channel: resolveChannel(deviceId) });
     } catch (e) {
       return sendJson(res, 400, { error: e.message });
     }
@@ -740,7 +834,9 @@ const server = http.createServer(async (req, res) => {
         dev.selfUpdateRequested = false;
         log(`[自更新] 已下发「更新脚本」→ 设备 ${data.deviceId}`);
       }
-      return sendJson(res, 200, { status: 'ok', serverTime: Date.now(), ...(control ? { control } : {}) });
+      // ★ 心跳回带当前通道: 手机据此决定 ADB 类操作是打中枢还是走本地 (避免 WiFi 下白等超时)
+      const ch = resolveChannel(data.deviceId);
+      return sendJson(res, 200, { status: 'ok', serverTime: Date.now(), channel: ch, ...(control ? { control } : {}) });
     } catch (e) {
       return sendJson(res, 400, { error: e.message });
     }
@@ -953,7 +1049,13 @@ const server = http.createServer(async (req, res) => {
     }
     let hubAgentScriptSize = 0;
     try { hubAgentScriptSize = fs.statSync(AGENT_SCRIPT).size; } catch (eS) { /* 忽略 */ }
-    return sendJson(res, 200, { devices: mergedList, adbDevicesCount: adbList.length, httpAgentsCount: httpList.length, hubAgentScriptSize });
+    return sendJson(res, 200, {
+      devices: mergedList,
+      adbDevicesCount: adbList.length,
+      httpAgentsCount: httpList.length,
+      hubAgentScriptSize,
+      channel: resolveChannel(),   // ★ 统一通道: 控制台按它决定按钮走 USB 还是 WiFi
+    });
   }
 
   /* ---- ADB 触摸注入 (Agent 手势失效时的可靠兜底通道) ---- */
@@ -962,7 +1064,7 @@ const server = http.createServer(async (req, res) => {
       const { x, y } = await readJsonBody(req);
       if (!Number.isFinite(x) || !Number.isFinite(y)) return sendJson(res, 400, { error: '缺少 x/y' });
       const adbList = scanAdbDevices();
-      if (!adbList.length) return sendJson(res, 503, { error: '无 USB 设备' });
+      if (!adbList.length) return sendJson(res, 503, { error: '此操作需要 USB 数据线（ADB input 注入）', needUsb: true, mode: resolveChannel().mode });
       // 优先走常驻 shell (≈29ms/次), 失败回落 spawn 通道 (≈210ms/次)
       if (adbWriteLines([`input tap ${Math.round(x)} ${Math.round(y)}`])) {
         return sendJson(res, 200, { status: 'ok', via: 'persist' });
@@ -980,7 +1082,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const tag = (String(body.tag || 'diag').replace(/[^\w.-]/g, '_').slice(0, 40)) || 'diag';
       const adbList = scanAdbDevices();
-      if (!adbList.length) return sendJson(res, 503, { error: '无 USB 设备' });
+      if (!adbList.length) return sendJson(res, 503, { error: '取证快照需要 USB 数据线（uiautomator dump + screencap 只能走 ADB）', needUsb: true, mode: resolveChannel().mode });
       const serial = adbList[0].serial;
       const dir = path.join(GRAB_DIR, 'diag');
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -1004,17 +1106,27 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { return sendJson(res, 500, { error: e.message }); }
   }
 
-  /* ---- 抢购保活优化 (开关 + 一键恢复原状) ---- */
+  /* ---- 抢购保活优化 (开关 + 一键恢复原状) —— USB 独占 (依赖 adb shell) ---- */
   if (pathname === '/api/device/perf-boost' && req.method === 'GET') {
-    try { return sendJson(res, 200, { status: 'ok', ...perfBoostStatus() }); }
+    const ch = resolveChannel();
+    if (!ch.usb) return sendJson(res, 200, {
+      status: 'unavailable', needUsb: true, mode: ch.mode, channel: ch, steps: [],
+      error: '保活优化需要 USB 数据线（电池白名单 / 后台运行 / 活动桶 / 插电常亮都只能走 adb shell）',
+    });
+    try { return sendJson(res, 200, { status: 'ok', channel: ch, ...perfBoostStatus() }); }
     catch (e) { return sendJson(res, 500, { error: e.message }); }
   }
   if (pathname === '/api/device/perf-boost' && req.method === 'POST') {
+    const ch = resolveChannel();
+    if (!ch.usb) return sendJson(res, 409, {
+      status: 'unavailable', needUsb: true, mode: ch.mode, channel: ch,
+      error: '保活优化需要 USB 数据线（依赖 adb shell，WiFi 通道做不到）',
+    });
     try {
       const body = await readJsonBody(req);
       const on = !!body.on;
       const r = on ? perfBoostOn() : perfBoostOff();
-      return sendJson(res, 200, { status: 'ok', on, ...r });
+      return sendJson(res, 200, { status: 'ok', on, channel: ch, ...r });
     } catch (e) { return sendJson(res, 500, { error: e.message }); }
   }
 
@@ -1026,7 +1138,8 @@ const server = http.createServer(async (req, res) => {
       const tag = String(body.tag || 'arm');
       if (!Number.isFinite(x) || !Number.isFinite(y)) return sendJson(res, 400, { error: '缺少 x/y' });
       if (!Number.isFinite(atMs)) return sendJson(res, 400, { error: '缺少 atMs (中枢时钟毫秒)' });
-      if (!scanAdbDevices().length) return sendJson(res, 503, { error: '无 USB 设备' });
+      const ch = resolveChannel();
+      if (!ch.usb) return sendJson(res, 503, { error: '中枢预置击发需要 USB 数据线（走常驻 adb shell，3ms 级）；WiFi 通道请用手机本地击发', needUsb: true, mode: ch.mode, channel: ch });
       if (atMs - Date.now() < -2000) return sendJson(res, 400, { error: '开抢时刻已过 2 秒以上, 拒绝预置' });
       const r = armTapStrike({ tag, x, y, atMs });
       return sendJson(res, 200, { status: 'armed', tag, ...r, hubNow: Date.now() });
@@ -1059,7 +1172,7 @@ const server = http.createServer(async (req, res) => {
       const jitter = Math.max(0, Math.min(24, parseInt(body.jitter, 10) || 0));
       const pressMs = Math.max(0, Math.min(400, parseInt(body.pressMs, 10) || 0));
       const adbList = scanAdbDevices();
-      if (!adbList.length) return sendJson(res, 503, { error: '无 USB 设备' });
+      if (!adbList.length) return sendJson(res, 503, { error: '连发点击需要 USB 数据线（ADB input 注入）', needUsb: true, mode: resolveChannel().mode });
       const lines = [];
       for (let i = 0; i < count; i++) {
         const jx = Math.round(x + (jitter ? (Math.random() * 2 - 1) * jitter : 0));
@@ -1085,47 +1198,80 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await readJsonBody(req);
       const itemId = String(body.itemId || '').trim();
-      // 闸门(副作用之前): 纯数字 + 必须在探针库白名单内
-      if (!/^\d{6,}$/.test(itemId)) return sendJson(res, 400, { error: 'itemId 必须为纯数字' });
-      const cat = loadDamaiCatalog();
-      const inCatalog = !!(cat && Array.isArray(cat.items) && cat.items.some((it) =>
-        String(it.itemId) === itemId ||
-        (Array.isArray(it.stations) && it.stations.some((s) => String(s.itemId) === itemId))));
-      if (!inCatalog) return sendJson(res, 403, { error: '该商品不在探针库白名单内, 请先「补采此商品」' });
-      const adbList = scanAdbDevices();
-      if (!adbList.length) return sendJson(res, 503, { error: '无 USB 设备' });
-      const serial = adbList[0].serial;
-      const variants = [
-        { name: 'damai://detail', cmd: `am start -a android.intent.action.VIEW -d 'damai://detail' --es itemId ${itemId} -p cn.damai` },
-        { name: 'damai://trade/detail', cmd: `am start -a android.intent.action.VIEW -d 'damai://trade/detail' --es itemId ${itemId} -p cn.damai` },
-        { name: 'damai://projectdetail', cmd: `am start -a android.intent.action.VIEW -d 'damai://projectdetail' --es itemId ${itemId} -p cn.damai` },
-        { name: 'https://m.damai.cn/damai/perform/item.html', cmd: `am start -a android.intent.action.VIEW -d 'https://m.damai.cn/damai/perform/item.html?itemId=${itemId}' -p cn.damai` },
-        { name: 'PRO_DETAIL', cmd: `am start -a cn.damai.intent.action.PRO_DETAIL --es itemId ${itemId} -p cn.damai` },
-      ];
-      const tried = [];
-      for (const v of variants) {
-        tried.push(v.name);
-        let out = '';
-        try { out = runAdb(`adb -s ${serial} shell "${v.cmd}"`, 4000) || ''; } catch (e) { out = String(e.stdout || e.message || e); }
-        if (!/Starting:/.test(out)) continue;
-        await new Promise((r) => setTimeout(r, 1300));
-        let top = '';
-        try { top = runAdb(`adb -s ${serial} shell "dumpsys activity activities | grep -m2 ResumedActivity"`, 4000) || ''; } catch (e) { top = ''; }
-        if (top.includes('ProjectDetailActivity')) {
-          ensureAdbShell(serial); // 顺手预热常驻通道 (给首击提速)
-          return sendJson(res, 200, { status: 'ok', hit: v.name, tried });
-        }
+      // ★ 闸门顺序: 先入参/白名单 (400/403), 再通道 (503) —— 保证"非法输入"永远优先暴露
+      const gate = openItemGate(itemId);
+      if (!gate.ok) return sendJson(res, gate.status, { status: 'fail', error: gate.error });
+      const ch = resolveChannel();
+      // 只走 USB: 手机侧若已是 WiFi 通道会自己用本地 deep-link, 不该绕回中枢 (会形成回环)
+      if (!ch.usb) {
+        return sendJson(res, 503, {
+          status: 'fail', needUsb: true, mode: ch.mode, channel: ch,
+          error: '中枢没有 USB 设备 — 该接口是 ADB 专用; WiFi 通道请用 /api/phone/cmd (会下发到手机本地打开)',
+        });
       }
-      return sendJson(res, 500, { status: 'fail', tried });
+      const r = await openItemViaAdb(itemId);
+      return sendJson(res, r.ok ? 200 : (r.status || 500), { ...r, channel: ch });
     } catch (e) {
       return sendJson(res, 500, { error: e.message });
     }
   }
+
+  /* ---- 统一通道查询 (控制台据此决定按钮可用性) ---- */
+  if (pathname === '/api/channel' && req.method === 'GET') {
+    return sendJson(res, 200, { status: 'ok', channel: resolveChannel(url.searchParams.get('deviceId') || undefined), serverTime: Date.now() });
+  }
+
+  /* ---- 统一通道入口: USB 优先 → WiFi 降级, 控制台所有"依赖通道"的按钮都打这里 ---- */
+  if (pathname === '/api/phone/cmd' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const op = String(body.op || '').trim();
+      const params = body.params || {};
+      const ch = resolveChannel(body.deviceId);
+      if (ch.mode === 'none') {
+        return sendJson(res, 503, { error: '手机未连接 — USB 与 WiFi 都不可达, 请先「一键连接设备」', channel: ch });
+      }
+      switch (op) {
+        case 'open_item': {
+          const itemId = String(params.itemId || '').trim();
+          if (ch.mode === 'usb') {
+            const r = await openItemViaAdb(itemId);
+            return sendJson(res, r.ok ? 200 : (r.status || 500), { ...r, channel: ch });
+          }
+          const r = dispatchPhoneOp('open_item', { itemId }, ch.deviceId);
+          return sendJson(res, 200, {
+            status: 'dispatched', via: 'wifi', taskId: r.task.taskId, channel: ch,
+            note: '手机将用本地 deep-link 打开商品页 (WiFi 通道)',
+          });
+        }
+        case 'gesture': {
+          // USB → ADB 注入 (可靠); WiFi → 下发手机本地无障碍手势 (自绘控件可能无效, 已如实标注)
+          if (ch.mode === 'usb') {
+            const x = Number(params.x), y = Number(params.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return sendJson(res, 400, { error: '缺少 x/y' });
+            const adbList = scanAdbDevices();
+            if (adbWriteLines([`input tap ${Math.round(x)} ${Math.round(y)}`])) return sendJson(res, 200, { status: 'ok', via: 'usb-persist', channel: ch });
+            runAdb(`adb -s ${adbList[0].serial} shell input tap ${Math.round(x)} ${Math.round(y)}`, 2500);
+            return sendJson(res, 200, { status: 'ok', via: 'usb-exec', channel: ch });
+          }
+          const r = dispatchPhoneOp('gesture', { x: params.x, y: params.y, pressMs: params.pressMs }, ch.deviceId);
+          return sendJson(res, 200, { status: 'dispatched', via: 'wifi', taskId: r.task.taskId, channel: ch, degraded: true, note: 'WiFi 通道: 走手机无障碍手势, 大麦自绘按钮可能无效' });
+        }
+        case 'capabilities':
+          return sendJson(res, 200, { status: 'ok', channel: ch });
+        default:
+          return sendJson(res, 400, { error: `未知操作: ${op}` });
+      }
+    } catch (e) {
+      return sendJson(res, 500, { error: e.message });
+    }
+  }
+
   if (pathname === '/api/adb/swipe' && req.method === 'POST') {
     try {
       const { x1, y1, x2, y2, ms } = await readJsonBody(req);
       const adbList = scanAdbDevices();
-      if (!adbList.length) return sendJson(res, 503, { error: '无 USB 设备' });
+      if (!adbList.length) return sendJson(res, 503, { error: '滑动注入需要 USB 数据线（ADB input swipe）', needUsb: true, mode: resolveChannel().mode });
       runAdb(`adb -s ${adbList[0].serial} shell input swipe ${Math.round(x1)} ${Math.round(y1)} ${Math.round(x2)} ${Math.round(y2)} ${Math.round(ms || 300)}`, 3000);
       return sendJson(res, 200, { status: 'ok' });
     } catch (e) {
@@ -1266,7 +1412,7 @@ const server = http.createServer(async (req, res) => {
       const ticketCount = parseInt(incomingTask.target?.count || config.selection?.ticketCount || 1, 10);
 
       const mode = incomingTask.mode || 'test';
-      const VALID_MODES = ['test', 'dryrun', 'buy', 'monitor', 'add_viewer', 'add_address', 'grab'];
+      const VALID_MODES = ['test', 'dryrun', 'buy', 'monitor', 'add_viewer', 'add_address', 'grab', 'phone_op'];
       if (!VALID_MODES.includes(mode)) return sendJson(res, 400, { error: `未知任务模式: ${mode}` });
       const fireAt = Number(incomingTask.timing?.fireAtEpochMs || 0) || 0;
       if (mode === 'grab') {
@@ -1339,16 +1485,20 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  /* ---- 停止手机端脚本 (局域网一键, 不用碰手机) ---- */
+  /* ---- 停止手机端脚本 (USB/WiFi 均可: 走心跳下发, 不用碰手机) ----
+   * 职责单一: 只停脚本。若当时有任务在跑, 由**手机端**退出前自行上报 cancelled (见 runner.stopAgentNow)。 */
   if (pathname === '/api/device/stop-agent' && req.method === 'POST') {
     try {
       const body = await readJsonBody(req);
       const devId = String(body.deviceId || '').trim() || [...devices.keys()][0];
       const dev = devices.get(devId);
-      if (!dev) return sendJson(res, 404, { error: '设备不在线（可能已经停掉了）' });
+      if (!dev) return sendJson(res, 404, { error: '设备不在线（可能已经停掉了）', channel: resolveChannel() });
       dev.stopRequested = true;
       log(`[停止指令] 已登记 → 设备 ${devId}（下一次心跳下发, 最多 4 秒）`);
-      return sendJson(res, 200, { status: 'pending', deviceId: devId, note: '手机最多 4 秒内收到并退出脚本' });
+      return sendJson(res, 200, {
+        status: 'pending', deviceId: devId, runningTaskId: dev.currentTaskId || null,
+        channel: resolveChannel(devId), note: '手机最多 4 秒内收到并退出脚本',
+      });
     } catch (e) { return sendJson(res, 500, { error: e.message }); }
   }
 
@@ -1397,8 +1547,61 @@ const server = http.createServer(async (req, res) => {
   sendJson(res, 404, { error: 'Not found' });
 });
 
+/* ============ USB 插入自动一键连接 (2026-10-09 新增) ============
+ * 用户诉求: "USB 一连接，手机 Agent 就该自动跑起来，为什么还要我手点按钮?"
+ * 行为: 每隔 5s 看一眼 USB 设备 —— 出现新 serial 且没有 Agent 在线时, 自动跑一遍
+ *       connectDeviceFlow() (reverse 代理 → 写配置 → 推脚本 → 拉起 AutoJs6 → 验证上线)。
+ * 防呆: 同一 serial 只自动连一次; 有 Agent 在线不重复连; 正在连不叠加;
+ *       开关存 data/grab/device-hub.conf.json (autoConnectUsb, 默认开)。
+ */
+const HUB_CONF_FILE = path.join(GRAB_DIR, 'device-hub.conf.json');
+const autoConnectState = { busy: false, lastSerial: null, lastAt: 0 };
+
+function loadHubConf() {
+  try { return JSON.parse(fs.readFileSync(HUB_CONF_FILE, 'utf8')) || {}; } catch (e) { return {}; }
+}
+
+function autoConnectEnabled() {
+  return loadHubConf().autoConnectUsb !== false;   // 默认开
+}
+
+async function usbAutoConnectLoop() {
+  setInterval(async () => {
+    if (autoConnectState.busy || !autoConnectEnabled()) return;
+    let adbList = [];
+    try { adbList = scanAdbDevices(); } catch (e) { return; }
+    if (!adbList.length) { autoConnectState.lastSerial = null; return; }
+    const serial = adbList[0].serial;
+    if (serial === autoConnectState.lastSerial) return;              // 同一台设备不反复折腾
+    if (Date.now() - autoConnectState.lastAt < 60000) return;        // 60s 熔断
+    // Agent 已在线就不必再连 (插着数据线充电、脚本已在跑的场景)
+    const agentAlive = [...devices.values()].some(d => !d.isAdbOnly && Date.now() - d.lastSeen < 20000);
+    if (agentAlive) { autoConnectState.lastSerial = serial; return; }
+    autoConnectState.busy = true;
+    autoConnectState.lastAt = Date.now();
+    autoConnectState.lastSerial = serial;
+    log(`[自动连接] 检测到 USB 设备 ${serial} 且 Agent 未在线 → 自动执行一键连接`);
+    addRecentEvent({ event: 'usb_auto_connect', detail: { serial, phase: 'start' }, receivedAt: new Date().toISOString() });
+    try {
+      const r = await connectDeviceFlow({ source: 'auto' });
+      addRecentEvent({
+        event: 'usb_auto_connect',
+        detail: { serial, ok: r.ok, error: r.error || null, steps: (r.steps || []).map(s => `${s.ok ? '✓' : '✗'}${s.name}`) },
+        receivedAt: new Date().toISOString(),
+      });
+      log(`[自动连接] ${r.ok ? '✅ 完成' : '❌ 失败: ' + (r.error || '')}`);
+    } catch (e) {
+      log(`[自动连接] 异常: ${e.message}`);
+      addRecentEvent({ event: 'usb_auto_connect', detail: { serial, ok: false, error: e.message }, receivedAt: new Date().toISOString() });
+    } finally {
+      autoConnectState.busy = false;
+    }
+  }, 5000);
+}
+
 server.listen(PORT, HOST, () => {
   writePidFile();
+  usbAutoConnectLoop();
   const ips = getLocalIps();
   log(`==================================================================`);
   log(`🚀 QG 设备中枢已就绪 (v9)`);

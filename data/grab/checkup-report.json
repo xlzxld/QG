@@ -1,40 +1,41 @@
 {
-  "generatedAt": "2026-10-08T20:36:54.316Z",
+  "generatedAt": "2026-10-09T01:52:08.704Z",
   "platform": "huawei",
-  "slot": "acc2",
-  "prdId": "10086839715516",
-  "sbomCode": "2601010635813",
-  "durationMs": 5035,
+  "slot": "acc1",
+  "prdId": "10086384648661",
+  "sbomCode": "2601010640927",
+  "durationMs": 1238,
   "summary": {
-    "pass": 11,
+    "pass": 5,
     "drift": 0,
-    "skip": 1,
-    "fail": 0
+    "skip": 6,
+    "fail": 1
   },
   "checks": [
     {
       "id": "C0",
       "name": "商品列表闸门",
       "status": "PASS",
-      "detail": "槽位 acc2 → 商品「HUAWEI Mate XT 2」在列表内（未限规格）"
+      "detail": "槽位 acc1 → 商品「mate90-pro-max」在列表内（未限规格）"
     },
     {
       "id": "C1",
       "name": "槽位窗口与登录态",
-      "status": "PASS",
-      "detail": "端口 9402 · 商品页就位 · 登录正常（queryUserInfo: hid95140891 V0）"
+      "status": "FAIL",
+      "detail": "窗口/标签/页面异常：窗口拉起后调试端口仍不可达",
+      "fix": "试着手动打开 https://item.vmall.com/product/comdetail/index.html?prdId=10086384648661&sbomCode=2601010640927 看页面是否正常；或删除 data/grab/chrome-profile-rush/acc1 重开（需重新登录）"
     },
     {
       "id": "C2",
       "name": "购买按钮锚点",
-      "status": "PASS",
-      "detail": "#prd-botnav-rightbtn 存在（当前文案「10月9日 10:08 开始」）"
+      "status": "SKIP",
+      "detail": "商品页未就位，跳过（先解决 C1）"
     },
     {
       "id": "C3",
       "name": "抢购信息接口",
       "status": "PASS",
-      "detail": "形状正常（currentTime=1791491814510，startTime=1791511680000）"
+      "detail": "形状正常（currentTime=1791510727628，startTime=1791511680000）"
     },
     {
       "id": "C3b",
@@ -46,13 +47,13 @@
       "id": "C4",
       "name": "校时接口与时钟",
       "status": "PASS",
-      "detail": "偏差 -1293ms（5 样本，离散 -33ms）"
+      "detail": "偏差 0ms（5 样本，离散 -44ms）"
     },
     {
       "id": "C5",
       "name": "__NEXT_DATA__ 数据通道",
-      "status": "PASS",
-      "detail": "JSON 正常（414KB，含槽位 SKU）"
+      "status": "SKIP",
+      "detail": "商品页未就位，跳过"
     },
     {
       "id": "C6",
@@ -63,26 +64,26 @@
     {
       "id": "C6b",
       "name": "排队页样本",
-      "status": "PASS",
-      "detail": "已有真实排队页样本留证（data/grab/evidence/queue-samples/）——可着手分析排队接管逻辑"
+      "status": "SKIP",
+      "detail": "尚未捕获真实排队页（只在真实场次出现）。开抢时 R2 会自动留证，无需操作"
     },
     {
       "id": "C7",
       "name": "A 方案内部入口",
-      "status": "PASS",
-      "detail": "fiber 入口可达（向上 2 层、源码 788 字、业务签名匹配）——triggerMode=internal 可用；按钮文案「10月9日 10:08 开始」"
+      "status": "SKIP",
+      "detail": "商品页未就位，跳过"
     },
     {
       "id": "C7a",
       "name": "旧全局路径",
       "status": "SKIP",
-      "detail": "window.rush.business.doGoRush 不存在（已知：由 C7 的 fiber 入口接棒，无需处理）"
+      "detail": "商品页未就位，跳过"
     },
     {
       "id": "C8",
       "name": "价格读取",
-      "status": "PASS",
-      "detail": "读到页面价 ¥23999（maxPrice 上限保护可用）"
+      "status": "SKIP",
+      "detail": "商品页未就位，跳过"
     }
   ]
 }

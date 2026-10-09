@@ -20,12 +20,35 @@ var Transport = {
     USB_PROBE_CACHE_MS: 15000,       // 探测结果缓存 15s, 避免频繁探测
     activeHubUrl: null,
     deviceId: null,
+    hubChannel: null,            // 中枢自报的当前通道 (心跳/握手回带): {mode,usb,wifi,caps}
     heartbeatTimer: null,
     isPolling: false,
     consecutiveHeartbeatFailures: 0,
     taskState: "idle",
     currentTaskId: null,
     cancelRequestedTaskId: null, // 中枢请求取消的任务 (经心跳响应回带; 任务执行期间唯一可靠的下行通道)
+    stopRequested: false,        // 中枢请求停止整个脚本 (由 runner 的 1s 控制 tick 消费)
+    updateRequested: false,      // 中枢请求自更新脚本 (由 runner 的 1s 控制 tick 消费)
+
+    /**
+     * 统一通道判定 (2026-10-09)。
+     *   问题: 手机只用 WiFi 连中枢时, adbTap / armTap / diagSnapshot 仍会照发 —— 每个请求白等
+     *         一次超时 (首击重试 3 发 ≈ 2.4s 全浪费在等一个注定 503 的请求上)。
+     *   口径: **USB(ADB) 优先 → 无 USB 时立刻转本地能力**, 不等超时。
+     *   判据: 走的就是 USB 反向隧道 → 必有 adb; 否则看中枢心跳自报的 channel.usb。
+     */
+    remoteUsb: function() {
+        if (this.activeHubUrl === this.USB_URL) return true;
+        if (this.hubChannel && typeof this.hubChannel.usb === "boolean") return this.hubChannel.usb;
+        return true;   // 未知: 先按"有"试一次 (失败会立刻回落, 不会长期误判)
+    },
+
+    /** 当前通道名 (日志/上报用) */
+    channelName: function() {
+        if (this.activeHubUrl === this.USB_URL) return "usb";
+        if (this.hubChannel && this.hubChannel.mode) return this.hubChannel.mode;
+        return this.activeHubUrl ? "wifi" : "none";
+    },
 
     init: function(customHubUrl) {
         // 读取 PC 部署时自动写入的 hub.conf (含最新局域网 IP, 多行多地址)
@@ -229,6 +252,7 @@ var Transport = {
                 console.log("【握手成功】设备已在 Hub 登记: " + this.activeHubUrl);
                 try { toast("⚡ 设备已成功连入电脑控制台！"); } catch(eT) {}
                 this.hasRegistered = true;
+                try { var hb = JSON.parse(res.body.string()); if (hb && hb.channel) this.hubChannel = hb.channel; } catch (eH0) {}
                 return true;
             }
         } catch (e) {
@@ -272,6 +296,7 @@ var Transport = {
                 // 解析响应体: 中枢可能捎带「取消当前任务」指令 (任务执行期间唯一可靠下行通道)
                 try {
                     var hbJson = JSON.parse(res.body.string());
+                    if (hbJson && hbJson.channel) this.hubChannel = hbJson.channel;   // ★ 通道自报: 决定 ADB 类操作走中枢还是走本地
                     if (hbJson && hbJson.control) {
                         var ctl = hbJson.control;
                         if (ctl.cancelTaskId) {
@@ -405,6 +430,8 @@ var Transport = {
     adbTap: function(x, y, timeoutMs) {
         if (!this.activeHubUrl) this.detectHub();
         if (!this.activeHubUrl) return false;
+        // WiFi 通道: 中枢没有 ADB —— 直接判失败转本地手势, 不让首击的 3 发重试白等 ~2.4s
+        if (!this.remoteUsb()) return false;
         try {
             var res = http.postJson(this.activeHubUrl + "/api/adb/tap", { x: Math.round(x), y: Math.round(y) }, { timeout: timeoutMs || 2500 });
             return res && res.statusCode === 200;
@@ -438,6 +465,7 @@ var Transport = {
     armTap: function(x, y, atHubMs, tag, timeoutMs) {
         if (!this.activeHubUrl) this.detectHub();
         if (!this.activeHubUrl) return { ok: false, reason: "无可达中枢" };
+        if (!this.remoteUsb()) return { ok: false, reason: "WiFi 通道不支持中枢预置击发 (走本地击发)" };
         try {
             var res = http.postJson(this.activeHubUrl + "/api/adb/arm-tap",
                 { x: Math.round(x), y: Math.round(y), atMs: Math.round(atHubMs), tag: String(tag || "arm") },
@@ -466,6 +494,7 @@ var Transport = {
     armStatus: function(tag, timeoutMs) {
         if (!this.activeHubUrl) this.detectHub();
         if (!this.activeHubUrl) return null;
+        if (!this.remoteUsb()) return null;   // WiFi 下压根没预置过, 不必往返
         try {
             var res = http.get(this.activeHubUrl + "/api/adb/arm-status?tag=" + encodeURIComponent(String(tag || "")), { timeout: timeoutMs || 1500 });
             if (!res || res.statusCode !== 200 || !res.body) return null;
@@ -480,6 +509,7 @@ var Transport = {
     diagSnapshot: function(tag, timeoutMs) {
         if (!this.activeHubUrl) this.detectHub();
         if (!this.activeHubUrl) return null;
+        if (!this.remoteUsb()) return null;   // uiautomator dump / screencap 只能走 ADB
         try {
             var res = http.postJson(this.activeHubUrl + "/api/adb/diag-snapshot", { tag: String(tag || "diag") }, { timeout: timeoutMs || 25000 });
             if (!res || res.statusCode !== 200 || !res.body) return null;
@@ -542,6 +572,7 @@ var Transport = {
     adbSwipe: function(x1, y1, x2, y2, ms) {
         if (!this.activeHubUrl) this.detectHub();
         if (!this.activeHubUrl) return false;
+        if (!this.remoteUsb()) return false;   // WiFi: 中枢无法注入 swipe
         try {
             var res = http.postJson(this.activeHubUrl + "/api/adb/swipe", { x1: x1, y1: y1, x2: x2, y2: y2, ms: ms || 300 }, { timeout: 3000 });
             return res && res.statusCode === 200;
@@ -551,7 +582,72 @@ var Transport = {
     },
 
     /**
-     * 请求 PC 中枢用"深度链接"打开大麦商品页
+     * 等商品详情页落地 (本地打开 deep-link 后用)
+     */
+    waitForDetail: function(timeoutMs) {
+        var t0 = Date.now();
+        while (Date.now() - t0 < (timeoutMs || 6000)) {
+            try {
+                var act = String(currentActivity() || "");
+                if (act.indexOf("ProjectDetail") >= 0) { sleep(400); return true; }
+            } catch (eA) {}
+            sleep(150);
+        }
+        return false;
+    },
+
+    /**
+     * 本地 deep-link 打开大麦商品页 (2026-10-09 新增: WiFi 通道 = 无 ADB 时打开商品页的唯一办法)
+     * 变体顺序与中枢 ADB 版本一致, 逐个试到 ProjectDetailActivity 落地为止。
+     * @returns {{ok:boolean, hit?:string, tried?:string[], error?:string, via:string}}
+     */
+    openItemLocal: function(itemId) {
+        var id = String(itemId || "").trim();
+        if (!/^\d{6,}$/.test(id)) return { ok: false, error: "itemId 必须为纯数字", via: "local" };
+        var variants = [
+            { name: "damai://detail", action: "android.intent.action.VIEW", data: "damai://detail", extraKey: "itemId" },
+            { name: "damai://trade/detail", action: "android.intent.action.VIEW", data: "damai://trade/detail", extraKey: "itemId" },
+            { name: "damai://projectdetail", action: "android.intent.action.VIEW", data: "damai://projectdetail", extraKey: "itemId" },
+            { name: "web-item", action: "android.intent.action.VIEW", data: "https://m.damai.cn/damai/perform/item.html?itemId=" + id, extraKey: null },
+            { name: "PRO_DETAIL", action: "cn.damai.intent.action.PRO_DETAIL", data: null, extraKey: "itemId" }
+        ];
+        var tried = [];
+        for (var i = 0; i < variants.length; i++) {
+            var v = variants[i];
+            tried.push(v.name);
+            try {
+                var opt = { packageName: "cn.damai", action: v.action, flags: ["activity_new_task"] };
+                if (v.data) opt.data = v.data;
+                if (v.extraKey) { opt.extras = {}; opt.extras[v.extraKey] = id; }
+                app.startActivity(opt);
+            } catch (eS) {
+                console.log("【本地打开】" + v.name + " 拉起异常: " + (eS ? (eS.message || eS) : "?"));
+                continue;
+            }
+            if (this.waitForDetail(6000)) return { ok: true, hit: v.name, tried: tried, via: "local" };
+        }
+        return { ok: false, error: "本地 deep-link 均未落到详情页", tried: tried, via: "local" };
+    },
+
+    /**
+     * 打开大麦商品页 —— **统一通道入口**:
+     *   USB(中枢有 ADB) → 请求中枢 am start (已验证的强通道)
+     *   WiFi(无 ADB)     → 手机本地 app.startActivity (等价 deep-link, 免数据线)
+     * 调用方 (grabLocate / 自动刷新 / phone_op) 无需关心走哪条。
+     * @returns {{ok:boolean, hit?:string, tried?:string[], error?:string, via:string}}
+     */
+    openItem: function(itemId) {
+        if (!this.activeHubUrl) this.detectHub();
+        if (this.activeHubUrl && this.remoteUsb()) {
+            var r = this.adbOpenItem(itemId);
+            if (r && r.ok) return { ok: true, hit: r.hit || "", tried: r.tried || [], via: "usb" };
+            console.warn("【就位】中枢 ADB 通道失败 (" + ((r && r.error) || "无回应") + ") → 转手机本地 deep-link");
+        }
+        return this.openItemLocal(itemId);
+    },
+
+    /**
+     * 请求 PC 中枢用"深度链接"打开大麦商品页 (ADB 专用; 仅 USB 通道调用)
      * (2026-10-09 真机实证: damai://detail + itemId extra → ProjectDetailActivity;
      *  原始分享链接 /shows/item.html 无法路由到 App, 由中枢统一改写并兜底多入口)
      * @returns {{ok:boolean, hit?:string, tried?:string[], error?:string}}
@@ -581,6 +677,7 @@ var Transport = {
     adbTapBurst: function(opts) {
         if (!this.activeHubUrl) this.detectHub();
         if (!this.activeHubUrl) return false;
+        if (!this.remoteUsb()) return false;   // WiFi: 中枢无法注入连发 tap
         try {
             var res = http.postJson(this.activeHubUrl + "/api/adb/tap-burst", {
                 x: Math.round(opts.x),

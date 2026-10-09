@@ -304,7 +304,7 @@ function criticalTap(cx, cy, verify, label, tid) {
         if (!verify || verify()) return true;
         sendLog(tag, "[点击] " + name + " ADB 注入后页面未变化, 尝试手机端手势通道 (" + cx + "," + cy + ")");
     } else {
-        sendLog(tag, "[点击] " + name + " ADB 通道不可用 (中枢离线?), 使用手机端手势通道 (" + cx + "," + cy + ")");
+        sendLog(tag, "[点击] " + name + " ADB 通道不可用 (中枢离线 / 当前为 WiFi 通道), 使用手机端手势通道 (" + cx + "," + cy + ")");
     }
     // 通道 2 (兜底): 手机端无障碍手势
     var injected = humanPress(cx, cy);
@@ -459,13 +459,29 @@ function signalChangedFrom(s, base) {
     return false;
 }
 
-/** ADB 优先按击 (自绘控件只认 ADB); pressMs>=30 时用"同点按压"模拟人类按压时长 */
+/** ADB 优先按击 (自绘控件只认 ADB); 无 ADB (WiFi 通道) 时回落手机本地无障碍手势。
+ *  pressMs>=30 时用"同点按压"模拟人类按压时长 */
 function adbPress(x, y, pressMs) {
     if (pressMs && pressMs >= 30) {
         // 抖动统一由调用方 (humanTap) 施加, 这里不再叠加, 否则 jitterPx 参数会失真
-        return Transport.adbTapBurst({ x: x, y: y, count: 1, pressMs: pressMs, jitter: 0 });
+        if (Transport.adbTapBurst({ x: x, y: y, count: 1, pressMs: pressMs, jitter: 0 })) return true;
+    } else if (Transport.adbTap(x, y)) {
+        return true;
     }
-    return Transport.adbTap(x, y);
+    // ★ 2026-10-09: ADB 通道不可用 (WiFi: 中枢没有 adb; 或中枢离线) → 回落手机本地手势。
+    //   普通控件手势有效; 大麦自绘按钮可能无效 —— 只告警一次, 不静默, 也不假装成功。
+    var local = false;
+    try {
+        if (pressMs && pressMs >= 30 && typeof press === "function") local = press(x, y, pressMs) !== false;
+        else if (typeof press === "function") local = press(x, y, 30) !== false;
+        else if (typeof click === "function") local = click(x, y) !== false;
+    } catch (eLp) { local = false; }
+    if (!local) local = fastPress(x, y);
+    if (!adbPress._wifiWarned && typeof Transport !== "undefined" && Transport.remoteUsb && !Transport.remoteUsb()) {
+        adbPress._wifiWarned = true;
+        console.warn("[通道] WiFi 通道: 点击已改用手机无障碍手势 (大麦自绘按钮可能无效, 建议插数据线走 ADB)");
+    }
+    return local;
 }
 
 /* ===== 抢购点击参数 (控制台可下发; 未下发用默认) =====
@@ -2460,7 +2476,7 @@ var DamaiAdapter = {
             sendStep(tid, "item_open", "done", "已在目标页");
             return { ok: true, via: "already" };
         }
-        var r = Transport.adbOpenItem(itemId);
+        var r = Transport.openItem(itemId);   // ★ 统一通道: USB→中枢ADB, WiFi→手机本地 deep-link
         if (!r || !r.ok) {
             var why = (r && r.error) ? r.error : "中枢离线或 ADB 不可用";
             sendLog(tid, "[就位] ✘ 链接直达失败: " + why);
@@ -2538,7 +2554,7 @@ var DamaiAdapter = {
         var itemId = (task && task.target && task.target.itemId) ? String(task.target.itemId) : "";
         sendStep(tid, "refresh", "start", label);
         sendLog(tid, "[" + label + "] 自动刷新页面(深链重开) —— 让开售状态变新");
-        var r = Transport.adbOpenItem(itemId);
+        var r = Transport.openItem(itemId);   // ★ 统一通道 (USB→中枢ADB / WiFi→本地 deep-link)
         if (!r || !r.ok) {
             sendLog(tid, "[" + label + "] ✘ 刷新失败: " + ((r && r.error) || "无回应") + " → 继续用原页面盯梢");
             sendStep(tid, "refresh", "failed", "刷新失败");
@@ -2941,7 +2957,7 @@ var DamaiAdapter = {
                 var fb = fl.bounds();
                 var fx = Math.floor(fb.centerX()), fy = Math.floor(fb.centerY());
                 var tTap = now();
-                Transport.adbTap(fx, fy);
+                adbPress(fx, fy, 40);   // ★ 统一通道: ADB 优先, WiFi 回落本地手势 (不再直接调 adbTap 卡死自测)
                 var dl = now() + 3000;
                 while (now() < dl) {
                     if (isCancelled(tid)) break;
@@ -2950,7 +2966,7 @@ var DamaiAdapter = {
                     if (cur && cur !== before) { detectMs = now() - tTap; after = cur; break; }
                     sleep(6);
                 }
-                if (detectMs >= 0) Transport.adbTap(fx, fy); // 还原想看状态
+                if (detectMs >= 0) adbPress(fx, fy, 40); // 还原想看状态
             }
         } catch (eST) {}
 
