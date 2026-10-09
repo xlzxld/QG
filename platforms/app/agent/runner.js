@@ -48,9 +48,28 @@ function consumeControl() {
     try {
         if (typeof Transport === "undefined") return;
         if (Transport.updateRequested) { Transport.updateRequested = false; restartWithLatestScript(); }
+        if (Transport.restartRequested) { Transport.restartRequested = false; restartEngine("收到中枢重启指令 (脚本已由 USB 推送)"); }
         if (Transport.stopRequested) { Transport.stopRequested = false; stopAgentNow(); }
     } catch (e) {
         console.error("【控制】指令消费异常: " + (e ? (e.message || e) : "?"));
+    }
+}
+
+/**
+ * 引擎级自重启 (2026-10-10): 只重启脚本引擎, **绝不 force-stop 应用** → 无障碍永不被触碰。
+ * 用于 USB 更新脚本后加载新代码 (文件已由中枢推好, 无需再下载)。
+ */
+function restartEngine(reason) {
+    console.log("【自重启】" + reason + ", 换引擎加载最新脚本…");
+    try { Transport.sendEvent(null, "log", { msg: "【自重启】" + reason + ", 换引擎加载最新脚本" }); } catch (e0) {}
+    try {
+        var src = String(engines.myEngine().source);
+        engines.execScriptFile(src);      // 先起新引擎 (新代码先跑起来)
+        sleep(600);
+        engines.myEngine().forceStop();   // 再停旧引擎
+    } catch (e1) {
+        console.warn("【自重启】失败, 请手动重开脚本: " + (e1 ? (e1.message || e1) : "?"));
+        try { Transport.sendEvent(null, "log", { msg: "【自重启】失败, 请手动重开脚本: " + (e1 ? (e1.message || e1) : "?") }); } catch (e2) {}
     }
 }
 

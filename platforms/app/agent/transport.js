@@ -327,6 +327,11 @@ var Transport = {
                             this.updateRequested = true;
                             console.warn("【自更新】收到中枢「更新脚本」请求, 下次 tick 执行");
                         }
+                        // USB 推送后的自重启 (2026-10-10: Agent 自己换引擎, 中枢绝不 force-stop 应用 → 不碰无障碍)
+                        if (ctl.restartAgent && !this.restartRequested) {
+                            this.restartRequested = true;
+                            console.warn("【自重启】收到中枢「重启引擎」请求, 下次 tick 执行");
+                        }
                     }
                 } catch (eH) {
                     // 解析失败不影响心跳本身

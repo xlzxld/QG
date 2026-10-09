@@ -699,34 +699,13 @@ async function connectDeviceFlowInner(options = {}) {
     return { ok: false, steps, error: '推送脚本失败: ' + e.message };
   }
 
-  // 6. (重启模式) 停止旧 Agent 并恢复无障碍
-  //    ★ 2026-10-10: 只有「明确要求重启」(更新脚本) 或 Agent 不在线时才动 Agent ——
-  //    在线状态下的一键连接绝不打断它 (用户实证: 在线时重连 = 断 agent + 无障碍被抹)。
+  // 6. 拉起 Agent (仅在 Agent 不在线时) —— ★ **绝不 force-stop 应用、绝不碰无障碍**。
+  //    实证: vivo 会在应用被 force-stop 时主动关掉其无障碍授权, 写回设置也救不回来。
+  //    更新脚本的重启改由 Agent 自己换引擎 (见 /api/device/update-script 的 restartAgent 指令)。
   const agentWasOnline = [...devices.values()].some(d => Date.now() - d.lastSeen < 20000);
-  const wantRestart = options.restart === true || !agentWasOnline;
-  if (wantRestart) {
-    // ★ 无障碍快照恢复: force-stop 会解除绑定; 回写 = **原样恢复快照** (不强加、不覆盖别的服务)。
-    //    快照为空说明无障碍本来就关着 → 保持不动, 绝不替用户编造服务列表。
-    let accSnapshot = '';
-    try { accSnapshot = (runAdb(`adb -s ${serial} shell settings get secure enabled_accessibility_services`, 2000) || '').trim(); } catch (e) { /* 忽略 */ }
-    if (accSnapshot === 'null') accSnapshot = '';
-    try {
-      runAdb(`adb -s ${serial} shell am force-stop ${app.pkg}`, 3000);
-      await sleep(800);
-      if (accSnapshot) {
-        runAdb(`adb -s ${serial} shell settings put secure enabled_accessibility_services ${accSnapshot}`, 3000);
-        runAdb(`adb -s ${serial} shell settings put secure accessibility_enabled 1`, 3000);
-        step(`重启 ${app.name} (无障碍按快照恢复)`, true, accSnapshot.slice(0, 60));
-      } else {
-        step(`重启 ${app.name}`, true, '无障碍原本未启用, 保持不动');
-      }
-    } catch (e) {
-      step(`重启 ${app.name} (恢复无障碍服务)`, false, e.message);
-    }
-
-    // 7. 拉起 Agent 运行 (逐个候选试到成功为止)
+  if (!agentWasOnline) {
     let launched = null;
-    for (const cand of [app, ...AUTOJS_CANDIDATES.filter((c) => c.pkg !== app.pkg)]) {
+    for (const cand of AUTOJS_CANDIDATES) {
       try {
         const out = runAdb(`adb -s ${serial} shell am start -n ${cand.pkg}/${cand.launch} -a android.intent.action.VIEW -d "file:///sdcard/qg-agent/main.js" -t "application/x-javascript"`, 4000) || '';
         if (/Error|does not exist|not found|Exception/i.test(out)) continue;
@@ -737,9 +716,8 @@ async function connectDeviceFlowInner(options = {}) {
     if (!step(`拉起 ${launched ? launched.name : '自动化应用'} 运行 Agent`, !!launched, launched ? launched.pkg : '全部候选都拉起失败')) {
       return { ok: false, steps, error: '无法启动手机端脚本 (请确认手机已安装 AutoJs6/AutoX)' };
     }
-    if (launched.pkg !== app.pkg) app = launched;   // 实际拉起者获胜 (后续日志口径对齐)
   } else {
-    step('Agent 已在线', true, '跳过重启 (非破坏式连接, 不打断在跑的任务)');
+    step('Agent 已在线', true, '跳过拉起 (非破坏式连接, 不打断在跑的任务, 全程不触碰无障碍)');
   }
 
   // 8. 等待 Agent 注册上线 (最长 15s)
@@ -926,6 +904,12 @@ const server = http.createServer(async (req, res) => {
         pushControl({ selfUpdate: true });
         dev.selfUpdateRequested = false;
         log(`[自更新] 已下发「更新脚本」→ 设备 ${data.deviceId}`);
+      }
+      if (dev.restartRequested) {
+        // USB 更新脚本后的自重启: Agent 自己换引擎加载新脚本 (不 force-stop 应用 → 不碰无障碍)
+        pushControl({ restartAgent: true });
+        dev.restartRequested = false;
+        log(`[自重启] 已下发「重启引擎」→ 设备 ${data.deviceId}`);
       }
       // ★ 心跳回带当前通道: 手机据此决定 ADB 类操作是打中枢还是走本地 (避免 WiFi 下白等超时)
       const ch = resolveChannel(data.deviceId);
@@ -1393,11 +1377,49 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  /* ---- 更新手机端脚本 (推送 + 重启 Agent) ---- */
+  /* ---- 更新手机端脚本 (USB: 推文件 + 让 Agent 自己换引擎重启; ★ 绝不 force-stop 应用/不碰无障碍) ---- */
   if (pathname === '/api/device/update-script' && req.method === 'POST') {
     try {
-      const result = await connectDeviceFlow({ restart: true });
-      return sendJson(res, result.ok ? 200 : 500, result);
+      const steps = [];
+      const step = (name, ok, detail = '') => {
+        steps.push({ name, ok, detail });
+        log(`[更新脚本] ${ok ? '✅' : '❌'} ${name}${detail ? ': ' + detail : ''}`);
+        return ok;
+      };
+      const adbList = scanAdbDevices();
+      if (!step('检测 USB 设备', adbList.length > 0, adbList.length ? `${adbList[0].model} (${adbList[0].serial})` : '未检测到 USB 设备')) {
+        return sendJson(res, 500, { ok: false, steps, error: '未检测到 USB 连接的 Android 设备' });
+      }
+      const serial = adbList[0].serial;
+      try {
+        runAdb(`adb -s ${serial} push "${AGENT_SCRIPT}" /sdcard/qg-agent/main.js`, 6000);
+        step('推送 main.js', true, `${(fs.statSync(AGENT_SCRIPT).size / 1024).toFixed(1)} KB`);
+      } catch (e) {
+        return sendJson(res, 500, { ok: false, steps, error: '推送脚本失败: ' + e.message });
+      }
+      // 让 Agent 自己重启换引擎 (脚本内 forceStop 自己的引擎, 不 force-stop 应用 → 无障碍永不被触碰)
+      const devId = [...devices.keys()].find((id) => {
+        const d = devices.get(id);
+        return d && Date.now() - d.lastSeen < 20000;
+      });
+      if (!devId) {
+        step('Agent 未在线', false, '脚本已推送; 点「一键连接」即可拉起 (全程不触碰无障碍)');
+        return sendJson(res, 500, { ok: false, steps, error: 'Agent 未在线 — 脚本已推送, 请点「一键连接」拉起 Agent' });
+      }
+      devices.get(devId).restartRequested = true;
+      step('下发自重启指令', true, 'Agent 将自行换引擎加载新脚本 (心跳回带, 最多 4 秒)');
+      // 等重新注册: scriptSize 对账一致 + 心跳新鲜
+      const wantSize = fs.statSync(AGENT_SCRIPT).size;
+      let done = false;
+      for (let i = 0; i < 30; i++) {
+        await sleep(500);
+        const d = devices.get(devId);
+        if (d && Number(d.scriptSize) === wantSize && Date.now() - (d.lastSeen || 0) < 8000) { done = true; break; }
+      }
+      step('Agent 重启上线', done, done
+        ? '新版已生效 (scriptSize 对账一致)'
+        : '15s 内未确认 — 手机脚本较旧时请手动重开一次脚本, 之后即可全自动');
+      return sendJson(res, done ? 200 : 500, { ok: done, steps, error: done ? null : 'Agent 未能自动重启 (手机脚本过旧或已离线)' });
     } catch (e) {
       return sendJson(res, 500, { ok: false, error: e.message });
     }
