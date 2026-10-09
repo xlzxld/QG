@@ -54,6 +54,7 @@ describe('跨平台 (macOS Darwin / Windows Win32) 兼容性测试', () => {
     const bats = [
       '服务启停.bat',
       '自检-Windows环境.bat',
+      '开启局域网访问-管理员.bat',
       '今早抢购-手动武装.bat',
       path.join('tools', 'mobile', 'prepare-device.bat'),
     ];

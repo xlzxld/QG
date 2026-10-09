@@ -37,6 +37,7 @@
 - **Windows .bat 规范（2026-10-09 定案）**：一律 CRLF；含中文的 bat 必须 GBK 编码 + `chcp 936`（UTF-8/BOM + `chcp 65001` 组合会把 cmd 解析"啃"错位、直接崩退——实测 EXIT=255）；纯 ASCII 的 bat 内不写中文，中文输出交给 node 打印（WriteConsoleW）。守卫 = `tests/platform-compat.test.mjs` 第 5 项
 - **服务启停统一入口（2026-10-09）**：`服务启停.bat / 服务启停.command` → `core/service-menu.mjs`（菜单：启动/停止/重启全部、单项管理、状态、看日志、自检、控制台）；桥接内核 `grab-launcher.mjs`（--start/--stop/--restart/--status，另有 import 守卫：被 import 不执行 main），中枢内核 `hub-launcher.mjs`（--start/--start-bg/--stop/--restart/--status；后台运行，日志 `data/grab/device-hub.log`）；PID 定位三级：/health 自报 → netstat → PID 文件+身份核对。旧启停脚本 12 个（启动/停止服务/重启服务/启动-手机中枢/停止抢购中枢 ×2平台 + start.sh/stop.sh/start-device-hub.sh）已删；Windows 环境自检 = `自检-Windows环境.bat` + `check-windows-env.mjs`（本机现状：ADB 已装 = 项目根 `platform-tools/` v37.0.1，已 gitignore + 用户 PATH；无 winget）
 - adb 相关约定（2026-10-09）：本机 adb = 项目根 `platform-tools/`（**不入库**；中枢启动时自动把该目录补进子进程 PATH，不依赖系统 PATH 传播时机）；**任何 adb 调用超时 ≥6 秒**——服务冷启动需 1~4 秒，2 秒超时会被实测强杀、误判「adb 不可用」（device-hub 探测已改 6000ms）
+- 局域网连接（2026-10-09）：手机端 `transport.js` 自带**同网段扫描自动发现中枢**（换网络/换电脑零配置，命中缓存进 hubUrls，60s 节流；agentVersion≥1.0.1）；Windows 需管理员放行 TCP 3120（双击 `开启局域网访问-管理员.bat`，规则 QG-Hub-3120）；中枢有 `GET /agent/main.js` 下载路由（手机浏览器免数据线更新脚本）
 - `--only` 匹配：精确优先、子串兜底（`pickByOnly`）；桥接 `/api/crawler/run` 对 only 做精确硬闸门（命不中/已停用 → 400）；控制台任何写商品列表的入口后必须 `renderOnlyPicker()`（下拉栏残留=白名单泄漏，已补 4 处：删除/商品设置/添加/原始JSON）
 - 控制台采集范围 = 下拉栏（`renderOnlyPicker()`）；验证 `verify/history/verify-only-picker.mjs`
 - 服务常驻/"窗口弹不弹"类验证必须借用户环境（沙箱进程活不过命令边界、spawn 子进程不弹窗、schtasks/wmic 黑名单）→ 用户点 bat/点按钮，我在旁采样（`verify/sample_windows.py`）

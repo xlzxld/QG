@@ -818,6 +818,20 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  /* ---- 手机脚本下载（局域网更新用：手机浏览器打开 /agent/main.js 即可下载） ---- */
+  if (pathname === '/agent/main.js' && req.method === 'GET') {
+    try {
+      const js = fs.readFileSync(AGENT_SCRIPT);
+      res.writeHead(200, {
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': 'attachment; filename="main.js"',
+      });
+      return res.end(js);
+    } catch (e) {
+      return sendJson(res, 500, { error: '缺少手机脚本文件：' + e.message });
+    }
+  }
+
   /* ---- 控制台静态页 ---- */
   if ((pathname === '/' || pathname === '/devices' || pathname === '/console') && req.method === 'GET') {
     try {

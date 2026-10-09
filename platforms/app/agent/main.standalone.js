@@ -1,7 +1,7 @@
 /**
  * =====================================================================
  * QG-Agent 移动端全功能免依赖抢购引擎 (AutoJs6 / AutoX 独立全功能单文件版)
- * 生成时间: 2026-10-08T19:38:08.124Z
+ * 生成时间: 2026-10-09T04:05:57.309Z
  * 零 require 依赖，兼容任何目录直接运行 (彻底根除 jvm-npm 相对路径抛错)
  * =====================================================================
  */
@@ -309,8 +309,8 @@ var AnchorFire = {
 
 var Transport = {
     hubUrls: [
-        "http://127.0.0.1:3120",     // USB (adb reverse) 首选: 最稳定
-        "http://192.168.5.49:3120"   // 历史局域网 Wi-Fi IP 兜底
+        "http://127.0.0.1:3120"      // USB (adb reverse) 首选: 最稳定
+        // 局域网地址：由 hub.conf（PC 部署时写入）或自动扫描补充
     ],
     activeHubUrl: null,
     deviceId: null,
@@ -374,10 +374,87 @@ var Transport = {
                 // 忽略重试下一个
             }
         }
-        // 如果都未响应，优先保持第一个局域网 IP 尝试
+
+        // 已知地址全都不通 → 自动扫描当前 Wi-Fi 网段找中枢（换网络/换电脑也能连上）
+        var scanned = this.scanSubnetForHub();
+        if (scanned) {
+            var prevScanUrl = this.activeHubUrl;
+            this.activeHubUrl = scanned;
+            console.log("【通信建立】自动发现中枢: " + scanned);
+            if (prevScanUrl !== scanned || !this.hasRegistered) {
+                this.hello();
+            }
+            return true;
+        }
+
+        // 如果都未响应，优先保持第一个地址尝试
         this.activeHubUrl = this.hubUrls[0];
         console.warn("【通信警告】未探测到在线 Hub，候补使用: " + this.activeHubUrl);
         return false;
+    },
+
+    /**
+     * 局域网自动发现：拿本机 Wi-Fi 的 IP 扫同网段（x.1~x.254）的 3120 端口找中枢。
+     * 命中后把地址插入 hubUrls 队首，之后探测直接秒连。
+     * 60 秒内最多扫一次，避免频繁扫描。
+     */
+    scanSubnetForHub: function() {
+        var nowMs = java.lang.System.currentTimeMillis();
+        if (this._lastScanAt && nowMs - this._lastScanAt < 60000) return null;
+        this._lastScanAt = nowMs;
+
+        // 1) 取本机 Wi-Fi 的 IPv4
+        var myIp = null;
+        try {
+            var ifaces = java.net.NetworkInterface.getNetworkInterfaces();
+            while (ifaces.hasMoreElements()) {
+                var ni = ifaces.nextElement();
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                var addrs = ni.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    var ia = addrs.nextElement();
+                    var ip = String(ia.getHostAddress() || "");
+                    if (ip.indexOf(".") > 0 && ip.indexOf("127.") !== 0) { myIp = ip; break; }
+                }
+                if (myIp) break;
+            }
+        } catch (eIp) {}
+        if (!myIp) {
+            console.warn("【自动发现】拿不到本机 Wi-Fi 地址，跳过扫描（请确认手机连着 Wi-Fi）");
+            return null;
+        }
+
+        var prefix = myIp.substring(0, myIp.lastIndexOf(".") + 1);
+        console.log("【自动发现】扫描局域网 " + prefix + "x : 3120 寻找中枢...");
+        var found = null;
+        var makeWorker = function(startIdx, step) {
+            return function() {
+                for (var i = startIdx; i <= 254; i += step) {
+                    if (found) return;
+                    try {
+                        var res = http.get("http://" + prefix + i + ":3120/health", { timeout: 400 });
+                        if (res && res.statusCode === 200) {
+                            if (!found) found = "http://" + prefix + i + ":3120";
+                            return;
+                        }
+                    } catch (eW) {}
+                }
+            };
+        };
+        var workers = 24;
+        for (var s = 0; s < workers; s++) {
+            threads.start(makeWorker(s + 1, workers));
+        }
+        var t0 = java.lang.System.currentTimeMillis();
+        while (!found && java.lang.System.currentTimeMillis() - t0 < 6000) {
+            sleep(120);
+        }
+        if (found) {
+            if (this.hubUrls.indexOf(found) < 0) this.hubUrls.unshift(found);
+            return found;
+        }
+        console.warn("【自动发现】未找到中枢 —— 请确认：①手机与电脑在同一 Wi-Fi ②电脑上「手机中枢」已启动");
+        return null;
     },
 
     /**
@@ -394,7 +471,7 @@ var Transport = {
             try { if (typeof device !== 'undefined') { sw = device.width || 1080; sh = device.height || 2400; } } catch(eS) {}
             var payload = {
                 deviceId: this.deviceId,
-                agentVersion: "1.0.0",
+                agentVersion: "1.0.1",
                 autoX: "7.2.4",
                 screen: [sw, sh],
                 accessibility: isAcc,
