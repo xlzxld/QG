@@ -33,6 +33,16 @@ const CONSOLE_HTML = path.join(ROOT, 'web', 'hub-console.html');
 const AUTOJS_PKG = 'org.autojs.autojs6';
 const AUTOJS_ACC_SERVICE = 'org.autojs.autojs.core.accessibility.AccessibilityServiceUsher';
 
+/* ============ 本机 adb 优先：项目根 platform-tools ============
+ * 不依赖系统 PATH 是否已生效（刚配置完 / 老窗口环境变量没刷新时照样能用）。 */
+const LOCAL_ADB_DIR = path.join(ROOT, 'platform-tools');
+if (fs.existsSync(path.join(LOCAL_ADB_DIR, 'adb.exe'))) {
+  const curPath = process.env.PATH || process.env.Path || '';
+  if (!curPath.toLowerCase().includes(LOCAL_ADB_DIR.toLowerCase())) {
+    process.env.PATH = LOCAL_ADB_DIR + ';' + curPath;
+  }
+}
+
 /* ============ ADB 设备探测 (2s 缓存) ============ */
 let lastAdbScanTime = 0;
 let cachedAdbDevices = [];
@@ -64,7 +74,7 @@ function scanAdbDevices() {
   if (now - lastAdbScanTime < 2000) return cachedAdbDevices;
   lastAdbScanTime = now;
   try {
-    const output = runAdb('adb devices -l', 1500);
+    const output = runAdb('adb devices -l', 6000);
     const list = parseAdbDevices(output);
     // 自动维持 USB 反向端口代理
     for (const d of list) {
@@ -85,9 +95,11 @@ function scanAdbDevices() {
 //   装好 adb 后重启中枢，节奏自动恢复正常。
 let adbPollMs = 5000;
 let adbPollState = 'ok'; // 'ok' | 'no-adb'
+// 超时给足 6 秒：adb 服务冷启动（开机后第一次 / 服务被清掉时）可能要 2~4 秒拉起，
+// 超时太短会被误判成「adb 不可用」而错误降频（实测 2 秒必被强杀）。
 const scheduleAdbPoll = () => {
   setTimeout(() => {
-    execAsync('adb devices -l', { timeout: 2000, windowsHide: true }, (err, stdout) => {
+    execAsync('adb devices -l', { timeout: 6000, windowsHide: true }, (err, stdout) => {
       if (err) {
         cachedAdbDevices = [];
         lastAdbScanTime = Date.now();

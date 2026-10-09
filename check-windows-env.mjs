@@ -198,6 +198,7 @@ async function main() {
   const adbPath =
     adbFromPath ||
     [
+      path.join(ROOT, 'platform-tools', 'adb.exe'),
       process.env['LOCALAPPDATA'] && path.join(process.env['LOCALAPPDATA'], 'Android', 'Sdk', 'platform-tools', 'adb.exe'),
       process.env['USERPROFILE'] && path.join(process.env['USERPROFILE'], 'scoop', 'shims', 'adb.exe'),
       'C:\\platform-tools\\adb.exe',

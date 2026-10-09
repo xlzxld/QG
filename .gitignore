@@ -9,6 +9,9 @@ node_modules/
 # ── 旧平台归档（冻结快照，体积大，不入库）──
 归档_旧抢购平台_2026-10-08/
 
+# ── 本机工具：Android platform-tools（adb / fastboot，本地工具、体积大，不入库）──
+platform-tools/
+
 # ── data/grab：配置类入库；运行时状态排除 ──
 data/grab/chrome-profile-rush/
 data/grab/selftest-profile/
