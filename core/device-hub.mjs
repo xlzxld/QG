@@ -38,7 +38,8 @@ let lastAdbScanTime = 0;
 let cachedAdbDevices = [];
 
 function runAdb(cmd, timeoutMs = 4000) {
-  return execSync(cmd, { encoding: 'utf8', timeout: timeoutMs, stdio: 'pipe' });
+  // ★ 无控制台环境（后台运行）下必须 windowsHide，否则每次调用都会弹一个黑窗口（同桥接约定）
+  return execSync(cmd, { encoding: 'utf8', timeout: timeoutMs, stdio: 'pipe', windowsHide: true });
 }
 
 function parseAdbDevices(output) {
@@ -79,13 +80,13 @@ function scanAdbDevices() {
 // 后台周期探测: 维持 adb reverse 隧道与设备缓存 (hub 重启 / 手机重插 USB 后自动恢复,
 // 不依赖浏览器控制台是否打开; async 执行避免阻塞事件循环)
 setInterval(() => {
-  execAsync('adb devices -l', { timeout: 2000 }, (err, stdout) => {
+  execAsync('adb devices -l', { timeout: 2000, windowsHide: true }, (err, stdout) => {
     if (err) { cachedAdbDevices = []; lastAdbScanTime = Date.now(); return; }
     const list = parseAdbDevices(stdout);
     lastAdbScanTime = Date.now();
     cachedAdbDevices = list;
     for (const d of list) {
-      execAsync(`adb -s ${d.serial} reverse tcp:${PORT} tcp:${PORT}`, { timeout: 1500 }, () => {});
+      execAsync(`adb -s ${d.serial} reverse tcp:${PORT} tcp:${PORT}`, { timeout: 1500, windowsHide: true }, () => {});
     }
     if (list.length) log(`[USB 隧道] 已自动维持 ${list.length} 台设备的 tcp:${PORT} 反向代理`);
   });

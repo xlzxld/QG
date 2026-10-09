@@ -33,7 +33,7 @@
 - 油猴 `$` 是 getElementById 包装，传纯 id（写 `$('#x')` 整段静默死掉）
 - 抢购配置 `dryRun` 默认谨慎；改完核对 `data/grab/rush-slots.huawei.json`
 - 桥接 `core/grab-bridge.mjs` 改后必须重启（不热加载）→ 让用户双击「服务启停.bat」→ 按 3（重启全部）；沙箱起的进程活不过命令边界
-- spawn 子进程一律带 `windowsHide: true`（否则弹 Windows Terminal 黑窗）；已改 grab-bridge ×3 + grab-launcher ×1
+- spawn 子进程一律带 `windowsHide: true`（否则弹黑窗；**后台/detached 进程尤其致命**——没有控制台可继承，每次调用都弹一个新窗口）；已改 grab-bridge ×6 + grab-launcher ×1 + device-hub ×3（2026-10-09 中枢后台化后"每 5 秒 adb 轮询弹窗"的教训；新增无控制台常驻进程时把它的全部 exec/spawn 过一遍）
 - **Windows .bat 规范（2026-10-09 定案）**：一律 CRLF；含中文的 bat 必须 GBK 编码 + `chcp 936`（UTF-8/BOM + `chcp 65001` 组合会把 cmd 解析"啃"错位、直接崩退——实测 EXIT=255）；纯 ASCII 的 bat 内不写中文，中文输出交给 node 打印（WriteConsoleW）。守卫 = `tests/platform-compat.test.mjs` 第 5 项
 - **服务启停统一入口（2026-10-09）**：`服务启停.bat / 服务启停.command` → `core/service-menu.mjs`（菜单：启动/停止/重启全部、单项管理、状态、看日志、自检、控制台）；桥接内核 `grab-launcher.mjs`（--start/--stop/--restart/--status，另有 import 守卫：被 import 不执行 main），中枢内核 `hub-launcher.mjs`（--start/--start-bg/--stop/--restart/--status；后台运行，日志 `data/grab/device-hub.log`）；PID 定位三级：/health 自报 → netstat → PID 文件+身份核对。旧启停脚本 12 个（启动/停止服务/重启服务/启动-手机中枢/停止抢购中枢 ×2平台 + start.sh/stop.sh/start-device-hub.sh）已删；Windows 环境自检 = `自检-Windows环境.bat` + `check-windows-env.mjs`（本机现状：ADB 未装、无 winget → 自检报红 + 指引）
 - `--only` 匹配：精确优先、子串兜底（`pickByOnly`）；桥接 `/api/crawler/run` 对 only 做精确硬闸门（命不中/已停用 → 400）；控制台任何写商品列表的入口后必须 `renderOnlyPicker()`（下拉栏残留=白名单泄漏，已补 4 处：删除/商品设置/添加/原始JSON）
