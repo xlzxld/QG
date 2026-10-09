@@ -21,8 +21,12 @@ function main() {
     Transport.hello();
 
     // 3. 启动周期心跳 (每 4 秒一次, 状态随任务联动)
+    //    顺带: ① 重挂屏幕常亮 (keepScreenOn 只保 1 小时, 长时间布防会悄悄到期 → 手机锁屏读不到界面)
+    //          ② 冲刷结果发件箱 (中枢临时不可达时, 任务结果落地重发, 控制台不再永远"执行中")
     setInterval(function() {
-        Transport.sendHeartbeat(Transport.taskState || "idle", Transport.currentTaskId || null);
+        try { if (typeof device !== "undefined" && device.keepScreenOn) device.keepScreenOn(3600 * 1000); } catch (eK) {}
+        try { Transport.sendHeartbeat(Transport.taskState || "idle", Transport.currentTaskId || null); } catch (eH) {}
+        try { Transport.flushOutbox(); } catch (eO) {}
     }, 4000);
 
     // 4. 启动长轮询接收 PC 任务派发
@@ -58,15 +62,26 @@ function consumeControl() {
 /**
  * 引擎级自重启 (2026-10-10): 只重启脚本引擎, **绝不 force-stop 应用** → 无障碍永不被触碰。
  * 用于 USB 更新脚本后加载新代码 (文件已由中枢推好, 无需再下载)。
+ * ★ 入口一律用规范部署路径 /sdcard/qg-agent/main.js —— 实测踩坑: 经编辑器等方式启动的引擎,
+ *   myEngine().source 可能指向过期副本, 换引擎后跑的还是旧代码 (version/体积对账永远失败)。
  */
+function scriptEntry() {
+    var canonical = "/sdcard/qg-agent/main.js";
+    try { if (files.exists(canonical) && Transport.fileSizeBytes(canonical) > 1000) return canonical; } catch (eC) {}
+    try {
+        var src = String(engines.myEngine().source);
+        if (src.slice(-3) === ".js" && files.exists(src)) return src;
+    } catch (e0) {}
+    return canonical;
+}
+
 function restartEngine(reason) {
     console.log("【自重启】" + reason + ", 换引擎加载最新脚本…");
     try { Transport.sendEvent(null, "log", { msg: "【自重启】" + reason + ", 换引擎加载最新脚本" }); } catch (e0) {}
     try {
-        var src = String(engines.myEngine().source);
-        engines.execScriptFile(src);      // 先起新引擎 (新代码先跑起来)
+        engines.execScriptFile(scriptEntry());   // 先起新引擎 (新代码先跑起来)
         sleep(600);
-        engines.myEngine().forceStop();   // 再停旧引擎
+        engines.myEngine().forceStop();          // 再停旧引擎
     } catch (e1) {
         console.warn("【自重启】失败, 请手动重开脚本: " + (e1 ? (e1.message || e1) : "?"));
         try { Transport.sendEvent(null, "log", { msg: "【自重启】失败, 请手动重开脚本: " + (e1 ? (e1.message || e1) : "?") }); } catch (e2) {}
@@ -92,8 +107,7 @@ function restartWithLatestScript() {
     try { Transport.sendEvent(null, "log", { msg: "【自更新】已覆盖本地脚本 " + kb + " KB, 重启脚本" }); } catch (e2) {}
     sleep(400);
     try {
-        var src = String(engines.myEngine().source);
-        engines.execScriptFile(src);   // 先起新引擎 (新代码先跑起来)
+        engines.execScriptFile(scriptEntry());   // 先起新引擎 (新代码先跑起来)
         sleep(600);
         engines.myEngine().forceStop(); // 再停旧引擎, 避免"先停后起"中间断线
         return;
@@ -241,7 +255,7 @@ function handleTask(task) {
                 //   导致"打开商品页(phone_op)被当成一键安全演练整条跑出来"的低级事故
                 console.error("【拒绝任务】未知任务模式: " + mode + " (手机脚本与中枢版本不匹配? 请更新手机脚本)");
                 Transport.sendResult({
-                    taskId: tid,
+                    taskId: task.taskId,
                     platform: "damai",
                     outcome: "failed",
                     reason: "unknown_mode",
@@ -250,6 +264,14 @@ function handleTask(task) {
             }
         } else {
             console.warn("暂未实现的平台适配器: " + platform);
+            // 未实现平台也必须回结果 —— 否则中枢侧该任务永远显示"执行中"
+            Transport.sendResult({
+                taskId: task.taskId,
+                platform: platform,
+                outcome: "failed",
+                reason: "unsupported_platform",
+                evidence: "手机端暂未实现平台适配器: " + platform
+            });
         }
     } catch (e) {
         console.error("【任务执行抛错】" + (e ? (e.message || e) : "未知异常"));
@@ -365,9 +387,17 @@ function executeDamaiGrab(task) {
     }
 
     // 2. 页面核对闸门 (对不上 → 不动作 + 报警, 白名单纪律)
+    //    巡演切站救援: deep-link 只能落默认站, 核对失败且任务是巡演子站 → 点站点卡切换后重核 (2026-10-10)
     var verify = DamaiAdapter.grabVerify(task, tid);
+    if (!verify.ok && task.target && String(task.target.session || "").trim()) {
+        console.log("[核对] 未通过, 尝试巡演切站救援 (目标站: " + task.target.session + ")");
+        try { Transport.sendEvent(tid, "log", { msg: "[核对] 未通过, 尝试巡演切站救援 (目标站: " + task.target.session + ")" }); } catch (eL) {}
+        if (DamaiAdapter.grabSwitchStation(task, tid)) {
+            verify = DamaiAdapter.grabVerify(task, tid);
+        }
+    }
     if (!verify.ok) {
-        Transport.sendResult({ taskId: tid, platform: "damai", outcome: "failed", reason: "page_verify_fail", evidence: "页面核对不通过, 已拒绝操作" });
+        Transport.sendResult({ taskId: tid, platform: "damai", outcome: "failed", reason: "page_verify_fail", evidence: "页面核对不通过 (含切站救援), 已拒绝操作" });
         return;
     }
 
@@ -378,9 +408,33 @@ function executeDamaiGrab(task) {
         return;
     }
 
-    // 4. 服务器对时
+    // 4. 服务器对时 + T0 三源交叉核对 (证据埋点: 手机↔大麦 / 手机↔电脑 / 页面开售文案 vs 填写的开抢时间)
     var sync = TimeSync.syncDamai();
-    Transport.sendEvent(tid, "timesync_done", sync);
+    var syncEvidence = {
+        damaiOffsetMs: sync.offset, damaiRttMs: sync.rtt,
+        hubOffsetMs: (typeof Transport.hubOffsetMs === "number") ? Transport.hubOffsetMs : null,
+        hubRttMs: (typeof Transport.hubRttMs === "number") ? Transport.hubRttMs : null
+    };
+    // 页面 "X月X日 HH:MM开抢" 与任务 T0 的交叉核对 (差 > 60s 告警 —— 防止用户填错时间/抢错批次)
+    try {
+        var sellText = DamaiAdapter.grabReadSellTime();
+        if (sellText) {
+            var mSell = String(sellText).match(/(\d{1,2})月(\d{1,2})日\s*(\d{1,2}):(\d{2})/);
+            if (mSell) {
+                var dSell = new Date();
+                dSell.setMonth(parseInt(mSell[1], 10) - 1, parseInt(mSell[2], 10));
+                dSell.setHours(parseInt(mSell[3], 10), parseInt(mSell[4], 10), 0, 0);
+                var driftMs = dSell.getTime() - (task.timing.fireAtEpochMs - sync.offset);
+                syncEvidence.pageSellText = sellText;
+                syncEvidence.pageVsT0Ms = driftMs;
+                if (Math.abs(driftMs) > 60000) {
+                    console.warn("【对时核对】⚠ 页面开售时间与填写的开抢时间相差 " + Math.round(driftMs / 1000) + "s, 请确认抢的是不是同一场!");
+                    Transport.sendEvent(tid, "t0_mismatch", { sellText: sellText, driftMs: driftMs });
+                }
+            }
+        }
+    } catch (eSell) {}
+    Transport.sendEvent(tid, "timesync_done", syncEvidence);
     if (isTaskCancelled(tid)) { reportCancelled(tid, "对时后被手动终止"); return; }
 
     // 5. 通道自测分支 (盯按钮区域 + 触发一次真实变化测发现延迟)

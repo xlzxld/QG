@@ -201,6 +201,7 @@ function armTapStrike({ tag, x, y, atMs }) {
       } catch (e) { via = 'fail'; }
     }
     armResults.set(tag, { atMs, actualMs: actual, deltaMs: actual - atMs, via, x: px, y: py });
+    if (armResults.size > 50) armResults.delete(armResults.keys().next().value);   // 防无限增长
     log(`[计划击发] ${tag} 落点(${px},${py}) ΔT0=${actual - atMs}ms via=${via}`);
   };
   const waitMs = atMs - Date.now();
@@ -1062,6 +1063,14 @@ const server = http.createServer(async (req, res) => {
 
       entry.cancelRequested = true;
       entry.cancelledAt = Date.now();
+      // ★ 同步撤掉以该任务 tag 预置的击发 (彩排 armTap 把首击排在中枢时钟上,
+      //   任务取消后那一发若不撤, 到点仍会打出去 —— 2026-10-10 修复)
+      const armedT = armedTaps.get(taskId);
+      if (armedT) {
+        clearTimeout(armedT);
+        armedTaps.delete(taskId);
+        log(`[任务取消] 已撤销预置击发 ${taskId} (到点不再出膛)`);
+      }
       addRecentEvent({
         deviceId: entry.deviceId || 'device',
         event: 'task_cancel_requested',
@@ -1674,11 +1683,13 @@ const server = http.createServer(async (req, res) => {
   sendJson(res, 404, { error: 'Not found' });
 });
 
-/* ============ USB 插入自动一键连接 (2026-10-09 新增) ============
+/* ============ USB 插入自动一键连接 (2026-10-09 新增; 2026-10-10 补自愈) ============
  * 用户诉求: "USB 一连接，手机 Agent 就该自动跑起来，为什么还要我手点按钮?"
- * 行为: 每隔 5s 看一眼 USB 设备 —— 出现新 serial 且没有 Agent 在线时, 自动跑一遍
- *       connectDeviceFlow() (reverse 代理 → 写配置 → 推脚本 → 拉起 AutoJs6 → 验证上线)。
- * 防呆: 同一 serial 只自动连一次; 有 Agent 在线不重复连; 正在连不叠加;
+ * 行为: 每隔 5s 看一眼 USB 设备 ——
+ *   ① 出现新 serial 且没有 Agent 在线 → 自动跑一遍 connectDeviceFlow (reverse → 配置 → 脚本 → 拉起 → 验证)
+ *   ② ★ 同一 serial 但 Agent 掉线超 30s → 也自动重连 (脚本被系统杀掉后自愈,
+ *      2026-10-10 补: 原来同一 serial 直接 return, 手机脚本被杀后永远没人管)
+ * 防呆: 60s 熔断 (两次自动连接至少间隔 60s); 有 Agent 在线不重复连; 正在连不叠加;
  *       开关存 data/grab/device-hub.conf.json (autoConnectUsb, 默认开)。
  */
 const HUB_CONF_FILE = path.join(GRAB_DIR, 'device-hub.conf.json');
@@ -1699,16 +1710,19 @@ async function usbAutoConnectLoop() {
     try { adbList = scanAdbDevices(); } catch (e) { return; }
     if (!adbList.length) { autoConnectState.lastSerial = null; return; }
     const serial = adbList[0].serial;
-    if (serial === autoConnectState.lastSerial) return;              // 同一台设备不反复折腾
-    if (Date.now() - autoConnectState.lastAt < 60000) return;        // 60s 熔断
+    const isNewSerial = serial !== autoConnectState.lastSerial;
     // Agent 已在线就不必再连 (插着数据线充电、脚本已在跑的场景)
     const agentAlive = [...devices.values()].some(d => !d.isAdbOnly && Date.now() - d.lastSeen < 20000);
     if (agentAlive) { autoConnectState.lastSerial = serial; return; }
+    // 同一 serial: Agent 却掉线 —— 30s 宽限 (避免重启间隙误判) + 60s 熔断; 新 serial: 60s 熔断仍生效
+    if (!isNewSerial && Date.now() - autoConnectState.lastAt < 60000) return;
+    const agentGoneMs = Date.now() - Math.max(...[...devices.values()].map(d => d.lastSeen || 0), 0);
+    if (!isNewSerial && agentGoneMs < 30000) return;
     autoConnectState.busy = true;
     autoConnectState.lastAt = Date.now();
     autoConnectState.lastSerial = serial;
-    log(`[自动连接] 检测到 USB 设备 ${serial} 且 Agent 未在线 → 自动执行一键连接`);
-    addRecentEvent({ event: 'usb_auto_connect', detail: { serial, phase: 'start' }, receivedAt: new Date().toISOString() });
+    log(`[自动连接] USB ${isNewSerial ? '新设备' : 'Agent 掉线'} ${serial} → 自动执行一键连接`);
+    addRecentEvent({ event: 'usb_auto_connect', detail: { serial, phase: 'start', reason: isNewSerial ? 'new-serial' : 'agent-offline' }, receivedAt: new Date().toISOString() });
     try {
       const r = await connectDeviceFlow({ source: 'auto' });
       addRecentEvent({

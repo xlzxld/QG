@@ -6,151 +6,200 @@
 <title>QG 抢购中枢</title>
 <style>
   :root {
-    --bg: #0b0e14; --panel: #12161f; --panel2: #171c27; --line: #232a38;
-    --accent: #4f8cff; --accent2: #2f6ae0; --ok: #34d399; --warn: #fbbf24; --err: #f87171;
-    --text: #e8ecf3; --muted: #8b95a7; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --bg: #07090f; --bg2: #0b0e17;
+    --panel: #10141f; --panel2: #161b28; --panel3: #1c2333;
+    --line: #232c40; --line2: #2d3852;
+    --accent: #5b8cff; --accent2: #3d6ef0; --accent-soft: rgba(91,140,255,.12);
+    --ok: #34d399; --warn: #fbbf24; --err: #f87171;
+    --text: #e9edf5; --text2: #c3cbdb; --muted: #8590a8; --muted2: #5c667c;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --radius: 14px; --radius-sm: 9px;
+    --shadow: 0 10px 40px rgba(0,0,0,.45);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
     font-family: -apple-system, "PingFang SC", "Segoe UI", Roboto, sans-serif;
-    background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5;
+    background:
+      radial-gradient(1200px 500px at 85% -10%, rgba(91,140,255,.10), transparent 60%),
+      radial-gradient(900px 400px at -10% 0%, rgba(120,90,255,.07), transparent 55%),
+      var(--bg);
+    color: var(--text); font-size: 14px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
   }
   a { color: var(--accent); text-decoration: none; }
 
-  /* 顶栏 */
+  /* ============ 顶栏 ============ */
   .topbar {
-    display: flex; align-items: center; gap: 14px; padding: 12px 20px;
-    border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgba(11,14,20,.92);
-    backdrop-filter: blur(8px); z-index: 50;
+    display: flex; align-items: center; gap: 12px; padding: 10px 22px;
+    border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 50;
+    background: rgba(7,9,15,.86); backdrop-filter: blur(14px);
   }
-  .logo { font-size: 17px; font-weight: 800; letter-spacing: .5px; }
-  .logo em { color: var(--accent); font-style: normal; }
-  .topbar .sub { color: var(--muted); font-size: 12px; }
+  .logo { display: flex; align-items: baseline; gap: 9px; margin-right: 6px; }
+  .logo .mark {
+    font-size: 17px; font-weight: 900; letter-spacing: .4px;
+    background: linear-gradient(120deg, #7aa5ff, #9d7dff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .logo .sub { color: var(--muted); font-size: 11.5px; }
   .topbar .grow { flex: 1; }
   .pill {
-    display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px;
-    background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; font-size: 12px;
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px;
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 999px;
+    font-size: 12px; color: var(--text2); white-space: nowrap;
   }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 6px var(--ok); }
-  .dot.off { background: var(--err); box-shadow: 0 0 6px var(--err); }
-  .pill .mono { font-family: var(--mono); color: var(--accent); cursor: pointer; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); flex: none; }
+  .dot.off { background: var(--err); box-shadow: 0 0 8px var(--err); }
+  .pill .mono { font-family: var(--mono); color: #9db9ff; cursor: pointer; font-size: 11.5px; }
+  .pill .mono:hover { text-decoration: underline; }
 
-  /* 布局 */
-  .wrap { max-width: 1440px; margin: 0 auto; padding: 16px 20px 60px; }
-  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; align-items: start; }
-  @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+  /* ============ 布局 ============ */
+  .wrap { max-width: 1480px; margin: 0 auto; padding: 18px 22px 80px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: 18px; align-items: start; }
+  @media (max-width: 1180px) { .grid { grid-template-columns: 1fr; } }
+
   .card {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-    padding: 16px; margin-bottom: 16px;
+    background: linear-gradient(180deg, rgba(255,255,255,.015), transparent 40%), var(--panel);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px 18px 16px; margin-bottom: 18px;
+    box-shadow: 0 2px 14px rgba(0,0,0,.25);
   }
+  .card.hero { border-color: rgba(91,140,255,.35); box-shadow: 0 0 0 1px rgba(91,140,255,.08), 0 14px 44px rgba(30,60,160,.16); }
   .card h3 {
-    margin: 0 0 12px; font-size: 14px; font-weight: 700; color: #cdd6e4;
-    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin: 0 0 14px; font-size: 14.5px; font-weight: 800; color: var(--text);
+    display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+    letter-spacing: .2px;
+  }
+  .card h3 .ico {
+    width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); border: 1px solid rgba(91,140,255,.25); font-size: 13px; flex: none;
   }
   .card h3 .grow { flex: 1; }
-  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
-  .badge.blue { background: rgba(79,140,255,.15); color: #8ab4ff; border: 1px solid rgba(79,140,255,.35); }
-  .badge.green { background: rgba(52,211,153,.12); color: var(--ok); border: 1px solid rgba(52,211,153,.35); }
-  .badge.gray { background: rgba(139,149,167,.12); color: var(--muted); border: 1px solid var(--line); }
+  .badge { font-size: 11px; padding: 2.5px 9px; border-radius: 999px; font-weight: 700; letter-spacing: .2px; }
+  .badge.blue { background: rgba(91,140,255,.13); color: #9db9ff; border: 1px solid rgba(91,140,255,.32); }
+  .badge.green { background: rgba(52,211,153,.10); color: var(--ok); border: 1px solid rgba(52,211,153,.32); }
+  .badge.amber { background: rgba(251,191,36,.10); color: var(--warn); border: 1px solid rgba(251,191,36,.32); }
+  .badge.red { background: rgba(248,113,113,.10); color: var(--err); border: 1px solid rgba(248,113,113,.32); }
+  .badge.gray { background: rgba(133,144,168,.10); color: var(--muted); border: 1px solid var(--line); }
 
-  /* 表单 */
-  .frow { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  /* ============ 表单 ============ */
+  .frow { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 12px; }
   .frow.full { grid-template-columns: 1fr; }
-  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+  label { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 5px; font-weight: 700; letter-spacing: .3px; }
   input, select {
-    width: 100%; background: #0d1118; border: 1px solid var(--line); color: var(--text);
-    padding: 9px 10px; border-radius: 8px; font-size: 13px; outline: none;
+    width: 100%; background: #0a0e16; border: 1px solid var(--line); color: var(--text);
+    padding: 9px 11px; border-radius: var(--radius-sm); font-size: 13px; outline: none;
+    transition: border-color .15s, box-shadow .15s;
   }
-  input:focus, select:focus { border-color: var(--accent); }
-  .hint { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,140,255,.14); }
+  input::placeholder { color: var(--muted2); }
+  .hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+  .hint b { color: var(--text2); }
+  .section-note { color: var(--muted); font-size: 12px; margin: -4px 0 12px; line-height: 1.6; }
+  .divider { border: none; border-top: 1px solid var(--line); margin: 15px 0; }
 
-  /* 按钮 */
+  /* ============ 按钮 ============ */
   .btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    padding: 9px 16px; border-radius: 8px; border: 1px solid transparent;
-    font-size: 13px; font-weight: 700; cursor: pointer; transition: filter .15s, opacity .15s;
-    background: var(--panel2); color: var(--text); border-color: var(--line);
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 9px 16px; border-radius: var(--radius-sm); border: 1px solid var(--line2);
+    font-size: 13px; font-weight: 700; cursor: pointer; transition: all .15s;
+    background: var(--panel2); color: var(--text); letter-spacing: .2px;
   }
-  .btn:hover { filter: brightness(1.15); }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .btn.primary { background: var(--accent2); border-color: var(--accent2); color: #fff; }
-  .btn.ok { background: #0d9668; border-color: #0d9668; color: #fff; }
-  .btn.danger { background: #b91c1c; border-color: #b91c1c; color: #fff; }
-  .btn.sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
-  .btnrow { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+  .btn:hover { filter: brightness(1.18); border-color: var(--accent); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  .btn.primary {
+    background: linear-gradient(135deg, var(--accent2), #6a58f0); border-color: transparent; color: #fff;
+    box-shadow: 0 4px 18px rgba(61,110,240,.35);
+  }
+  .btn.ok { background: linear-gradient(135deg, #0c8a5f, #0da771); border-color: transparent; color: #fff; }
+  .btn.danger { background: linear-gradient(135deg, #b91c1c, #d63c3c); border-color: transparent; color: #fff; }
+  .btn.sm { padding: 5px 11px; font-size: 12px; border-radius: 7px; }
+  .btnrow { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
 
-  /* 设备卡 */
+  /* ============ 设备卡 ============ */
   .dev {
     display: flex; gap: 14px; align-items: center; background: var(--panel2);
-    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; flex-wrap: wrap;
+    border: 1px solid var(--line); border-radius: 11px; padding: 12px 14px; flex-wrap: wrap;
   }
-  .dev .icon { font-size: 26px; }
+  .dev .icon { font-size: 24px; }
   .dev .info { flex: 1; min-width: 200px; }
-  .dev .name { font-weight: 700; }
+  .dev .name { font-weight: 700; font-size: 13.5px; }
   .dev .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
-  .kv { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 4px; font-size: 12px; color: var(--muted); }
-  .kv b { color: var(--text); font-weight: 600; }
+  .kv { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .kv b { color: var(--text2); font-weight: 600; }
 
-  /* 芯片 */
+  /* ============ 芯片 ============ */
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
-    background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
-    padding: 6px 10px; font-size: 12px; cursor: pointer;
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 9px;
+    padding: 7px 11px; font-size: 12.5px; cursor: pointer; transition: border-color .15s;
   }
   .chip:hover { border-color: var(--accent); }
-  .chip.sel { border-color: var(--accent); background: rgba(79,140,255,.12); }
+  .chip.sel { border-color: var(--accent); background: var(--accent-soft); }
   .chip .sub { color: var(--muted); font-size: 11px; }
 
-  /* 步骤时间线 */
-  .steps { display: flex; flex-direction: column; gap: 0; }
-  .step { display: flex; gap: 10px; position: relative; padding-bottom: 14px; }
-  .step:last-child { padding-bottom: 0; }
-  .step .rail { width: 20px; display: flex; flex-direction: column; align-items: center; }
-  .step .node {
-    width: 18px; height: 18px; border-radius: 50%; background: var(--panel2);
-    border: 2px solid var(--line); display: flex; align-items: center; justify-content: center;
-    font-size: 10px; flex-shrink: 0;
+  /* ============ 抢购倒计时横幅 ============ */
+  .countdown {
+    display: none; align-items: center; gap: 10px; margin: -6px 0 14px;
+    padding: 10px 14px; border-radius: 11px;
+    background: linear-gradient(135deg, rgba(91,140,255,.14), rgba(120,90,255,.10));
+    border: 1px solid rgba(91,140,255,.35); font-size: 13px;
   }
-  .step .rail .bar { flex: 1; width: 2px; background: var(--line); margin-top: 2px; }
-  .step.done .node { border-color: var(--ok); color: var(--ok); }
-  .step.done .rail .bar { background: rgba(52,211,153,.4); }
-  .step.active .node { border-color: var(--accent); animation: pulse 1.2s infinite; }
-  .step.failed .node { border-color: var(--err); color: var(--err); }
-  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(79,140,255,.5);} 50% { box-shadow: 0 0 0 5px rgba(79,140,255,0);} }
-  .step .body { flex: 1; min-width: 0; }
-  .step .t { font-weight: 600; font-size: 13px; }
-  .step .d { color: var(--muted); font-size: 12px; word-break: break-all; }
+  .countdown.show { display: flex; }
+  .countdown .cd-time { font-family: var(--mono); font-size: 19px; font-weight: 800; color: #9db9ff; letter-spacing: 1px; }
 
-  /* 结果横幅 */
+  /* ============ 步骤时间线 ============ */
+  .steps { display: flex; flex-direction: column; gap: 0; }
+  .step { display: flex; gap: 11px; position: relative; padding-bottom: 14px; }
+  .step:last-child { padding-bottom: 0; }
+  .step .rail { width: 20px; display: flex; flex-direction: column; align-items: center; flex: none; }
+  .step .node {
+    width: 19px; height: 19px; border-radius: 50%; background: var(--panel2);
+    border: 2px solid var(--line2); display: flex; align-items: center; justify-content: center;
+    font-size: 10px; flex-shrink: 0; margin-top: 1px;
+  }
+  .step .rail .bar { flex: 1; width: 2px; background: var(--line); margin-top: 3px; }
+  .step.done .node { border-color: var(--ok); color: var(--ok); background: rgba(52,211,153,.08); }
+  .step.done .rail .bar { background: rgba(52,211,153,.35); }
+  .step.active .node { border-color: var(--accent); animation: pulse 1.2s infinite; }
+  .step.failed .node { border-color: var(--err); color: var(--err); background: rgba(248,113,113,.08); }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(91,140,255,.5);} 50% { box-shadow: 0 0 0 5px rgba(91,140,255,0);} }
+  .step .body { flex: 1; min-width: 0; padding-top: 1px; }
+  .step .t { font-weight: 700; font-size: 13px; }
+  .step .d { color: var(--muted); font-size: 12px; word-break: break-all; margin-top: 1px; }
+
+  /* ============ 结果横幅 ============ */
   .result {
-    border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; font-size: 13px;
+    border-radius: 11px; padding: 12px 14px; margin-bottom: 12px; font-size: 13px;
     display: none; border: 1px solid;
   }
   .result.show { display: block; }
-  .result.success { background: rgba(52,211,153,.08); border-color: rgba(52,211,153,.4); }
-  .result.failed { background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.4); }
-  .result.other { background: rgba(251,191,36,.08); border-color: rgba(251,191,36,.4); }
+  .result.success { background: rgba(52,211,153,.07); border-color: rgba(52,211,153,.38); }
+  .result.failed { background: rgba(248,113,113,.07); border-color: rgba(248,113,113,.38); }
+  .result.other { background: rgba(251,191,36,.07); border-color: rgba(251,191,36,.38); }
   .result .rt { font-weight: 800; margin-bottom: 4px; }
 
-  /* 日志 */
+  /* ============ 日志 ============ */
   .logbox {
-    background: #080b11; border: 1px solid var(--line); border-radius: 10px;
-    height: 460px; overflow-y: auto; padding: 10px; font-family: var(--mono); font-size: 12px;
+    background: #06080d; border: 1px solid var(--line); border-radius: 11px;
+    height: 520px; overflow-y: auto; padding: 10px; font-family: var(--mono); font-size: 12px;
   }
-  .loge { padding: 2px 6px; border-radius: 4px; line-height: 1.55; word-break: break-all; }
+  .loge { padding: 2px 6px; border-radius: 4px; line-height: 1.6; word-break: break-all; }
   .loge:hover { background: rgba(255,255,255,.03); }
-  .loge .t { color: #5b667a; margin-right: 8px; }
+  .loge .t { color: #4d5871; margin-right: 8px; }
   .loge .e { color: #6ea8ff; margin-right: 6px; font-weight: 600; }
   .loge.resultline.success { color: var(--ok); }
   .loge.resultline.failed { color: var(--err); }
+  .logbox::-webkit-scrollbar, .modal .mb::-webkit-scrollbar { width: 8px; }
+  .logbox::-webkit-scrollbar-thumb, .modal .mb::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 4px; }
 
-  /* toast */
-  #toasts { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
+  /* ============ toast ============ */
+  #toasts { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; max-width: 390px; }
   .toast {
-    background: var(--panel2); border: 1px solid var(--line); border-left: 3px solid var(--accent);
-    border-radius: 8px; padding: 10px 14px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.5);
-    animation: slidein .2s ease-out;
+    background: var(--panel3); border: 1px solid var(--line2); border-left: 3px solid var(--accent);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px; box-shadow: var(--shadow);
+    animation: slidein .22s ease-out;
   }
   .toast.ok { border-left-color: var(--ok); }
   .toast.err { border-left-color: var(--err); }
@@ -159,28 +208,32 @@
   .toast .sub { color: var(--muted); font-size: 12px; word-break: break-all; }
   @keyframes slidein { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
 
-  /* modal */
-  #modal-mask { position: fixed; inset: 0; background: rgba(4,6,10,.72); z-index: 9998; display: none; align-items: center; justify-content: center; }
+  /* ============ modal ============ */
+  #modal-mask { position: fixed; inset: 0; background: rgba(3,5,9,.74); z-index: 9998; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
   #modal-mask.show { display: flex; }
   .modal {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line2); border-radius: var(--radius);
     width: min(92vw, 560px); max-height: 82vh; display: flex; flex-direction: column;
-    box-shadow: 0 24px 60px rgba(0,0,0,.6);
+    box-shadow: var(--shadow);
   }
-  .modal .mh { padding: 14px 18px; border-bottom: 1px solid var(--line); font-weight: 700; display: flex; align-items: center; }
+  .modal .mh { padding: 14px 18px; border-bottom: 1px solid var(--line); font-weight: 800; display: flex; align-items: center; }
   .modal .mh .grow { flex: 1; }
   .modal .mb { padding: 16px 18px; overflow-y: auto; font-size: 13px; white-space: pre-wrap; }
   .modal .mf { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 10px; }
   .xbtn { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1; }
+  .xbtn:hover { color: var(--text); }
 
-  /* 连接步骤列表 */
+  /* ============ 连接步骤列表 ============ */
   .connect-steps { font-size: 12px; margin-top: 10px; }
   .connect-steps .cs { padding: 3px 0; display: flex; gap: 8px; }
   .connect-steps .cs.ok::before { content: "✅"; }
   .connect-steps .cs.bad::before { content: "❌"; }
 
-  .section-note { color: var(--muted); font-size: 12px; margin: 4px 0 10px; }
-  .divider { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
+  /* ============ details/参数区 ============ */
+  details.params { border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; margin: 8px 0 12px; background: rgba(255,255,255,.012); }
+  details.params summary { cursor: pointer; padding: 9px 0; font-size: 12px; color: var(--muted); font-weight: 700; list-style: none; }
+  details.params summary::before { content: "▸ "; }
+  details.params[open] summary::before { content: "▾ "; }
 </style>
 </head>
 <body>
@@ -195,24 +248,25 @@
 </div>
 
 <div class="topbar">
-  <div>
-    <div class="logo">QG <em>抢购中枢</em></div>
-    <div class="sub">大麦移动端精准击发 · 热启动防广告 · 多观演人配对</div>
+  <div class="logo">
+    <span class="mark">QG 抢购中枢</span>
+    <span class="sub">大麦移动端精准击发 · 手机自主点击 · 多观演人配对</span>
   </div>
   <div class="grow"></div>
   <span class="pill"><span class="dot" id="hub-dot"></span><span id="hub-text">连接中…</span></span>
   <span class="pill">通道 <span class="badge gray" id="chan-badge">检测中</span></span>
+  <span class="pill" id="sync-pill" title="手机与大麦服务器/电脑的时钟偏置 (对时证据, 来自最近一次抢购任务)">对时 <span class="badge gray" id="sync-badge">未测</span></span>
   <span class="pill">Wi-Fi <span class="mono" title="点击复制" onclick="copyText('http://${LAN_IP}:${PORT}','局域网地址已复制')">http://${LAN_IP}:${PORT}</span></span>
   <span class="pill">USB <span class="mono">127.0.0.1:${PORT}</span></span>
 </div>
 
 <div class="wrap">
   <div class="grid">
-    <!-- ============ 左列 ============ -->
+    <!-- ============ 左列 (主流程) ============ -->
     <div>
-      <!-- 设备 -->
+      <!-- ① 设备与连接 -->
       <div class="card">
-        <h3>📱 设备 <span class="badge gray" id="dev-badge">检测中</span>
+        <h3><span class="ico">📱</span>设备与连接 <span class="badge gray" id="dev-badge">检测中</span>
           <span class="grow"></span>
           <button class="btn sm" onclick="refreshDevices(true)">刷新</button>
         </h3>
@@ -220,18 +274,105 @@
         <div class="btnrow">
           <button class="btn ok" id="btn-connect" onclick="connectDevice()">⚡ 一键连接设备 (全自动)</button>
           <button class="btn" id="btn-update" onclick="updateScript()">📦 更新手机脚本并重启 Agent</button>
-        </div>
-        <div class="btnrow">
           <button class="btn danger" id="btn-stop-agent" onclick="stopAgent()">🛑 停止手机脚本</button>
         </div>
         <div class="connect-steps" id="connect-steps"></div>
-        <div class="hint" style="margin-top:8px">一键连接 = USB 检测 → 端口代理 → 写入通信配置 → 推送脚本与省市区数据 → 拉起 AutoJs6 运行 → 验证上线。全程无需操作手机。</div>
+        <div class="hint" style="margin-top:8px">一键连接 = USB 检测 → 端口代理 → 写入通信配置 → 推送脚本与省市区数据 → 拉起 AutoJs6 运行 → 验证上线。全程无需操作手机；Agent 掉线后中枢每分钟自动重连一次（自愈）。</div>
         <div class="hint" id="chan-hint">通道判定中…</div>
       </div>
 
-      <!-- 演出配置 -->
+      <!-- ② 链接抢购 (核心, 上移) -->
+      <div class="card hero">
+        <h3><span class="ico">🔗</span>链接抢购 (大麦)
+          <span class="badge gray" id="grab-badge">未抢购</span>
+          <span class="grow"></span>
+          <button class="btn sm" onclick="grabSelfTest()">🧪 检测通道自测</button>
+        </h3>
+        <div class="countdown" id="grab-countdown">
+          <span>⏳ 距开抢</span><span class="cd-time" id="grab-cd-time">--:--</span>
+          <span class="hint" style="margin:0" id="grab-cd-note"></span>
+        </div>
+        <div class="section-note">粘链接 + 填开抢时间就行。开售判定与首击全部在<b>手机本地</b>完成（对时大麦服务器、结构突变检测、Shizuku 自主点击），不依赖开抢那一瞬的电脑通讯。</div>
+        <div>
+          <label>商品链接 / ID</label>
+          <input id="grab-link" placeholder="https://m.damai.cn/shows/item.html?itemId=1085142029424&from=appshare" oninput="onGrabLinkInput()">
+          <div class="hint" id="grab-parsed">粘贴后自动解析商品</div>
+        </div>
+        <div class="frow">
+          <div><label>页面核对关键词 (逗号分隔)</label><input id="grab-keywords" placeholder="薛之谦,贵阳"></div>
+          <div><label>执行方式</label>
+            <select id="grab-exec" onchange="onGrabExecChange()">
+              <option value="live" selected>🔴 正式开抢 (变化→瞬间点击→连点到提交)</option>
+              <option value="rehearsal">🟢 彩排 (到点真打: 首击+连点, 不打提交)</option>
+              <option value="blind">⚡ 无脑高频 (不判跳转, 直接连点)</option>
+            </select>
+          </div>
+        </div>
+        <div class="frow">
+          <div id="grab-time-wrap"><label>开抢时间</label><input id="grab-time" placeholder="2026-10-10 17:17:00"></div>
+          <div id="grab-reh-wrap" style="display:none"><label>彩排时间 (仅彩排模式)</label><input id="grab-reh-time" placeholder="2026-10-10 16:45:00"></div>
+          <div><label>进入高频提前量 (毫秒)</label><input id="grab-lead" type="number" value="1000" min="300" max="10000"></div>
+        </div>
+        <div class="hint" id="grab-rate-hint"></div>
+        <details class="params" open>
+          <summary>⚙️ 点击参数（可直接调；收起也照样生效）</summary>
+          <div class="frow" style="margin-top:10px">
+            <div><label>连点节拍 最少 (几下/秒)</label><input id="grab-rate-min" type="number" value="8" min="1" max="20" oninput="updateGrabRate()"></div>
+            <div><label>连点节拍 最多 (几下/秒)</label><input id="grab-rate-max" type="number" value="12" min="1" max="20" oninput="updateGrabRate()"></div>
+          </div>
+          <div class="frow">
+            <div style="grid-column:1/-1"><label>系统自动推算 (间隔 / 按压 / 真实节拍)</label><div class="hint" id="grab-cadence-hint">—</div></div>
+          </div>
+          <div class="frow">
+            <div><label>落点抖动 X 轴 上限 (px)</label><input id="grab-jitter-x" type="number" value="3" min="0" max="100"></div>
+            <div><label>落点抖动 Y 轴 上限 (px)</label><input id="grab-jitter-y" type="number" value="3" min="0" max="40"></div>
+          </div>
+          <div class="frow">
+            <div style="grid-column:1/-1"><label>抖动规则</label><div class="hint">每次点击都在 <b>-上限 ~ +上限</b> 之间随机（填 9 → -9~+9），<b>XY 各自独立、两轴同时生效</b>；填 0 = 该轴不抖。几何上限 X±100 / Y±40，推荐 X 20~40 / Y 8~16。</div></div>
+          </div>
+          <div class="frow">
+            <div><label>首击重试次数</label><input id="grab-ft-tries" type="number" value="3" min="1" max="5"></div>
+            <div><label>首击单发超时 (ms)</label><input id="grab-ft-timeout" type="number" value="700" min="200" max="3000"></div>
+          </div>
+          <div class="frow">
+            <div><label>连点链总时长 (ms)</label><input id="grab-chain-ms" type="number" value="12000" min="3000" max="60000"></div>
+            <div><label>盯梢说明</label><div class="hint" style="margin-top:6px">开抢前 1 秒起高频盯「预约结构消失」，<b>一有变化立即出手，不会提前放弃</b>（无观察窗）</div></div>
+          </div>
+          <div class="frow">
+            <div style="grid-column:1/-1">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="grab-autorefresh" style="width:auto">
+                开售前自动刷新页面（T-30s / T-12s 各一次，默认关）
+              </label>
+              <div class="hint">用深链重开商品页让状态变新，刷新后自动重新核对+重新锚定；刷新期间不做判定。解决“页面开着很久、开售时状态还是旧的”的问题。</div>
+            </div>
+          </div>
+          <div class="frow" id="grab-reh-ms-wrap" style="display:none">
+            <div><label>彩排连点时长 (ms)</label><input id="grab-reh-ms" type="number" value="4000" min="1000" max="60000"></div>
+          </div>
+          <div class="frow">
+            <div><label>主按钮坐标 (留空 = 统一锚点)</label><input id="grab-btn-xy" placeholder="841,2310"></div>
+            <div><label>提交坐标 (默认同主按钮)</label><input id="grab-sub-xy" placeholder="841,2310"></div>
+          </div>
+          <div class="frow">
+            <div><label>弹窗「继续尝试」坐标 (留空=按提交坐标推算)</label><input id="grab-popup-xy" placeholder="540,1382"></div>
+            <div><label>统一锚点方案</label><div class="hint" style="margin-top:6px">留空时自动用 <b>(841,2310)</b> —— 立即预订/确定/立即提交 三键交集中心，抖动余量最大；弹窗按钮优先点<b>节点中心</b>，兜底坐标 <b>(540,1382)</b> 内置 X±80/Y±18 抖动（已避开「返回重新选购」）。</div></div>
+          </div>
+          <div class="hint" id="grab-calib-hint">标定分辨率：未连接设备</div>
+        </details>
+        <div class="btnrow">
+          <button class="btn" onclick="grabOpenItem()">📲 打开商品页</button>
+          <button class="btn primary" onclick="grabArm()">🚀 抢购</button>
+          <button class="btn danger" style="flex:none" onclick="grabDisarm()">⛔ 停止</button>
+          <button class="btn" style="flex:none" onclick="resetGrabParams()" title="清空本机保存的参数, 恢复页面默认值">↺ 清空已存</button>
+        </div>
+        <div class="hint" id="grab-save-hint">参数会自动保存在本机浏览器（换 IP 打开控制台 = 换了一份存储）</div>
+        <div class="hint">抢购 = 把这个任务下发给手机, 到点自动开抢；停止 = 立刻终止本次抢购（等同「最近任务」里的 ⛔ 终止，含撤销已预置的击发）。</div>
+      </div>
+
+      <!-- ③ 目标演出 -->
       <div class="card">
-        <h3>🎯 目标演出 <span class="badge blue">探针库联动</span></h3>
+        <h3><span class="ico">🎯</span>目标演出 <span class="badge blue">探针库联动</span></h3>
         <div class="frow full">
           <div>
             <label>从探针库选择（巡演按项目分组，可选不同城市站）</label>
@@ -282,9 +423,9 @@
         </div>
       </div>
 
-      <!-- 账号信息库 -->
+      <!-- ④ 观演人与收货地址 -->
       <div class="card">
-        <h3>👤 观演人与收货地址
+        <h3><span class="ico">👤</span>观演人与收货地址
           <span class="badge blue" id="viewer-count">0 位观演人</span>
           <span class="badge green" id="addr-count">0 个地址</span>
           <span class="grow"></span>
@@ -317,7 +458,8 @@
         <div class="frow">
           <div><label>新增地址 · 收货人</label><input id="na-name" placeholder="姓名"></div>
           <div>
-            <label>手机号</label><input id="na-phone" placeholder="11 位" oninput="onPhoneInput()">
+            <label>手机号</label>
+            <input id="na-phone" placeholder="11 位" oninput="onPhoneInput()">
             <div class="hint" id="na-pbadge">待输入</div>
           </div>
         </div>
@@ -328,122 +470,37 @@
         <div class="btnrow"><button class="btn" onclick="addAddress()">➕ 手机端自动添加收货地址</button></div>
       </div>
 
-      <!-- 链接抢购 (grab) -->
+      <!-- ⑤ 抢购保活优化 -->
       <div class="card">
-        <h3>🔗 链接抢购 (大麦)
-      <span class="badge gray" id="grab-badge">未抢购</span>
-          <span class="grow"></span>
-          <button class="btn sm" onclick="grabSelfTest()">🧪 检测通道自测</button>
-        </h3>
-        <div class="section-note">粘链接 + 填开抢时间就行。首击走「中枢预置击发」（排在电脑时钟上，不受开抢那一瞬的网络抖动影响）；后续连点的间隔 / 按压时长 / 抖动 / 时长全部可在「高级」里调。</div>
-        <div>
-          <label>商品链接 / ID</label>
-          <input id="grab-link" placeholder="https://m.damai.cn/shows/item.html?itemId=1085142029424&from=appshare" oninput="onGrabLinkInput()">
-          <div class="hint" id="grab-parsed">粘贴后自动解析商品</div>
-        </div>
-        <div class="frow">
-          <div><label>页面核对关键词 (逗号分隔)</label><input id="grab-keywords" placeholder="薛之谦,贵阳"></div>
-          <div><label>执行方式</label>
-            <select id="grab-exec" onchange="onGrabExecChange()">
-              <option value="live" selected>🔴 正式开抢 (变化→瞬间点击→连点到提交)</option>
-              <option value="rehearsal">🟢 彩排 (到点真打: 首击+连点, 不打提交)</option>
-              <option value="blind">⚡ 无脑高频 (不判跳转, 直接连点)</option>
-            </select>
-          </div>
-        </div>
-        <div class="frow">
-          <div id="grab-time-wrap"><label>开抢时间</label><input id="grab-time" placeholder="2026-10-09 17:17:00"></div>
-          <div id="grab-reh-wrap" style="display:none"><label>彩排时间 (仅彩排模式)</label><input id="grab-reh-time" placeholder="2026-10-09 16:45:00"></div>
-          <div><label>进入高频提前量 (毫秒)</label><input id="grab-lead" type="number" value="1000" min="300" max="10000"></div>
-        </div>
-        <div class="hint" id="grab-rate-hint"></div>
-        <details open style="margin:6px 0 10px">
-          <summary class="hint" style="cursor:pointer">⚙️ 点击参数（可直接调；收起这个条也照样生效）</summary>
-          <div class="frow" style="margin-top:8px">
-            <div><label>连点节拍 最少 (几下/秒)</label><input id="grab-rate-min" type="number" value="8" min="1" max="20" oninput="updateGrabRate()"></div>
-            <div><label>连点节拍 最多 (几下/秒)</label><input id="grab-rate-max" type="number" value="12" min="1" max="20" oninput="updateGrabRate()"></div>
-          </div>
-          <div class="frow">
-            <div style="grid-column:1/-1"><label>系统自动推算 (间隔 / 按压 / 真实节拍)</label><div class="hint" id="grab-cadence-hint">—</div></div>
-          </div>
-          <div class="frow">
-            <div><label>落点抖动 X 轴 上限 (px)</label><input id="grab-jitter-x" type="number" value="3" min="0" max="24"></div>
-            <div><label>落点抖动 Y 轴 上限 (px)</label><input id="grab-jitter-y" type="number" value="3" min="0" max="24"></div>
-          </div>
-          <div class="frow">
-            <div style="grid-column:1/-1"><label>抖动规则</label><div class="hint">每次点击都在 <b>-上限 ~ +上限</b> 之间随机（填 9 → -9~+9），<b>XY 各自独立、两轴同时生效</b>；填 0 = 该轴不抖。</div></div>
-          </div>
-          <div class="frow">
-            <div><label>首击重试次数</label><input id="grab-ft-tries" type="number" value="3" min="1" max="5"></div>
-            <div><label>首击单发超时 (ms)</label><input id="grab-ft-timeout" type="number" value="700" min="200" max="3000"></div>
-          </div>
-          <div class="frow">
-            <div><label>连点链总时长 (ms)</label><input id="grab-chain-ms" type="number" value="12000" min="3000" max="60000"></div>
-            <div><label>盯梢说明</label><div class="hint" style="margin-top:6px">开抢前 1 秒起高频盯「预约结构消失」，<b>一有变化立即出手，不会提前放弃</b>（无观察窗）</div></div>
-          </div>
-          <div class="frow">
-            <div style="grid-column:1/-1">
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-                <input type="checkbox" id="grab-autorefresh" style="width:auto">
-                开售前自动刷新页面（T-30s / T-12s 各一次，默认关）
-              </label>
-              <div class="hint">用深链重开商品页让状态变新，刷新后自动重新核对+重新锚定；刷新期间不做判定。解决“页面开着很久、开售时状态还是旧的”的问题。</div>
-            </div>
-          </div>
-          <div class="frow" id="grab-reh-ms-wrap" style="display:none">
-            <div><label>彩排连点时长 (ms)</label><input id="grab-reh-ms" type="number" value="4000" min="1000" max="60000"></div>
-          </div>
-          <div class="frow">
-            <div><label>主按钮坐标 (1080×2400 标定)</label><input id="grab-btn-xy" placeholder="841,2310"></div>
-            <div><label>提交坐标 (默认同主按钮)</label><input id="grab-sub-xy" placeholder="841,2310"></div>
-          </div>
-          <div class="frow">
-            <div><label>弹窗「继续尝试」坐标 (留空=按提交坐标推算)</label><input id="grab-popup-xy" placeholder="540,1382"></div>
-            <div><label>抖动幅度上限 (锚点实测)</label><div class="hint" style="margin-top:6px">三按钮交集给出：<b>X ±100 / Y ±40 px</b>（超过必出按钮）；推荐 X 20~40 / Y 8~16。弹窗按钮（兜底坐标）抖动内置 <b>X ±80 / Y ±20</b>（跨设备推算取交集，已避开「返回重新选购」），优先点节点中心、无需手调。</div></div>
-          </div>
-          <div class="hint" id="grab-calib-hint">标定分辨率：未连接设备</div>
-        </details>
-        <div class="btnrow">
-          <button class="btn" onclick="grabOpenItem()">📲 打开商品页</button>
-          <button class="btn primary" onclick="grabArm()">🚀 抢购</button>
-          <button class="btn danger" style="flex:none" onclick="grabDisarm()">⛔ 停止</button>
-          <button class="btn" style="flex:none" onclick="resetGrabParams()" title="清空本机保存的参数, 恢复页面默认值">↺ 清空已存</button>
-        </div>
-        <div class="hint" id="grab-save-hint">参数会自动保存在本机浏览器（换 IP 打开控制台 = 换了一份存储）</div>
-        <div class="hint">抢购 = 把这个任务下发给手机, 到点自动开抢；停止 = 立刻终止本次抢购（等同「最近任务」里的 ⛔ 终止）。</div>
-      </div>
-
-      <!-- 抢购保活优化 -->
-      <div class="card">
-        <h3>⚡ 抢购保活优化
+        <h3><span class="ico">⚡</span>抢购保活优化
           <span class="badge gray" id="perf-badge">未查询</span>
         </h3>
         <div class="section-note">抢购前点一下，防手机把脚本冻住/降级导致"任务下发慢、界面读不到"。全部走数据线、不装任何东西；<b>抢完点「恢复原状」就按原值回填</b>。</div>
-        <div class="hint" id="perf-status">点「查询」看当前状态</div>
+        <div class="hint" id="perf-status">点「开启优化」前会先展示当前状态</div>
         <div class="hint" id="agent-script-hint">手机脚本体积：查询中…</div>
         <div class="btnrow">
           <button class="btn primary" id="perf-boost-on" onclick="perfBoost(true)">⚡ 开启优化</button>
           <button class="btn" id="perf-boost-off" onclick="perfBoost(false)">↺ 恢复原状</button>
         </div>
         <div class="hint" id="perf-chan-hint"></div>
-        <div class="hint">通过心跳下发（最多 4 秒生效），不用碰手机。状态在页面加载和开启/恢复后自动刷新。</div>
+        <div class="hint">通过 adb shell 直接生效（USB 在线时即时完成）。状态在页面加载和开启/恢复后自动刷新。</div>
       </div>
     </div>
 
-    <!-- ============ 右列 ============ -->
+    <!-- ============ 右列 (监控) ============ -->
     <div>
       <!-- 任务进度 -->
       <div class="card">
-        <h3>⚡ 任务执行状态 <span class="badge gray" id="task-state-badge">空闲</span></h3>
+        <h3><span class="ico">⚡</span>任务执行状态 <span class="badge gray" id="task-state-badge">空闲</span></h3>
         <div class="result" id="task-result"></div>
         <div class="steps" id="steps">
-          <div class="hint">暂无任务。点击「一键安全演练」后, 这里实时显示每个环节的执行进度。</div>
+          <div class="hint">暂无任务。点击「一键安全演练」或「抢购」后, 这里实时显示每个环节的执行进度。</div>
         </div>
       </div>
 
       <!-- 实时日志 -->
       <div class="card">
-        <h3>📜 实时日志
+        <h3><span class="ico">📜</span>实时日志
           <span class="grow"></span>
           <label style="display:flex;align-items:center;gap:5px;font-size:12px;margin:0" title="只显示最近一次任务的日志行 (勾选后从勾选时刻起算)">
             <input type="checkbox" id="only-task" style="width:auto" onchange="renderLogs()">只看本次任务
@@ -455,7 +512,7 @@
 
       <!-- 最近任务 -->
       <div class="card">
-        <h3>🗂 最近任务 <span class="grow"></span><button class="btn sm" onclick="loadTaskStates()">刷新</button></h3>
+        <h3><span class="ico">🗂</span>最近任务 <span class="grow"></span><button class="btn sm" onclick="loadTaskStates()">刷新</button></h3>
         <div id="recent-tasks"><div class="hint">暂无</div></div>
       </div>
     </div>
@@ -505,7 +562,7 @@ async function api(path, opts) {
 /* ==================== 统一通道 (USB 优先 → WiFi 降级) ====================
  * 口径: 连了 USB → 一切照旧 (ADB 注入最快最可靠);
  *       只有 WiFi → 依旧可用的: 打开商品页 / 自测 / 抢购 / 停止 / 更新脚本
- *                  (手机端用本地 deep-link + 无障碍手势兜底, 中枢下发 phone_op 任务);
+ *                  (手机端用本地 deep-link + Shizuku 自主点击, 中枢下发 phone_op 任务);
  *       只有 USB 才行的: 中枢预置击发 / adb shell 保活优化 / 界面树+截图取证。
  */
 let chanState = { mode: 'none', usb: false, wifi: false };
@@ -523,7 +580,7 @@ function applyChannel(ch, adbFallback) {
     hint.textContent = m === 'usb'
       ? '通道: USB (ADB) — 全部能力可用（含中枢预置击发 / 保活优化）'
       : m === 'wifi'
-        ? '通道: Wi-Fi — 可用（打开商品页 / 自测 / 抢购 / 停止 / 更新脚本）；点击优先走手机本地 Shizuku 注入（未启用则退无障碍手势，大麦自绘按钮可能无效）；中枢预置击发与保活优化需插数据线'
+        ? '通道: Wi-Fi — 可用（打开商品页 / 自测 / 抢购 / 停止 / 更新脚本）；点击走手机本地 Shizuku 注入（未启用则退无障碍手势，大麦自绘按钮可能无效）；中枢预置击发与保活优化需插数据线'
         : '通道: 未连接 — 插 USB 数据线，或在同一 Wi-Fi 下启动手机脚本';
     hint.style.color = m === 'wifi' ? 'var(--warn)' : '';
   }
@@ -582,7 +639,7 @@ async function refreshDevices(manual) {
     if (onlineDev) {
       targetScreen = { w: onlineDev.screen[0], h: onlineDev.screen[1] };
       const ch = $('grab-calib-hint');
-      if (ch) ch.textContent = `标定分辨率：${targetScreen.w}×${targetScreen.h}（保底坐标按它标定，换设备自动按比例换算）`;
+      if (ch) ch.textContent = `标定分辨率：${targetScreen.w}×${targetScreen.h}（统一锚点按它标定, 换设备自动按比例换算）`;
     }
     // 手机脚本体积对账（判断"手机上的脚本是不是电脑上这一版"）
     const sh = $('agent-script-hint');
@@ -591,8 +648,8 @@ async function refreshDevices(manual) {
       const hubSz = Number(data.hubAgentScriptSize || 0);
       const devSz = dev && Number(dev.scriptSize || 0);
       if (!devSz) sh.textContent = '手机脚本体积：未上报（旧版脚本 / 刚重启 / 设备离线）';
-      else if (hubSz && Math.abs(devSz - hubSz) < 2048) sh.innerHTML = '手机脚本 <b>已是电脑上最新版</b>（' + (devSz / 1024).toFixed(1) + ' KB）';
-      else sh.innerHTML = '<span class="warn">⚠ 手机脚本与电脑不一致</span>（手机 ' + (devSz / 1024).toFixed(1) + ' KB / 电脑 ' + (hubSz / 1024).toFixed(1) + ' KB）→ 点「📦 更新手机脚本并重启 Agent」';
+      else if (hubSz && Math.abs(devSz - hubSz) < 2048) sh.innerHTML = '手机脚本 <b>已是电脑上最新版</b>（' + (devSz / 1024).toFixed(1) + ' KB · Agent v' + esc(dev.agentVersion || '?') + '）';
+      else sh.innerHTML = '<span style="color:var(--warn)">⚠ 手机脚本与电脑不一致</span>（手机 ' + (devSz / 1024).toFixed(1) + ' KB / 电脑 ' + (hubSz / 1024).toFixed(1) + ' KB）→ 点「📦 更新手机脚本并重启 Agent」';
     }
     if (!list.length) {
       area.innerHTML = `<div class="dev"><div class="icon">🔌</div><div class="info">
@@ -608,17 +665,22 @@ async function refreshDevices(manual) {
     area.innerHTML = list.map(d => {
       if (d.isAdbOnly) return `<div class="dev"><div class="icon">📱</div><div class="info">
         <div class="name">${esc(d.model)} <span class="badge blue">USB 已连接</span></div>
-        <div class="meta">Agent 未运行 — 点击下方「一键连接设备」自动部署并启动。</div></div></div>`;
+        <div class="meta">Agent 未运行 — 点击上方「一键连接设备」自动部署并启动。</div></div></div>`;
       const alive = d.isAlive;
       const state = d.state === 'busy' ? `执行任务中 ${d.currentTaskId || ''}` : (d.state || 'idle');
+      const syncBits = [];
+      if (lastSync.damaiOffsetMs !== null) syncBits.push(`大麦 ${lastSync.damaiOffsetMs >= 0 ? '+' : ''}${lastSync.damaiOffsetMs}ms (RTT ${lastSync.damaiRttMs}ms)`);
+      if (lastSync.hubOffsetMs !== null) syncBits.push(`电脑 ${lastSync.hubOffsetMs >= 0 ? '+' : ''}${lastSync.hubOffsetMs}ms`);
       return `<div class="dev"><div class="icon">${alive ? '🟢' : '🔴'}</div><div class="info">
-        <div class="name">${esc(d.deviceId)} <span class="badge ${alive ? 'green' : 'gray'}">${alive ? '在线' : '失联'}</span></div>
-        <div class="meta">${esc(d.connectionMode || '')}</div>
+        <div class="name">${esc(d.model || d.deviceId)} <span class="badge ${alive ? 'green' : 'gray'}">${alive ? '在线' : '失联'}</span>
+          <span class="badge gray" title="手机端 Agent 版本 (hello 上报)">v${esc(d.agentVersion || '?')}</span></div>
+        <div class="meta">${esc(d.connectionMode || '')}${d.autoX ? ' · 运行时 ' + esc(d.autoX) : ''}</div>
         <div class="kv">
           <span>状态 <b>${esc(state)}</b></span>
-          <span>电量 <b>${d.battery != null ? d.battery + '%' : '--'}</b></span>
+          <span>电量 <b>${d.battery != null ? d.battery + '%' : '--'}${d.charging ? ' ⚡' : ''}</b></span>
           <span>无障碍 <b style="color:${d.accessibility ? 'var(--ok)' : 'var(--err)'}">${d.accessibility ? '正常' : '未开启'}</b></span>
           <span>自主点击 <b style="color:${d.shizuku === 'active' ? 'var(--ok)' : 'var(--warn)'}" title="Shizuku 本地注入: 免数据线点击自绘控件">${d.shizuku === 'active' ? 'Shizuku ✓' : '未启用'}</b></span>
+          ${syncBits.length ? `<span>对时 <b title="手机时钟相对大麦服务器/电脑的偏置">${syncBits.join(' · ')}</b></span>` : ''}
         </div></div></div>`;
     }).join('');
     if (manual) toast('设备已刷新', `${list.length} 台设备`, 'success', 2000);
@@ -648,9 +710,9 @@ async function connectDevice() {
 }
 
 /**
- * 更新手机脚本并重启 Agent —— 统一通道 (2026-10-09 合并原「局域网更新脚本」):
- *   USB (中枢有 ADB) → 走数据线推送+重启 (最快最稳)
- *   Wi-Fi            → 心跳下发 selfUpdate, 手机自己从中枢下载覆盖后重启 (免数据线)
+ * 更新手机脚本并重启 Agent —— 统一通道 (USB 最快最稳 / Wi-Fi 免数据线):
+ *   USB (中枢有 ADB) → 走数据线推送 + 心跳指令让 Agent 自己换引擎重启 (不碰无障碍)
+ *   Wi-Fi             → 心跳下发 selfUpdate, 手机自己从中枢下载覆盖后重启
  */
 async function updateScript() {
   const btn = $('btn-update');
@@ -692,6 +754,7 @@ async function updateScript() {
 let catalog = [];
 let targetScreen = null;   // 当前在线手机的分辨率（保底坐标的标定基准）
 let profile = { viewers: [], addresses: [] };
+let lastSync = { damaiOffsetMs: null, damaiRttMs: null, hubOffsetMs: null, hubRttMs: null };   // 三源对时证据 (timesync_done 事件)
 
 async function loadCatalog(manual) {
   try {
@@ -976,7 +1039,7 @@ function resetModalFooter() {
 /* ==================== 任务手动终止 ==================== */
 async function cancelTask(taskId) {
   const ok = await confirmModal('⛔ 确认终止该任务?',
-    `任务: ${taskId}\n\n手机端将在几秒内停下（若正在倒计时等待开抢，也会取消击发）。\n说明: 若任务已进入提交订单环节，可能无法拦截。`,
+    `任务: ${taskId}\n\n手机端将在几秒内停下（若正在倒计时等待开抢，也会取消击发并撤销已预置的击发）。\n说明: 若任务已进入提交订单环节，可能无法拦截。`,
     '⛔ 确认终止');
   if (!ok) return;
   try {
@@ -985,6 +1048,7 @@ async function cancelTask(taskId) {
     else if (r.status === 'already_cancelling') toast('已在取消中', '等待手机响应…', 'warn');
     else if (r.status === 'cancelling') toast('⛔ 已发送终止指令', '等待手机响应（最多几秒）…', 'success');
     else toast('⛔ 任务已终止', r.scope === 'queued' ? '任务尚未下发，已直接取消' : '已标记取消', 'success');
+    if (grabTask && grabTask.taskId === taskId) { grabTask = null; updateCountdown(); }
     loadTaskStates();
   } catch (e) { toast('终止失败', e.message, 'error'); }
 }
@@ -997,6 +1061,7 @@ const STEP_NAMES = {
   item_open: '链接就位商品页', page_verify: '页面核对 (白名单)', anchor: '按钮锚定',
   prewatch: '预监视 (低频)', mutation: '突变检测 (高频)', first_tap: '瞬间一击',
   tap_chain: '连点链 (拟人)', submit: '提交订单', order_confirm: '确认订单与观演人',
+  refresh: '开售前自动刷新',
   selftest: '检测通道自测',
   add_viewer: '添加观演人', add_address: '添加收货地址',
 };
@@ -1039,8 +1104,19 @@ function showTaskResult(r) {
     <div>${esc(r.message || r.evidence || '')}</div>`;
   $('task-state-badge').textContent = ok ? '成功' : cancelled ? '已取消' : r.outcome === 'failed' ? '失败' : r.outcome;
   $('task-state-badge').className = 'badge ' + (ok ? 'green' : (cancelled || r.outcome === 'failed') ? 'gray' : 'blue');
-  modal(ok ? '✅ 任务结果' : cancelled ? '⛔ 任务已终止' : '❌ 任务结果',
-    `<div style="font-size:14px;line-height:1.7"><b>结果:</b> ${esc(r.outcome)}<br><b>说明:</b> ${esc(r.message || r.evidence || '')}<br><b>任务:</b> ${esc(r.taskId || '')}</div>`);
+  // 弹窗只给"当前跟踪中的任务"—— phone_op 打开商品页之类的后台结果只走 toast, 不打断操作
+  if (currentTask && r.taskId === currentTask.taskId) {
+    modal(ok ? '✅ 任务结果' : cancelled ? '⛔ 任务已终止' : '❌ 任务结果',
+      `<div style="font-size:14px;line-height:1.7"><b>结果:</b> ${esc(r.outcome)}<br><b>说明:</b> ${esc(r.message || r.evidence || '')}<br><b>任务:</b> ${esc(r.taskId || '')}</div>`);
+  } else {
+    toast(ok ? '✅ 任务完成' : cancelled ? '⛔ 任务已终止' : '❌ 任务结束', r.message || r.evidence || '', ok ? 'success' : cancelled ? 'info' : 'error', 6000);
+  }
+  if (grabTask && r.taskId === grabTask.taskId) {
+    $('grab-badge').textContent = ok ? '已完成' : cancelled ? '已终止' : '结束';
+    $('grab-badge').className = 'badge ' + (ok ? 'green' : 'gray');
+    grabTask = null;
+    updateCountdown();
+  }
 }
 
 /* ==================== 日志流 (游标式增量) ==================== */
@@ -1070,8 +1146,6 @@ function processEvent(e) {
   const det = e.detail || {};
   if (e.event === 'log' && det.msg) {
     logLines.push({ t: time, e: '[日志]', m: det.msg, taskId: e.taskId });
-    // 步骤日志同步高亮
-    const m = String(det.msg).match(/^【(.+?)】|^\[(.+?)\]/);
   } else if (e.event === 'step') {
     stepState[det.step] = { status: det.status, detail: det.detail || '' };
     logLines.push({ t: time, e: '[步骤]', m: `${STEP_NAMES[det.step] || det.step} → ${det.status}${det.detail ? ' · ' + det.detail : ''}`, taskId: e.taskId });
@@ -1092,6 +1166,28 @@ function processEvent(e) {
     logLines.push({ t: time, e: '[开始]', m: `${det.mode} ${det.target || ''}`, taskId: e.taskId });
   } else if (e.event === 'ticket_status_change') {
     logLines.push({ t: time, e: '[监控]', m: `票务状态 → ${det.status}`, taskId: e.taskId });
+  } else if (e.event === 'timesync_done') {
+    // 三源对时证据: 手机↔大麦 (MTOP) / 手机↔电脑 (心跳 serverTime)
+    lastSync = {
+      damaiOffsetMs: (det.damaiOffsetMs ?? null), damaiRttMs: (det.damaiRttMs ?? null),
+      hubOffsetMs: (det.hubOffsetMs ?? null), hubRttMs: (det.hubRttMs ?? null),
+    };
+    const sb = $('sync-badge');
+    if (sb && lastSync.damaiOffsetMs !== null) {
+      sb.textContent = `大麦 ${lastSync.damaiOffsetMs >= 0 ? '+' : ''}${lastSync.damaiOffsetMs}ms`;
+      sb.className = 'badge ' + (Math.abs(lastSync.damaiOffsetMs) < 500 ? 'green' : 'amber');
+      sb.title = `RTT ${lastSync.damaiRttMs}ms` + (lastSync.hubOffsetMs !== null ? ` · 电脑 ${lastSync.hubOffsetMs >= 0 ? '+' : ''}${lastSync.hubOffsetMs}ms` : '');
+    }
+    logLines.push({ t: time, e: '[对时]', m: `大麦 offset ${det.damaiOffsetMs}ms (RTT ${det.damaiRttMs}ms)` + (det.hubOffsetMs !== null ? ` · 电脑 offset ${det.hubOffsetMs}ms` : '') + (det.pageSellText ? ` · 页面开售「${det.pageSellText}」` + (det.pageVsT0Ms !== undefined ? ` 与 T0 差 ${Math.round(det.pageVsT0Ms / 1000)}s` : '') : ''), taskId: e.taskId });
+  } else if (e.event === 't0_mismatch') {
+    logLines.push({ t: time, e: '[对时]', m: `⚠ 页面开售时间「${det.sellText}」与填写的开抢时间差 ${Math.round(det.driftMs / 1000)}s — 请确认抢的是同一场!`, taskId: e.taskId, cls: 'resultline failed' });
+    toast('⚠ 开抢时间与页面不一致', `页面开售「${det.sellText}」与填写时间差 ${Math.round(det.driftMs / 1000)}s`, 'warn', 12000);
+  } else if (e.event === 'first_tap_sent') {
+    logLines.push({ t: time, e: '[首击]', m: `ΔT0 ${det.deltaMs}ms · ${det.viaName || (det.via ? 'persist' : 'gesture')} · 第${det.tries}发 (${det.x},${det.y})`, taskId: e.taskId });
+  } else if (e.event === 'popup_retry_click') {
+    logLines.push({ t: time, e: '[弹窗]', m: `继续尝试 第${det.n}击 (${det.x},${det.y} via=${det.via})`, taskId: e.taskId });
+  } else if (e.event === 'sidecar_start') {
+    logLines.push({ t: time, e: '[侧车]', m: `连点侧车已启动 · 弹窗点(${det.popupPoint?.x},${det.popupPoint?.y}) · Shizuku ${det.shizuku ? '✓' : '✗'}`, taskId: e.taskId });
   } else {
     logLines.push({ t: time, e: '[' + e.event + ']', m: JSON.stringify(det).slice(0, 160), taskId: e.taskId });
   }
@@ -1133,11 +1229,11 @@ async function loadTaskStates() {
       if (r) {
         badge = r.outcome === 'success' || r.outcome === 'ordered'
           ? '<span class="badge green">成功</span>'
-          : r.outcome === 'failed' ? '<span class="badge gray">失败</span>'
+          : r.outcome === 'failed' ? '<span class="badge red">失败</span>'
           : r.outcome === 'cancelled' ? '<span class="badge gray">已取消</span>'
           : '<span class="badge blue">' + esc(r.outcome) + '</span>';
       } else if (t.cancelRequested) {
-        badge = '<span class="badge gray">取消中…</span>';
+        badge = '<span class="badge amber">取消中…</span>';
       } else {
         badge = '<span class="badge blue">执行中</span>';
         action = `<button class="btn danger sm" style="flex:none" onclick="cancelTask('${esc(t.taskId)}')">⛔ 终止</button>`;
@@ -1154,6 +1250,31 @@ async function loadTaskStates() {
 
 /* ==================== 链接抢购 (grab) ==================== */
 let grabTask = null;
+
+/** 抢购倒计时横幅: 有待开抢的 grab 任务时显示 T-xx:xx */
+function updateCountdown() {
+  const box = $('grab-countdown');
+  if (!box) return;
+  const t0 = grabTask && grabTask.timing && grabTask.timing.fireAtEpochMs;
+  if (!t0) { box.classList.remove('show'); return; }
+  const remain = t0 - Date.now();
+  if (remain > -120000) {
+    box.classList.add('show');
+    if (remain >= 0) {
+      const s = Math.floor(remain / 1000);
+      const mm = String(Math.floor(s / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      $('grab-cd-time').textContent = `${mm}:${ss}`;
+      $('grab-cd-note').textContent = grabTask.grab?.dryRun ? '(彩排)' : '手机本地倒计时, 无需电脑参与';
+    } else {
+      $('grab-cd-time').textContent = '00:00';
+      $('grab-cd-note').textContent = '已到点 — 手机端高频监测/连点进行中';
+    }
+  } else {
+    box.classList.remove('show');
+  }
+}
+setInterval(updateCountdown, 1000);
 
 /** 从分享链接/纯数字中解析商品 ID (认不出返回 null, 不兜底) */
 function parseItemId(text) {
@@ -1269,7 +1390,7 @@ function loadGrabParams() {
   const h = $('grab-save-hint');
   try {
     const raw = localStorage.getItem(GRAB_SAVE_KEY);
-    if (!raw) { if (h) h.textContent = '参数会自动保存在本机浏览器（换 IP 打开控制台 = 换了一份存储）'; return; }
+    if (!raw) { if (h) h.textContent = '参数会自动保存在本机浏览器（换 IP 打开控制台 = 换一份存储）'; return; }
     const o = JSON.parse(raw);
     for (const id of GRAB_FIELDS) { const el = $(id); if (el && o[id] !== undefined && o[id] !== null) el.value = o[id]; }
     for (const id of GRAB_CHECKS) { const el = $(id); if (el && o['#' + id] !== undefined) el.checked = !!o['#' + id]; }
@@ -1309,7 +1430,7 @@ async function perfStatus(silent) {
     if (r.status === 'unavailable') {
       $('perf-badge').textContent = '需 USB';
       $('perf-badge').className = 'badge gray';
-      $('perf-status').innerHTML = '<span class="warn">' + esc(r.error || '保活优化需要 USB 数据线') + '</span>';
+      $('perf-status').innerHTML = '<span style="color:var(--warn)">' + esc(r.error || '保活优化需要 USB 数据线') + '</span>';
       return;
     }
     const on = !!r.dozeWhitelisted;
@@ -1319,7 +1440,7 @@ async function perfStatus(silent) {
       + ' · 后台运行 <b>' + esc(String(r.runAnyInBg || '?')) + '</b>'
       + ' · 活动桶 <b>' + esc(String(r.standbyBucket || '?')) + '</b>'
       + ' · 插电常亮 <b>' + esc(String(r.stayOn || '?')) + '</b>'
-      + (r.dozeError ? ' <span class="warn">(' + esc(r.dozeError) + ')</span>' : '');
+      + (r.dozeError ? ' <span style="color:var(--warn)">(' + esc(r.dozeError) + ')</span>' : '');
   } catch (e) {
     if (!silent) toast('查询失败', e.message, 'error', 6000);
     $('perf-status').textContent = '查询失败: ' + e.message;
@@ -1344,7 +1465,7 @@ async function perfBoost(on) {
 async function stopAgent() {
   if (requireChannel()) return;
   const ok = await confirmModal('🛑 停止手机端脚本?',
-    '手机上的 AutoJs6 脚本会退出：不再发心跳、不再接任务（等于"断开服务"）。\n\n若当时有任务在跑，手机退出前会先把任务上报为「已取消」。\n需要时点「一键连接设备」或在手机上重开脚本即可重新上线。\n（最多 4 秒生效）',
+    '手机上的 AutoJs6 脚本会退出：不再发心跳、不再接任务（等于"断开服务"）。\n\n若当时有任务在跑，手机退出前会先把任务上报为「已取消」。\n需要时点「一键连接设备」或在手机上重开脚本即可重新上线（USB 连着时中枢每分钟也会自动拉起）。\n（最多 4 秒生效）',
     '停止脚本');
   if (!ok) return;
   try {
@@ -1388,7 +1509,7 @@ function updateGrabRate() {
   const rMax = Math.max(rMin, numVal('grab-rate-max', 1, 20, 12));
   const cad = deriveCadence(rMin, rMax, lastRttMs || 40);
   const el = $('grab-rate-hint');
-  if (el) el.textContent = '目标 ' + rMin + '~' + rMax + ' 击/秒 · 预估真实约 ' + cad.estPerSec + ' 击/秒（按往返 ' + (lastRttMs || 40) + 'ms 算）';
+  if (el) el.textContent = '目标 ' + rMin + '~' + rMax + ' 击/秒 · 预估真实约 ' + cad.estPerSec + ' 击/秒（按往返 ' + (lastRttMs || 40) + 'ms 算；端侧硬上限 20 击/秒）';
   const cd = $('grab-cadence-hint');
   if (cd) cd.textContent = '间隔 ' + cad.gapMin + '~' + cad.gapMax + 'ms · 按压 ' + cad.pressMin + '~' + cad.pressMax + 'ms · 单发路径上限约 ' + cad.ceilingPerSec + ' 击/秒';
 }
@@ -1412,12 +1533,12 @@ async function grabArm() {
   const dryRun = exec === 'rehearsal';
   const hammer = exec === 'blind';
   const ft = (dryRun ? $('grab-reh-time').value : $('grab-time').value).trim();
-  if (!ft) return toast(dryRun ? '请填写彩排时间' : '请填写开抢时间', '如 2026-10-09 17:17:00', 'warn');
+  if (!ft) return toast(dryRun ? '请填写彩排时间' : '请填写开抢时间', '如 2026-10-10 17:17:00', 'warn');
   const fireAt = new Date(ft.replace(/-/g, '/')).getTime();
-  if (isNaN(fireAt)) return toast('时间格式错误', '如 2026-10-09 17:17:00', 'warn');
+  if (isNaN(fireAt)) return toast('时间格式错误', '如 2026-10-10 17:17:00', 'warn');
   if (fireAt - Date.now() < 8000) return toast('时间太近', '距离现在不足 8 秒, 来不及就位', 'warn');
 
-  // 前置检查 (统一通道): USB 或 Wi-Fi 任一在线即可 —— Wi-Fi 时点击自动降级为手机本地手势
+  // 前置检查 (统一通道): USB 或 Wi-Fi 任一在线即可 —— Wi-Fi 时点击走手机本地 Shizuku/手势
   if (requireChannel()) return;
   try {
     const dv = await api('/api/devices');
@@ -1430,8 +1551,8 @@ async function grabArm() {
   const rateMin = numVal('grab-rate-min', 1, 20, 8);
   const rateMax = Math.max(rateMin, numVal('grab-rate-max', 1, 20, 12));
   const cad = deriveCadence(rateMin, rateMax, lastRttMs || 40);
-  const jitterX = numVal('grab-jitter-x', 0, 24, 3);
-  const jitterY = numVal('grab-jitter-y', 0, 24, 3);
+  const jitterX = numVal('grab-jitter-x', 0, 100, 3);
+  const jitterY = numVal('grab-jitter-y', 0, 40, 3);
   const realMs = numVal('grab-reh-ms', 1000, 60000, 4000);
   const ftTries = numVal('grab-ft-tries', 1, 5, 3);
   const btnXY = parseXY($('grab-btn-xy').value);
@@ -1439,21 +1560,22 @@ async function grabArm() {
   const popupXY = parseXY($('grab-popup-xy').value);
   const keywords = $('grab-keywords').value.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 6);
   const item = catalog.find(x => String(x.itemId || '') === String(itemId));
-  const rate = `目标 ${rateMin}~${rateMax} 击/秒 → 预估真实 ${cad.estPerSec} 击/秒`;
+  const rate = `目标 ${rateMin}~${rateMax} 击/秒 → 预估真实 ${cad.estPerSec} 击/秒 (硬上限 20)`;
   const execText = dryRun
     ? `彩排 (到点真打: 首击 + ${realMs}ms 连点; 不检测变化、不走提交)`
     : hammer ? '无脑高频连点 (不判跳转)' : '正式开抢 (变化→瞬间首击→连点到提交订单)';
   const chanLine = chanState.mode === 'wifi'
-    ? '\n⚠ 当前 Wi-Fi 通道: 首击/连点走手机无障碍手势, 大麦自绘按钮可能无效 (建议插数据线)'
-    : '\n通道: USB (ADB 注入, 最可靠)';
+    ? '\n⚠ 当前 Wi-Fi 通道: 点击走手机本地 Shizuku 注入 (未启用则退无障碍手势, 自绘按钮可能无效)'
+    : '\n通道: USB (首击 PC-ADB 注入, Shizuku 本地注入兜底, 最可靠)';
 
   const ok = await confirmModal('🚀 确认抢购?',
     `目标: ${item?.name || ('商品 ' + itemId)}\n商品ID: ${itemId}\n时间: ${ft}\n方式: ${execText}\n`
     + `连点节拍: ${rate} (间隔 ${cad.gapMin}~${cad.gapMax}ms, 按压 ${cad.pressMin}~${cad.pressMax}ms, 抖动 X${jitterX}px / Y${jitterY}px)\n`
-    + `首击: 中枢预置 + 最多 ${ftTries} 发重试\n`
-    + `统一锚点: ${btnXY ? (btnXY.x + ',' + btnXY.y) : '自动锚定'} @ ${targetScreen ? (targetScreen.w + '×' + targetScreen.h) : '未知分辨率'}`
-    + ` — 一个点通吃 立即预订/确定/立即提交 (抖动上限 X±100/Y±40, 当前 X±${Math.min(jitterX,100)}/Y±${Math.min(jitterY,40)})\n`
-    + `弹窗连击: 「继续尝试」在首次点击 300ms 后由侧车高频处置 (与主链并行互不影响, 合计 ≤20 击/秒)\n`
+    + `首击: ${dryRun ? '中枢预置击发 (排在中枢时钟, 不经 T0 网络)' : '手机检测到开售变化后瞬间出手'} · 最多 ${ftTries} 发重试\n`
+    + `落点: ${btnXY ? ('控制台标定 ' + btnXY.x + ',' + btnXY.y) : '统一锚点 (841,2310)'} @ ${targetScreen ? (targetScreen.w + '×' + targetScreen.h) : '未知分辨率'}`
+    + ` — 一个点通吃 立即预订/确定/立即提交 (几何余量 X±100/Y±40, 当前 X±${jitterX}/Y±${jitterY})\n`
+    + `弹窗连击: 「继续尝试」在首击 300ms 后由侧车探测处置 (命中即点节点中心, 与主链并行, 合计 ≤20 击/秒)\n`
+    + `对时: 手机直连大麦服务器校准, 开售判定与倒计时全程手机本地\n`
     + chanLine + '\n\n'
     + (dryRun ? '彩排会真实点击按钮区域 + 连点, 但不会点提交。' : '到点后将真实点击, 连点到提交订单!'),
     dryRun ? '🟢 开始彩排' : '🚀 抢购 (真实抢购)');
@@ -1490,10 +1612,11 @@ async function grabArm() {
   try {
     await api('/api/tasks/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task }) });
     grabTask = task;
-    $('grab-badge').textContent = dryRun ? '彩排中' : '已抢购';
-    $('grab-badge').className = 'badge green';
+    $('grab-badge').textContent = dryRun ? '彩排中' : '已布防';
+    $('grab-badge').className = 'badge ' + (dryRun ? 'green' : 'amber');
     startTracking(task);
-    toast(dryRun ? '🟢 彩排已启动' : '🚀 已下发抢购', `${task.target.name} · ${ft}${chanState.mode === 'wifi' ? ' · Wi-Fi 通道' : ' · USB 通道'}`, 'success', 7000);
+    updateCountdown();
+    toast(dryRun ? '🟢 彩排已启动' : '🚀 已布防抢购', `${task.target.name} · ${ft}${chanState.mode === 'wifi' ? ' · Wi-Fi 通道' : ' · USB 通道'}`, 'success', 7000);
   } catch (e) { toast('抢购下发失败', e.message, 'error', 7000); }
 }
 

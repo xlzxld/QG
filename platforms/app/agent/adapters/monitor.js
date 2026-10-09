@@ -37,6 +37,7 @@ var MonitorAdapter = {
      */
     runLoop: function(task, onStatusChange) {
         console.log("【余票盯梢启动】开始监控大麦目标演出票务状态...");
+        this.lastStatus = "unknown";   // ★ 每次任务重置: 实例级状态跨任务残留会吞掉首轮本应上报的跃迁
         var intervalMs = 15000; // 默认 15 秒低频轮询
 
         while (true) {

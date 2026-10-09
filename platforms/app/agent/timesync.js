@@ -61,58 +61,6 @@ var TimeSync = {
             console.warn("【对时告警】所有采样失败，回退使用本地时钟 (offset=0)");
             return { offset: 0, rtt: -1, serverTime: java.lang.System.currentTimeMillis() };
         }
-    },
-
-    /**
-     * 纳秒级单调钟精准等待并执行击发
-     * @param {number} targetEpochMs 目标开火绝对时间戳 (平台时间)
-     * @param {number} leadMs 提前量 (通常 30~50ms 抵消事件注入延迟)
-     * @param {function} fireCallback 到点回调
-     * @param {function} shouldAbort 可选: 返回 true 表示收到手动终止指令, 放弃击发
-     * @returns {boolean} true=已击发; false=被终止未击发
-     */
-    waitToFire: function(targetEpochMs, leadMs, fireCallback, shouldAbort) {
-        var offset = this.cachedOffset;
-        var triggerLocalEpoch = targetEpochMs - offset - leadMs;
-        var now = java.lang.System.currentTimeMillis();
-        var deltaMs = triggerLocalEpoch - now;
-
-        console.log("【倒计时启动】距离击发还剩: " + deltaMs + "ms (已扣除 lead: " + leadMs + "ms, offset: " + offset + "ms)");
-
-        // 远距离休眠，让出 CPU; 每轮检查手动终止 (倒计时可能长达数分钟, 必须能中途取消)
-        while (deltaMs > 250) {
-            if (typeof shouldAbort === "function" && shouldAbort()) {
-                console.log("【倒计时终止】收到手动终止指令, 放弃击发");
-                return false;
-            }
-            var sleepTime = Math.min(deltaMs - 200, 1000);
-            sleep(sleepTime);
-            now = java.lang.System.currentTimeMillis();
-            deltaMs = triggerLocalEpoch - now;
-        }
-
-        // 临界 200ms 内转换为纳秒单调时钟，拒绝墙钟跳变
-        var startNano = java.lang.System.nanoTime();
-        var waitNano = (triggerLocalEpoch - java.lang.System.currentTimeMillis()) * 1000000;
-        var endNano = startNano + waitNano;
-
-        while (java.lang.System.nanoTime() < endNano) {
-            // CPU 微自旋，绝对准点出膛
-        }
-
-        // 自旋结束、击发前最后一判 (临界保护)
-        if (typeof shouldAbort === "function" && shouldAbort()) {
-            console.log("【倒计时终止】临界段收到手动终止指令, 放弃击发");
-            return false;
-        }
-
-        // 准点执行
-        var firedAt = java.lang.System.currentTimeMillis();
-        console.log("【准点击发】实际击发物理本地时间: " + firedAt);
-        if (typeof fireCallback === "function") {
-            fireCallback();
-        }
-        return true;
     }
 };
 

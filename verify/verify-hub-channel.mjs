@@ -34,7 +34,9 @@ fs.writeFileSync(path.join(tmpData, 'damai.catalog.json'), JSON.stringify({
 
 const hub = spawn(process.execPath, [path.join(ROOT, 'core', 'device-hub.mjs')], {
   cwd: ROOT,
-  env: { ...process.env, DEVICE_HUB_PORT: String(TEST_PORT), DEVICE_HUB_DATA_DIR: tmpData },
+  // ★ DEVICE_HUB_FAKE_NO_ADB=1: 强制"无 USB"场景 —— 本机插着真机跑验证时, 真实 adb 设备会把
+  //   WiFi 降级断言全部顶掉 (resolveChannel 优先真实 USB)。此开关只影响该测试实例, 不碰真机。
+  env: { ...process.env, DEVICE_HUB_PORT: String(TEST_PORT), DEVICE_HUB_DATA_DIR: tmpData, DEVICE_HUB_FAKE_NO_ADB: '1' },
   windowsHide: true,
   stdio: ['ignore', 'pipe', 'pipe'],
 });

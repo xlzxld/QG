@@ -39,6 +39,8 @@ var Transport = {
      */
     remoteUsb: function() {
         if (this.activeHubUrl === this.USB_URL) return true;
+        // 正在走局域网地址 = 手机必然不在 USB 反向隧道上 → 中枢的 ADB 注入轮不到这台手机, 立即转本地能力
+        if (this.activeHubUrl) return false;
         if (this.hubChannel && typeof this.hubChannel.usb === "boolean") return this.hubChannel.usb;
         return true;   // 未知: 先按"有"试一次 (失败会立刻回落, 不会长期误判)
     },
@@ -248,10 +250,16 @@ var Transport = {
             try { if (typeof device !== 'undefined' && device.getBattery) bat = device.getBattery(); } catch(eB) {}
             var sw = 1080, sh = 2400;
             try { if (typeof device !== 'undefined') { sw = device.width || 1080; sh = device.height || 2400; } } catch(eS) {}
+            var runtimeVer = "unknown";
+            try {
+                if (typeof app !== "undefined" && app.autojs && (app.autojs.versionName || app.autojs.version)) {
+                    runtimeVer = String(app.autojs.versionName || app.autojs.version);
+                }
+            } catch (eV) {}
             var payload = {
                 deviceId: this.deviceId,
-                agentVersion: "1.1.0",   // 1.1.0: 支持 phone_op (中枢据此做版本闸门, 旧脚本派 phone_op 会被拦下)
-                autoX: "7.2.4",
+                agentVersion: "1.2.0",   // 1.2.0: 修复 unknown_mode 上报/发件箱/统一锚点默认; 1.1.0 起支持 phone_op (中枢版本闸门 ≥1.1.0)
+                autoX: runtimeVer,       // 实际运行时版本 (此前写死 7.2.4 是错误信息)
                 screen: [sw, sh],
                 accessibility: isAcc,
                 battery: bat,
@@ -302,12 +310,18 @@ var Transport = {
                 scriptSize: this.scriptSize(),   // 本脚本体积: 中枢据此判断"手机脚本是否最新"
                 ts: java.lang.System.currentTimeMillis()
             };
+            var hbT0 = java.lang.System.currentTimeMillis();
             var res = http.postJson(this.activeHubUrl + "/api/device/heartbeat", payload, { timeout: 3000 });
             var ok = res && res.statusCode === 200;
             if (ok && res.body) {
                 // 解析响应体: 中枢可能捎带「取消当前任务」指令 (任务执行期间唯一可靠下行通道)
                 try {
                     var hbJson = JSON.parse(res.body.string());
+                    // ★ 手机↔电脑时钟偏置 (证据用): serverTime - 请求往返中点。与大麦对时 offset 一起构成三源对时证据
+                    if (hbJson && Number(hbJson.serverTime)) {
+                        this.hubRttMs = java.lang.System.currentTimeMillis() - hbT0;
+                        this.hubOffsetMs = Number(hbJson.serverTime) - (hbT0 + Math.floor(this.hubRttMs / 2));
+                    }
                     if (hbJson && hbJson.channel) this.hubChannel = hbJson.channel;   // ★ 通道自报: 决定 ADB 类操作走中枢还是走本地
                     if (hbJson && hbJson.control) {
                         var ctl = hbJson.control;
@@ -538,20 +552,31 @@ var Transport = {
         }
     },
 
-    /** 本脚本文件路径 (自更新写入目标) */
+    /** 文件字节数 (java.io.File 直取 —— 实测 AutoJs6 无 files.size API, 调用会抛异常被吞成 0) */
+    fileSizeBytes: function(p) {
+        try { return Number(new java.io.File(String(p)).length()); } catch (e) { return 0; }
+    },
+
+    /** 本脚本文件路径 (自更新写入目标)。
+     *  ★ 优先规范部署路径 /sdcard/qg-agent/main.js —— 中枢推送/自更新都写这里;
+     *    实测踩坑: 经编辑器/某些方式启动的引擎, myEngine().source 可能指向过期副本,
+     *    导致"换引擎加载的还是旧代码"+"scriptSize 对账永远失败"。 */
     myScriptPath: function() {
+        var canonical = "/sdcard/qg-agent/main.js";
+        try { if (files.exists(canonical) && this.fileSizeBytes(canonical) > 1000) return canonical; } catch (eC) {}
         try {
             var src = engines.myEngine().source;
             if (src && String(src).slice(-3) === ".js" && files.exists(String(src))) return String(src);
         } catch (e1) {}
-        return "/sdcard/qg-agent/main.js";
+        return canonical;
     },
 
-    /** 本脚本体积 (字节; 上报给中枢做"是否最新"对账) */
+    /** 本脚本体积 (字节; 上报给中枢做"是否最新"对账)。失败不缓存 —— 0 缓存会让"更新脚本对账"永远失败 */
     scriptSize: function() {
-        if (this._scriptSize !== undefined) return this._scriptSize;
-        try { this._scriptSize = files.size(this.myScriptPath()); } catch (e) { this._scriptSize = 0; }
-        return this._scriptSize;
+        if (this._scriptSize > 0) return this._scriptSize;
+        var s = this.fileSizeBytes(this.myScriptPath());
+        if (s > 0) this._scriptSize = s;
+        return s;
     },
 
     /**
@@ -573,9 +598,8 @@ var Transport = {
             try { res.body.close(); } catch (eC) {}
             if (!bytes || !bytes.length) return { ok: false, reason: "下载内容为空" };
             files.writeBytes(target, bytes);
-            var sz = 0;
-            try { sz = files.size(target); } catch (eS) {}
-            this._scriptSize = sz;
+            var sz = this.fileSizeBytes(target);
+            this._scriptSize = sz > 0 ? sz : 0;
             console.log("【自更新】已写入 " + target + " (" + Math.round(sz / 1024) + " KB, 下载 " + Math.round(bytes.length / 1024) + " KB)");
             return { ok: sz > 1000, size: sz, path: target };
         } catch (e) {
@@ -711,24 +735,29 @@ var Transport = {
     },
 
     /**
-     * 上报任务结果
+     * 上报任务结果 (带回执确认 + 本地发件箱兜底)
+     * 中枢临时不可达时结果进发件箱, 由 runner 心跳 tick 冲刷 —— 控制台不会因一次网络抖动永远"执行中"。
      */
     sendResult: function(resultData) {
-        if (!this.activeHubUrl) return false;
+        if (!this.activeHubUrl) this.detectHub();
+        var payload = {
+            deviceId: this.deviceId,
+            taskId: resultData.taskId,
+            seq: resultData.seq || 1,
+            platform: resultData.platform || "damai",
+            outcome: resultData.outcome,
+            reason: resultData.reason || null,
+            message: resultData.message || null,
+            orderNo: resultData.orderNo || null,
+            evidence: resultData.evidence || "",
+            data: resultData.data || null,
+            ts: java.lang.System.currentTimeMillis()
+        };
+        if (!this.activeHubUrl) {
+            this.enqueueOutbox(payload);
+            return false;
+        }
         try {
-            var payload = {
-                deviceId: this.deviceId,
-                taskId: resultData.taskId,
-                seq: resultData.seq || 1,
-                platform: resultData.platform || "damai",
-                outcome: resultData.outcome,
-                reason: resultData.reason || null,
-                message: resultData.message || null,
-                orderNo: resultData.orderNo || null,
-                evidence: resultData.evidence || "",
-                data: resultData.data || null,
-                ts: java.lang.System.currentTimeMillis()
-            };
             var res = http.postJson(this.activeHubUrl + "/api/device/result", payload, { timeout: 5000 });
             var ok = res && res.statusCode === 200;
             if (res && res.body) {
@@ -739,9 +768,37 @@ var Transport = {
                 return true;
             }
         } catch (e) {
-            console.error("【结果上报失败】将留存本地发件箱: " + e.message);
+            console.error("【结果上报失败】" + e.message);
         }
+        this.enqueueOutbox(payload);
         return false;
+    },
+
+    /** 结果发件箱 (最多 20 条, 满了丢最旧 —— 兜网络抖动, 不做持久化) */
+    enqueueOutbox: function(payload) {
+        if (!this._outbox) this._outbox = [];
+        this._outbox.push(payload);
+        if (this._outbox.length > 20) this._outbox.shift();
+        console.warn("【结果发件箱】中枢暂不可达, 结果已入队 (共 " + this._outbox.length + " 条), 心跳时自动重发");
+    },
+
+    /** 冲刷发件箱 (runner 心跳 tick 调用) */
+    flushOutbox: function() {
+        if (!this._outbox || !this._outbox.length || !this.activeHubUrl) return;
+        var rest = [];
+        for (var i = 0; i < this._outbox.length; i++) {
+            var sent = false;
+            try {
+                var res = http.postJson(this.activeHubUrl + "/api/device/result", this._outbox[i], { timeout: 4000 });
+                sent = !!(res && res.statusCode === 200);
+                if (res && res.body) { try { res.body.close(); } catch (e) {} }
+            } catch (e) { sent = false; }
+            if (!sent) rest.push(this._outbox[i]);
+        }
+        if (rest.length < this._outbox.length) {
+            console.log("【结果发件箱】已补发 " + (this._outbox.length - rest.length) + " 条结果");
+        }
+        this._outbox = rest;
     }
 };
 
