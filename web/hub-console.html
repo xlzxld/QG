@@ -229,15 +229,16 @@
         <h3>🎯 目标演出 <span class="badge blue">探针库联动</span></h3>
         <div class="frow full">
           <div>
-            <label>从探针库选择</label>
+            <label>从探针库选择（巡演按项目分组，可选不同城市站）</label>
             <select id="catalog-select" onchange="onCatalogChange()"><option value="">载入中…</option></select>
+            <div class="hint" id="target-meta" style="min-height:18px;margin-top:6px"></div>
           </div>
         </div>
         <div class="frow">
           <div>
             <label>演出 ID / 链接 (探针采集)</label>
             <div style="display:flex;gap:8px">
-              <input id="probe-input" placeholder="如 87541290" style="flex:1">
+              <input id="probe-input" placeholder="如 1085142029424 或粘贴演出链接" style="flex:1">
               <button class="btn sm" onclick="runProbe()">采集</button>
             </div>
           </div>
@@ -514,26 +515,87 @@ async function loadCatalog(manual) {
 }
 function renderCatalog() {
   const sel = $('catalog-select');
-  const prev = sel.value;
-  sel.innerHTML = '<option value="">-- 选择演出 --</option>' + catalog.map((it, i) =>
-    `<option value="${i}">${esc(it.name)} (${esc(it.city || '全国')} · ${esc(it.status || '在售')})</option>`).join('');
-  if (prev && catalog[prev]) sel.value = prev;
-  else if (catalog.length) { sel.selectedIndex = 1; onCatalogChange(); }
+  const prevIdx = sel.value;
+  const prevItemId = (prevIdx !== '' && catalog[prevIdx]) ? String(catalog[prevIdx].itemId || '') : '';
+
+  const optOf = (it, i) => {
+    if (it.tourId) {
+      // 巡演站: "贵阳站 · 预约 · 10.17-10.25 [未采全]"
+      const st = it.saleStatus || it.status || '';
+      const badge = it.fullData === false ? ' ⏳未采全' : '';
+      return `<option value="${i}">${esc(it.stationName || '')} · ${esc(st)}${it.stationShowTime ? ' · ' + esc(it.stationShowTime) : ''}${badge}</option>`;
+    }
+    return `<option value="${i}">${esc(it.name)} (${esc(it.city || '全国')} · ${esc(it.status || '在售')})</option>`;
+  };
+
+  // 巡演分组（按 tourId），其余平铺
+  const groups = [], groupMap = new Map(), singles = [];
+  catalog.forEach((it, i) => {
+    if (it.tourId && it.tourName) {
+      let g = groupMap.get(String(it.tourId));
+      if (!g) { g = { tourId: String(it.tourId), tourName: it.tourName, list: [] }; groupMap.set(String(it.tourId), g); groups.push(g); }
+      g.list.push([it, i]);
+    } else singles.push([it, i]);
+  });
+
+  let html = '<option value="">-- 选择演出 --</option>';
+  for (const g of groups) {
+    html += `<optgroup label="${esc(g.tourName)}">` + g.list.map(([it, i]) => optOf(it, i)).join('') + '</optgroup>';
+  }
+  html += singles.map(([it, i]) => optOf(it, i)).join('');
+  sel.innerHTML = html;
+
+  // 恢复选中: 优先按 itemId 定位（采集/补采后条目顺序会变）
+  let restore = -1;
+  if (prevItemId) restore = catalog.findIndex(x => String(x.itemId || '') === prevItemId);
+  if (restore < 0 && prevIdx !== '' && catalog[prevIdx]) restore = Number(prevIdx);
+  if (restore < 0 && catalog.length) restore = 0;
+  if (restore >= 0) { sel.value = String(restore); onCatalogChange(); }
 }
 function onCatalogChange() {
   const idx = $('catalog-select').value;
   if (idx === '' || !catalog[idx]) return;
   const item = catalog[idx];
-  $('target-name').value = item.name;
+  $('target-name').value = item.name || '';
+
+  // 站点概要信息条 + 未采全时的补采按钮
+  const parts = [];
+  if (item.tourId && item.tourName) parts.push(`🚩 ${item.tourName}`);
+  if (item.stationName) parts.push(`📍 ${item.stationName}`);
+  const stText = item.saleStatus || item.status;
+  if (stText) parts.push(`状态: ${stText}`);
+  const dtText = item.stationShowTime || item.showTime;
+  if (dtText) parts.push(`日期: ${dtText}`);
+  if (item.priceRange) parts.push(`票价: ¥${item.priceRange}`);
+  if (item.saleTimeHints?.length) parts.push(`开售提示: ${item.saleTimeHints.join('; ')}`);
+  if (item.venue) parts.push(item.venue);
+  const needProbe = item.fullData === false;
+  $('target-meta').innerHTML = esc(parts.join(' · ')) +
+    (needProbe ? ` &nbsp;<button class="btn sm" style="padding:2px 10px" onclick="reprobeCurrent()">⏬ 补采此站（拉全量场次）</button>` : '');
+
   const ss = $('session-select');
   ss.innerHTML = '<option value="">-- 自适应首个有票场次 --</option>' + (item.sessions || []).map(s =>
     `<option value="${esc(s.name)}" ${s.inStock ? '' : 'disabled'}>${esc(s.name)}${s.inStock ? '' : ' [无票]'}</option>`).join('');
   if (item.sessions?.length) { ss.selectedIndex = 1; onSessionChange(); }
   const ps = $('price-select');
-  ps.innerHTML = '<option value="">-- 自适应在售最低票档 --</option>' + (item.priceTiers || []).map(p =>
+  const priceHead = item.priceRange ? `-- 自适应最低票档 (参考 ¥${item.priceRange}) --` : '-- 自适应在售最低票档 --';
+  ps.innerHTML = `<option value="">${esc(priceHead)}</option>` + (item.priceTiers || []).map(p =>
     `<option value="${esc(p.price ?? p.name)}" ${p.inStock ? '' : 'style="color:#6b7487"'}>${esc(p.name)} [${esc(p.tag || (p.inStock ? '有票' : '缺货'))}]</option>`).join('');
   const firstOk = (item.priceTiers || []).findIndex(p => p.inStock);
   if (firstOk >= 0) { ps.selectedIndex = firstOk + 1; onPriceChange(); }
+}
+async function reprobeCurrent() {
+  const item = currentItem();
+  if (!item?.itemId) return toast('该条目不完整', '无法补采', 'warn');
+  toast('补采中…', `${item.stationName || item.name} (约 10 秒)`, 'info', 4000);
+  try {
+    const r = await api('/api/probe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemId: String(item.itemId) }) });
+    toast('补采成功', r.item?.name || '', 'success');
+    const keepId = String(item.itemId);
+    await loadCatalog();
+    const ni = catalog.findIndex(x => String(x.itemId || '') === keepId);
+    if (ni >= 0) { $('catalog-select').value = String(ni); onCatalogChange(); }
+  } catch (e) { toast('补采失败', e.message, 'error'); }
 }
 function onSessionChange() { }
 function onPriceChange() { }
@@ -636,7 +698,12 @@ async function runProbe() {
 async function saveConfig() {
   const viewers = collectViewers();
   const payload = {
-    project: { name: $('target-name').value, projectId: currentItem()?.itemId || '' },
+    project: {
+      name: $('target-name').value,
+      projectId: currentItem()?.itemId || '',
+      stationName: currentItem()?.stationName || '',
+      stationShowTime: currentItem()?.stationShowTime || '',
+    },
     selection: {
       sessionTarget: $('session-select').value || '',
       priceTierTarget: $('price-select').value || '',
@@ -685,6 +752,8 @@ async function dispatchTask(forcedMode) {
     target: {
       name: $('target-name').value || '大麦演练项目',
       itemId: item ? (item.itemId || String(item.id || '').replace('item-', '')) : '',
+      stationName: item?.stationName || '',
+      stationShowTime: item?.stationShowTime || '',
       session: $('session-select').value || '',
       priceText: $('price-select').value || '',
       viewer: viewers[0] || '',

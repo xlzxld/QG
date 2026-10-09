@@ -50,7 +50,7 @@
 - 控制台平台特化审计（2026-10-08）：grab-console.html 仍与华为深度绑定（硬编码文案 / 槽位层字段仍叫 sbomCode / 「抢购设置」页 = 华为驱动参数镜像 / 桥接 DRIVERS 写死）。已通用：PLATFORM 参数化、platformMeta、catalog 统一字段、结果页。改造方向 P1 文案归一+字段统一 / P2 设置面板改「平台自带设置清单」驱动渲染 / P3 能力开关+桥接注册数据化（留到写第二个平台时再定）；2026-10-08 下午已落地门户架构（workbench + 专属页）
 - 桥接体检只查 slots[0]（`checkup-vmall.mjs` 无参 = 第一个槽位；支持 `--slot=accX`，但桥接 `/api/checkup/run` 不带参）。查非首位：临时排到 slots 第一位再触发，完事恢复（核对 + git checkout）；窗口没拉起时会经 `ensureSlotWindow` 自动开窗；front profile 首启那一瞬会误报"端口不可达"，隔几秒复检即正常
 - 派发定时没有桥接内置调度（只有爬虫/体检调度，爬虫调度关着）→ 用「自动化任务」或 `core/deferred-timers.mjs <HH:MM> <脚本>`。工具 `tools/dispatch-huawei.mjs`（幂等派发：已在运行=成功不重复派；--plan 只读预演；结果记 `data/grab/auto-dispatch-log.md` 并回传控制台）；手动武装 bat「今早抢购-手动武装.bat」；派发接口自带商品列表闸门（prdId 在 products 且 sbomCode 已勾选才放行）
-- 保活守护：`keepalive-daemon.mjs` 由桥接开机自动拉起（PID 防重复），4~6 分钟抖动给所有在跑槽位窗口续命——窗口不跑驱动时也保持登录，新开窗口自动纳入（读 slots 文件端口）。**中途被停不会自动重启**（桥接只在启动时拉起一次）：巡检查 `/api/keepalive/status`，恢复用 `POST /api/keepalive/start`
+- 保活守护（2026-10-09 加控制通道）：`keepalive-daemon.mjs` 由桥接开机自动拉起，4~6 分钟抖动给所有在跑槽位窗口续命（窗口不跑驱动也保持登录，新开窗口自动纳入）。守护自占 `127.0.0.1:3101`（`KEEPALIVE_CTL_PORT`）：GET /ping 自报 = **状态的唯一权威**（PID 文件仅兜底）；POST /stop 体面退；POST /round 加跑一轮。单例=端口独占（原子，无抢跑窗口）；PID 文件每轮自愈重写。桥接「停止」= 端口叫停 + PID 兜底 + 测试轮（`keepalive-test.pid`，--once 一次性进程）一并停 + 停完复核；「立即测一轮」守护活着走 /round。日志标记：【测试轮】/【手动测试】= 临时轮，【控制台】= 桥接记录的按钮操作。**中途被停不会自动重启**（桥接只在启动时拉起一次）：巡检查 `/api/keepalive/status`，恢复用 `POST /api/keepalive/start`。自测 `verify/verify-keepalive-control.mjs`（17 项）
 - **"抢购未中"排查三件套（2026-10-09）**：① 取证 `events.jsonl` 有无 `UNLOCK_SEEN`（无 = 购买按钮从未出现，点击速度不背锅）② 直读 `queryRushbuyInfo.skuStatus`：**开售前=1、售罄=2**；开售过点仍=1 ⇒ 疑该场无放量 ③ 页面 buttonMode：1=现货可买、2=即将开售、9/10=缺货、29=抢购未开售——**29 在开售后不翻转**，控制台「待抢购」徽标会一直挂着（≠能买）。爬虫读的是这些平台字段（如实转译），"待抢购 SKU 实际缺货"是平台自身两套状态的不一致，非爬虫 bug
 - 遗留待清理：用户自建 Windows 计划任务 10:00 跑旧路径 `scripts\check-slot-logins.mjs` / `scripts\rush-experiment-3plans.mjs`（10-08 重组后失效，报"找不到模块"，输出 `data/grab/schtasks.log`）
 
@@ -73,3 +73,11 @@
 - 终版全文（六方对比 + 冻结版 + 审查）：`docs/APP端抢购终极技术方案_WorkBuddy终版_2026-10-08.md`；各家方案存 `docs/1/`（6 份）
 - 关键事实（2026-10-08 源码级核实）：AutoX 延续仓 = aiselp/AutoX（kkevsekk1 原仓已删的 fork，★1.9k、v7.2.4）；启动组件 `org.autojs.autoxjs.v7/org.autojs.autojs.external.open.RunIntentActivity`（-d file:// 直跑脚本）；无障碍组件 `com.stardust.autojs.core.accessibility.AccessibilityService`（adb settings put secure 自愈）
 - 最新裁决：hub 独立 :3120（与华为产线隔离）；引擎条件冻结（P0-0 三验证后，Plan B=AutoJs6）；通道 adb reverse:3120 + 长轮询；白名单=内容快照+版本+哈希；击发=预热锚定+零查找（不承诺固定毫秒数）。待拍板：平台顺序（京东先/大麦先）、GPL 非商业边界
+
+## 大麦采集与控制台口径（2026-10-09 探针 v2）
+- **采集原理**：探针 = Playwright 无头打开 `m.damai.cn/shows/item.html?itemId=…`，拦截页面自身发出的 `mtop.damai.item.detail.getdetail` 响应（签名由页面 JS 生成，无需逆向）。**直连 HTTP 必被反爬拦**（滑块 punish 页），别走这条路
+- **数据字段速查**：巡演全站 = `data.guide.tour.projectList[]`（cityName/itemId/saleStatus/showTime/tourId）；日期场次 = `serviceTips.serviceTerm[].tagDescJson → performRules[].performDate`；开售提示 = `desc.introduce` 文本；票档明细 H5/PC 拿不到（购票收拢 App）→ 用 price.range
+- **catalog 结构**（`data/grab/damai.catalog.json`）：条目 = 一个站（`st-<itemId>`），字段 tourId/tourName/stationName/saleStatus/stationShowTime/fullData/sessions/stations[]；merge 语义 = 当前站全量 + 其它站概要；补采升级、不降级、按 itemId 去重（`mergeIntoCatalog` 纯函数，verify-damai-probe.mjs 覆盖）
+- **控制台**：演出下拉按 tourId optgroup 分组；概要站标 ⏳未采全 + 「补采此站」；派发 payload 带 stationName；站名随 target.name 派发，手机端 `extractSearchHints` 提城市 → 自动点"城市卡"（手机端无需改）
+- **改后生效规则**：`/api/probe` 与 device-hub 代码 = 动态 import 缓存 → **必须重启中枢**；hub-console.html 每次请求重读 → **改页面只需刷新**
+- **验证**：`verify/verify-damai-probe.mjs`（35 项，fixture + merge 语义 + --live 联网冒烟）；`verify/verify-damai-console-ui.mjs`（自起 33120 实例 + 无头 UI + PID 文件自动恢复）

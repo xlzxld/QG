@@ -1,0 +1,739 @@
+{
+ "api": "mtop.damai.item.detail.getdetail",
+ "ret": [
+  "SUCCESS::调用成功"
+ ],
+ "data": {
+  "item": {
+   "belongsToJuguang": "false",
+   "catBgUrl": "https://gw.alicdn.com/imgextra/i4/O1CN01oZPee01UQ5RcwbnmY_!!6000000002511-2-tps-1125-702.png",
+   "categoryId": "50019085",
+   "cityName": "贵阳市",
+   "generalAgent": {
+    "description": "总票代",
+    "generalAgent": "true",
+    "generalType": "2"
+   },
+   "ipId": "42615701718",
+   "itemId": "1085142029424",
+   "itemName": "【贵阳】薛之谦“万兽之王”巡回演唱会- 贵阳站",
+   "itemNameDisplay": "贵阳·薛之谦“万兽之王”巡回演唱会- 贵阳站",
+   "itemPics": {
+    "itemPicList": [
+     {
+      "picUrl": "https://img.alicdn.com/imgextra/i1/2251059038/O1CN01JIRK9Q5es0D24P4m_!!2251059038.jpg"
+     }
+    ]
+   },
+   "itemType": "4",
+   "nationalStandardCityId": "520100",
+   "performSeatImages": [],
+   "projectId": "240256009",
+   "projectStatus": "1",
+   "purchaseLimitation": "4",
+   "realName": {
+    "credentialNames": [
+     {
+      "id": "1",
+      "name": "身份证"
+     },
+     {
+      "id": "4",
+      "name": "护照"
+     },
+     {
+      "id": "5",
+      "name": "港澳通行证"
+     },
+     {
+      "id": "6",
+      "name": "台湾通行证"
+     },
+     {
+      "id": "7",
+      "name": "港澳台居民居住证"
+     },
+     {
+      "id": "8",
+      "name": "外国人永久居留身份证"
+     }
+    ],
+    "credentials": [
+     "1",
+     "4",
+     "5",
+     "6",
+     "7",
+     "8"
+    ],
+    "description": "该项目需实名制认证，请认证后再进行购票",
+    "type": "1"
+   },
+   "seatImageTitle": "座位图",
+   "seatImages": [
+    "https://img.alicdn.com/imgextra/i2/2251059038/O1CN01A8xViQdqGAC6i2uw_!!2251059038-0-alipicbeacon.jpg"
+   ],
+   "showDuration": "约150分钟，仅供参考，最终以现场实际时长为准",
+   "showTime": "2026.10.17-10.25",
+   "showTimeCustom": "false",
+   "tcCategoryId": "0301010300"
+  },
+  "venue": {
+   "authFlag": "false",
+   "lat": 26.616154,
+   "lng": 106.609253,
+   "officialFlag": "false",
+   "region": "1",
+   "showCount": "2",
+   "showCountText": "2个演出",
+   "venueAddr": "贵阳市观山湖区云潭南路",
+   "venueCityName": "贵阳市",
+   "venueId": "54163",
+   "venueName": "贵阳奥林匹克体育中心体育场",
+   "venueProvinceName": "贵州省",
+   "venueType": "0"
+  },
+  "price": {
+   "range": "317-1717"
+  },
+  "guide": {
+   "artists": [
+    {
+     "desc": "华语流行乐男歌手、影视演员、音乐制作人，毕业于格里昂酒店管理学院。",
+     "fansCount": "30790892",
+     "fansCountDesc": "粉丝",
+     "fansCountStr": "3079.1万",
+     "id": "609",
+     "name": "薛之谦",
+     "picUrl": "https://intercms.damai.cn/artist/pic/1684752526102/1684752526102-main.jpg",
+     "sellCount": "3场",
+     "sellCountDesc": "在售演出",
+     "tag": "歌手"
+    }
+   ],
+   "guideCat": "演唱会",
+   "mediaList": [
+    {
+     "contentId": "25451366",
+     "height": "544",
+     "mediaBg": "https://gw.alicdn.com/imgextra/i1/O1CN01SS5mcd1ysQQOIfjNI_!!6000000006634-0-tps-1125-2436.jpg",
+     "newVideoSize": {
+      "sd": "1919155",
+      "ld": "1279894",
+      "hd": "3723923"
+     },
+     "newVideoUrl": {
+      "sd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjUyNjk5Mjk2OA==&timestamp=1791524197054&streamType=sd&sign=c855178db6a7b5a8d326bb4d6a7f8e79",
+      "ld": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjUyNjk5Mjk2OA==&timestamp=1791524197054&streamType=ld&sign=c9a5d5615ea5164aebd928f491216466",
+      "hd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjUyNjk5Mjk2OA==&timestamp=1791524197054&streamType=hd&sign=537d85806465650958fb99aa4d8a64a2"
+     },
+     "picUrl": "https://mec-comment.damai.cn/dy/img/20260313/0210f965e0ad3bd0fef14eb15299be90.jpg",
+     "type": "2",
+     "videoUrl": "https://dianying.taobao.com/PlayVodShowH5?videoId=XNjUyNjk5Mjk2OA==&timestamp=1773389399138&streamType=hd&sign=d8ea52e0d4dceec189be2d25c17d1f8a",
+     "width": "1280"
+    }
+   ],
+   "scene": {
+    "schema": "https://m.damai.cn/shows/pages/activities/wonderful-live.html?hidenavbar=1&&hidestatusbar=1&isSkipReload=true&pullRefresh=NO&referrer=itemDetail&itemId=1085142029424&contentIds=27405160,29573603,30034064,29194516,28345640,27522869,27355133,29092038,28924738,28924754",
+    "videoList": [
+     {
+      "content": "#薛之谦“万兽之王”演唱会- 北京站 薛之谦NB",
+      "id": "27405160",
+      "publishUser": {
+       "headImg": "https://perico.damai.cn/userheadphotosnew/3562064/712412932_1784284562071.jpg",
+       "nickname": "陪看雪之前"
+      },
+      "videoInfo": {
+       "coverUrl": "https://comment-cdn.damai.cn/dynimg/f1d39fc89bbb4a3389635a8d00809636.jpeg",
+       "height": "1280",
+       "videoUrl": {
+        "sd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU0MjY4NzE2OA==&timestamp=1791524036281&streamType=sd&sign=6f692d05fa29b67929ceea4cb5e71c83",
+        "ld": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU0MjY4NzE2OA==&timestamp=1791524036281&streamType=ld&sign=0a6da6eb9b70925c1ef71ca6cc505954",
+        "hd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU0MjY4NzE2OA==&timestamp=1791524036281&streamType=hd&sign=bc94c198c051cb728303c9673c800bde"
+       },
+       "width": "720"
+      }
+     },
+     {
+      "content": "#最热现场 薛之谦万兽之王巡回演唱会就是最牛批的演唱会，不容反驳",
+      "id": "29573603",
+      "publishUser": {
+       "headImg": "https://perico.damai.cn/userheadphotosnew/328984/65796801_1773325733223.jpg",
+       "nickname": "耳朵先鯊了谎"
+      },
+      "videoInfo": {
+       "coverUrl": "https://comment-cdn.damai.cn/dynimg/9d577948975040b38c6389e9cf36519e.jpg",
+       "height": "1080",
+       "videoUrl": {
+        "sd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU2OTM3MTA3Ng==&timestamp=1791524036281&streamType=sd&sign=72c899b1a758dc7648cf8598760113dc",
+        "ld": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU2OTM3MTA3Ng==&timestamp=1791524036281&streamType=ld&sign=8075a67586c3e2df69e5c0682ed61551",
+        "hd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU2OTM3MTA3Ng==&timestamp=1791524036281&streamType=hd&sign=bd89d8b3388e959a395332ad499615bc",
+        "ud": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU2OTM3MTA3Ng==&timestamp=1791524036281&streamType=ud&sign=7656704434c30df5a899a2152eb657ce"
+       },
+       "width": "1920"
+      }
+     },
+     {
+      "content": "#最热现场 #薛之谦“万兽之王”巡回演唱会- 大连站 这是一个美人鱼宝宝，我要抱回家",
+      "id": "30034064",
+      "publishUser": {
+       "headImg": "https://perico.damai.cn/userheadphotosnew/3027447/605489434_1786498083997.jpg",
+       "nickname": "0717的雪糕"
+      },
+      "videoInfo": {
+       "coverUrl": "https://comment-cdn.damai.cn/dynimg/1219dbb4463a4f19a309b27b6d905498.jpeg",
+       "height": "1280",
+       "videoUrl": {
+        "sd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU3MzI4MzE1Ng==&timestamp=1791524036282&streamType=sd&sign=9a7496a5390174726d8264c1f07c9185",
+        "ld": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU3MzI4MzE1Ng==&timestamp=1791524036282&streamType=ld&sign=addc3a3235a0ac11442a66cb1813fd06",
+        "hd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU3MzI4MzE1Ng==&timestamp=1791524036282&streamType=hd&sign=7507b5a302ededc6cacde817e835735e"
+       },
+       "width": "720"
+      }
+     },
+     {
+      "content": "万兽之王",
+      "id": "29194516",
+      "publishUser": {
+       "headImg": "https://perico.damai.cn/userheadphotosnew/2538276/507655299_1773501601027.jpg",
+       "nickname": "1柠檬小丸子"
+      },
+      "videoInfo": {
+       "coverUrl": "https://comment-cdn.damai.cn/dynimg/981b7414478c456c8ae2756d40313663.jpg",
+       "height": "1280",
+       "videoUrl": {
+        "sd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU2NzQwMTU1Ng==&timestamp=1791524036282&streamType=sd&sign=5b6736486fb44dccbc1f38e2a0c492a7",
+        "ld": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU2NzQwMTU1Ng==&timestamp=1791524036282&streamType=ld&sign=9ccd6bcb4fdf9886feba1239df8742e5",
+        "hd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU2NzQwMTU1Ng==&timestamp=1791524036282&streamType=hd&sign=6dd4778fbb9b047475a4154a875bac81"
+       },
+       "width": "720"
+      }
+     },
+     {
+      "content": "欢迎来到万兽之王的世界",
+      "id": "28345640",
+      "publishUser": {
+       "headImg": "https://perico.damai.cn/userheadphotosnew/1137980/227596070_1710827338957.jpg",
+       "nickname": "DDylan_"
+      },
+      "videoInfo": {
+       "coverUrl": "https://comment-cdn.damai.cn/dynimg/0aa929074fd14fecbe61a50457eb9a4f.jpeg",
+       "height": "1920",
+       "videoUrl": {
+        "sd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1NjM0MjI0OA==&timestamp=1791524036282&streamType=sd&sign=4fa01e48c7815726db2969aa5ccb150d",
+        "ld": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1NjM0MjI0OA==&timestamp=1791524036282&streamType=ld&sign=3c0d246e588dbab2f079583ec1fdc79d",
+        "hd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1NjM0MjI0OA==&timestamp=1791524036282&streamType=hd&sign=119196769d18fd00c005e8901880c6c5",
+        "ud": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1NjM0MjI0OA==&timestamp=1791524036282&streamType=ud&sign=d80518b973756ccdb9fd895d020f2e72"
+       },
+       "width": "1080"
+      }
+     },
+     {
+      "content": "#最热现场 非常有神性的背过手，看到薛被铁链困住就好像被流言蜚语困住一样 心疼#我的观演日记 #薛之谦“万兽之王”演唱会- 北京站 ",
+      "id": "27522869",
+      "publishUser": {
+       "headImg": "https://perico.damai.cn/userheadphotosnew/1148129/229625963_1679482478162.jpg",
+       "nickname": "Uii7-"
+      },
+      "videoInfo": {
+       "coverUrl": "https://comment-cdn.damai.cn/dynimg/f0eac8555171411ca42938b0c28dcc7c.jpeg",
+       "height": "1248",
+       "videoUrl": {
+        "sd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU0MzA1MjkyOA==&timestamp=1791524036282&streamType=sd&sign=72d9c8c1cdeddc1bc4fe034834c9cdf7",
+        "ld": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU0MzA1MjkyOA==&timestamp=1791524036282&streamType=ld&sign=f5f76564b73a0bfd37af03764f3844ae",
+        "hd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU0MzA1MjkyOA==&timestamp=1791524036282&streamType=hd&sign=9b5eb5ef3606085ed300338dbf045336"
+       },
+       "width": "720"
+      }
+     },
+     {
+      "content": "帅晕了小值钱",
+      "id": "27355133",
+      "publishUser": {
+       "headImg": "https://perico.damai.cn/userheadphotosnew/1222707/244541585_1774874262196.jpg",
+       "nickname": "橙芒雾雾"
+      },
+      "videoInfo": {
+       "coverUrl": "https://comment-cdn.damai.cn/dynimg/a86638b3073d4debb122daf4e9d4450a.jpg",
+       "height": "1920",
+       "videoUrl": {
+        "sd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1MTU3ODUzMg==&timestamp=1791524036282&streamType=sd&sign=976e09c952847bdbd58a62b48123da2c",
+        "ld": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1MTU3ODUzMg==&timestamp=1791524036282&streamType=ld&sign=d1077ebc86c81c27f8fc5c00073931bd",
+        "hd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1MTU3ODUzMg==&timestamp=1791524036282&streamType=hd&sign=3bfbf0f3fb2f2693837ff3dd8ae117d0",
+        "ud": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1MTU3ODUzMg==&timestamp=1791524036282&streamType=ud&sign=e4442efb87e7b79edb364c0c8df243ad"
+       },
+       "width": "1080"
+      }
+     },
+     {
+      "content": "我的狐狸大王，嘿嘿嘿",
+      "id": "29092038",
+      "publishUser": {
+       "headImg": "https://gw.alicdn.com/tfs/TB1GJJtd2WG3KVjSZPcXXbkbXXa-180-180.png",
+       "nickname": "tpp1738678168043"
+      },
+      "videoInfo": {
+       "coverUrl": "https://sentiment.damai.cn/feedBack/FxKrNNTE5x5cPGDSf3a4.jpg",
+       "height": "1080",
+       "videoUrl": {
+        "sd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1ODAzMTEyMA==&timestamp=1791524036282&streamType=sd&sign=cecfb4573d8053e49d86a1b6970af3dd",
+        "ld": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1ODAzMTEyMA==&timestamp=1791524036282&streamType=ld&sign=047573ee80559fa1ab4a8dd50d065b71",
+        "hd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1ODAzMTEyMA==&timestamp=1791524036282&streamType=hd&sign=3baa28f6841922fb3c3fa741541da41d",
+        "ud": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1ODAzMTEyMA==&timestamp=1791524036282&streamType=ud&sign=31dfc5da6c03e65148515a3820f7e4d5"
+       },
+       "width": "1920"
+      }
+     },
+     {
+      "content": "#最热现场 #神级现场 #我的观演日记 #薛之谦“万兽之王”巡回演唱会—深圳站 ",
+      "id": "28924738",
+      "publishUser": {
+       "headImg": "https://perico.damai.cn/userheadphotosnew/913410/182682082_1744178735239.jpg",
+       "nickname": "大麦我爱你你会给我薛之谦门票x"
+      },
+      "videoInfo": {
+       "coverUrl": "https://comment-cdn.damai.cn/dynimg/c4dde01191444078b0baca8ecc7f4037.jpeg",
+       "height": "1920",
+       "videoUrl": {
+        "sd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1NzUwNDM4OA==&timestamp=1791524036282&streamType=sd&sign=b1d5c2df6c85349cbea007f38feb377c",
+        "ld": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1NzUwNDM4OA==&timestamp=1791524036282&streamType=ld&sign=8e14a7ebb5e3650a652324d8690bb480",
+        "hd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1NzUwNDM4OA==&timestamp=1791524036282&streamType=hd&sign=8a2a60168dc44f118b41bb365358c9e0",
+        "ud": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1NzUwNDM4OA==&timestamp=1791524036282&streamType=ud&sign=92057a06d71abae2582ce3f7e93de4f6"
+       },
+       "width": "1080"
+      }
+     },
+     {
+      "content": "#最热现场 灯光切换流畅且富有叙事感，音响调校均衡到没有任何失真嘈杂，薛之谦全程稳定输出的演唱越听越能感受到歌声魅力，这种将视听完美融合的沉浸式体验，确实是让人想反复回味的顶级现场。",
+      "id": "28924754",
+      "publishUser": {
+       "headImg": "https://perico.damai.cn/userheadphotosnew/1204613/240922773_1778737332805.jpg",
+       "nickname": "嘻嘻嚷嚷的熙熙"
+      },
+      "videoInfo": {
+       "coverUrl": "https://comment-cdn.damai.cn/dynimg/1145ff1ec3db48039090535c1e0dc36d.jpeg",
+       "height": "1280",
+       "videoUrl": {
+        "sd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1NzUxMDU5Mg==&timestamp=1791524036282&streamType=sd&sign=a71dd295b9ae1c9714ba30946e77e11d",
+        "ld": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1NzUxMDU5Mg==&timestamp=1791524036282&streamType=ld&sign=b69b2e6ee927a89a415e8733c5654126",
+        "hd": "https://dianying.taobao.com/PlayVodShow?type=mp4&videoId=XNjU1NzUxMDU5Mg==&timestamp=1791524036282&streamType=hd&sign=5d22e6e1a749d9e3315fd74b40821572"
+       },
+       "width": "720"
+      }
+     }
+    ]
+   },
+   "showGuides": [
+    {
+     "comment": "#最热现场 ",
+     "id": "30271236",
+     "nickName": "麦子",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/57f309d1848140b28cb206bce30116c6.jpg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/107855/21571061_1762509517351.jpg"
+    },
+    {
+     "comment": "#最热现场 帅得要命了哥哥#薛之谦“万兽之王”巡回演唱会- 成都站 ",
+     "id": "30267049",
+     "nickName": "如约燕归来",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/f28fb9b7409e4958bbdb0e99725f9897.jpeg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/3213291/642658321_1779179195535.jpg"
+    },
+    {
+     "comment": "你在逃避 我的眼睛",
+     "id": "30260208",
+     "nickName": "值钱的Soly",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/b94841e6c6154602a6a7ca4db811a861.jpg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotos/980874/196174851.jpg"
+    },
+    {
+     "comment": "#最热现场 我以为我爱了 就会留下些什么 纪念那些曲折，我们快乐的争吵的不舍的分分合合，我还是撑着 不说 我应该平静的，面对你离开了北京的生活#薛之谦“万兽之王”巡回演唱会- 成都站 #薛之谦“万兽之王”巡回演唱会- 贵阳站 #薛之谦“万兽之王”巡回演唱会- 大连站 ",
+     "id": "30256350",
+     "nickName": "07710x",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/b172e358ba1a48c2bd5c4eec25dffe30.jpeg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/772990/154598012_1705374647280.jpg"
+    },
+    {
+     "comment": "#最热现场 #薛之谦“万兽之王”巡回演唱会- 成都站 《渡》的大屏怼脸都好好看啊。#薛之谦“万兽之王”巡回演唱会- 大连站 ",
+     "id": "30256318",
+     "nickName": "麦子6NleB",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/f101796637c54015819e36ba4d869f68.jpg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotos/542894/108578818.jpg"
+    },
+    {
+     "comment": "#最热现场薛之谦大帅哥 薛之谦华颜一#薛之谦“万兽之王”巡回演唱会- 成都站 #薛之谦“万兽之王”巡回演唱会- 贵阳站 #薛之谦“万兽之王”巡回演唱会- 大连站 ",
+     "id": "30256275",
+     "nickName": "07710x",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/5b838871f2cf427099e5d0e77bd163f6.jpeg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/772990/154598012_1705374647280.jpg"
+    },
+    {
+     "comment": "#最热现场 成都限定版熊猫🐼追着竹子薛之谦太可爱了哈哈，每一站都完全不一样好吗？！还有两套王子装又是太帅了吧！",
+     "id": "30255656",
+     "nickName": "麦子",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/f983d7e7147f421db6d18e43a6e972d9.jpeg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotos/477908/95581662.jpg"
+    },
+    {
+     "comment": "#最热现场 #薛之谦“万兽之王”巡回演唱会- 成都站 万兽之王能感受到他珍惜每一次和听众见面的机会，用扎实的实力回应所有人的奔赴。这份对音乐的敬畏、对舞台的执着，就是大家愿意一直相信他、喜欢他的理由。",
+     "id": "30255535",
+     "nickName": "麦子",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/84439c93b929418ba98db00a5a1b81b6.jpeg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotos/477908/95581662.jpg"
+    },
+    {
+     "comment": "眉压眼+王子礼+墨绿燕尾服=绅士薛",
+     "id": "30252509",
+     "nickName": "甘舌83",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/b7b57ed2f00a40e48df9efbe1cc501c5.jpg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/1177254/235450807_1761707093530.jpg"
+    },
+    {
+     "comment": "成都站正式解锁80场",
+     "id": "30217490",
+     "nickName": "甘舌83",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/7260e5043dd2417db05efbfe72f11618.jpg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/1177254/235450807_1761707093530.jpg"
+    },
+    {
+     "comment": "#最热现场 ",
+     "id": "30203471",
+     "nickName": "麦子",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/93f077dcd34f4b759e050abe31045631.jpg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/107855/21571061_1762509517351.jpg"
+    },
+    {
+     "comment": "#最热现场 ",
+     "id": "30203410",
+     "nickName": "麦子",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/e55dba5755164954833992b4ddde10c9.jpg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/107855/21571061_1762509517351.jpg"
+    },
+    {
+     "comment": "#最热现场 ",
+     "id": "30203398",
+     "nickName": "麦子",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/714809aacd4247ee84ae46bd476ee764.jpg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/107855/21571061_1762509517351.jpg"
+    },
+    {
+     "comment": "新皮肤帅得不行…严肃品鉴。#薛之谦“万兽之王”巡回演唱会- 成都站 ",
+     "id": "30184216",
+     "nickName": "如约燕归来",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/38b9fb5ace9f42829e66c63e5f64525d.jpeg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/3213291/642658321_1779179195535.jpg"
+    },
+    {
+     "comment": "#最热现场 #我的观演日记 #神级现场 #薛之谦“万兽之王”巡回演唱会- 成都站 ",
+     "id": "30180924",
+     "nickName": "OHOooo",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/cbcd750ee13a4e15a40648810e7b70c2.jpg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/3344317/668863438_1782212874454.jpg"
+    },
+    {
+     "comment": "#最热现场 #我的观演日记 #神级现场 #薛之谦“万兽之王”巡回演唱会- 成都站 ",
+     "id": "30180886",
+     "nickName": "OHOooo",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/983d09b3129340c582080a75fefc04ff.jpg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/3344317/668863438_1782212874454.jpg"
+    },
+    {
+     "comment": "#最热现场 声音定位太准了，闭眼能听出乐器在哪个位置，太沉浸了。#薛之谦“万兽之王”巡回演唱会- 成都站 ",
+     "id": "30179270",
+     "nickName": "麦子和我第一好",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/b18fef539bfe4a38b300b6d5a05cfeb5.jpeg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/2439039/487807853_1782193935639.jpg"
+    },
+    {
+     "comment": "#最热现场 低音炮震得胸口发麻，但一点不糊，太强了，心脏跟着一起跳。#薛之谦“万兽之王”巡回演唱会- 成都站 ",
+     "id": "30179170",
+     "nickName": "麦子和我第一好",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/b1688cfde94443209e54eb1fa4145af5.jpeg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/2439039/487807853_1782193935639.jpg"
+    },
+    {
+     "comment": "#最热现场 #薛之谦“万兽之王”巡回演唱会- 成都站 ",
+     "id": "30132122",
+     "nickName": "麦子",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/5a95cd492e0b4eecbcc02c1f32fd6b06.jpg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/107855/21571061_1762509517351.jpg"
+    },
+    {
+     "comment": "薛之谦，你值得所有最美好的称赞，怎么能怪你自己来得太晚了呢，明明是我来得太迟了，你要坚信我们永远爱你，谢谢你把这么盛大的万兽之王带给谦友们，没有人比我们更幸福了，没有人比你更真诚了，愿你平安，愿你健康，愿你开心！愿薛之谦做自由的薛之谦，写你想写的词，唱你想唱的歌，你在谦友在！永远爱你😘#薛之谦“万兽之王”巡回演唱会- 成都站 ",
+     "id": "30125653",
+     "nickName": "狐狐你好呀",
+     "picUrl": "https://comment-cdn.damai.cn/dynimg/1bab2b4397c1465e8d7f49cd96dfe9a6.jpeg",
+     "showVideoIcon": "true",
+     "type": "STRATEGY",
+     "userPic": "https://perico.damai.cn/userheadphotosnew/2268353/453670608_1785429316812.jpg"
+    }
+   ],
+   "tour": {
+    "encoreRequestTargetUrl": "https://m.damai.cn/shows/artist.html?show_city_layer=true&artistId=609",
+    "projectList": [
+     {
+      "cityName": "贵阳站",
+      "itemId": "1085142029424",
+      "saleStatus": "预约",
+      "showTime": "10.17-10.25",
+      "statusLight": "true",
+      "tourId": "5850"
+     },
+     {
+      "cityName": "厦门站",
+      "itemId": "1083650546473",
+      "saleStatus": "预约",
+      "showTime": "10.31-11.08",
+      "statusLight": "true",
+      "tourId": "5850"
+     },
+     {
+      "cityName": "成都站",
+      "itemId": "1076554197906",
+      "saleStatus": "缺货",
+      "showTime": "10.10-10.11",
+      "statusLight": "false",
+      "tourId": "5850"
+     }
+    ],
+    "showEncoreRequest": "true"
+   },
+   "want": {
+    "canFollow": "1",
+    "guideTipShareSubTitle": "记录心动演出，和好友结伴观演",
+    "guideTipShareTitle": "你的好友邀你标 [想看] 哦～",
+    "guideTipSubTitle": "在 [想看] 列表记录心动演出",
+    "guideTipTitle": "标 [想看] ，订阅最新优惠信息～",
+    "showWant": "true",
+    "subFlag": "false",
+    "thresholdNum": "10000",
+    "tipsSubTitle": "可购票时会及时通知你的～",
+    "tipsTitle": "已加入 [我的-想看]",
+    "title": "想看人数",
+    "useLocalCache": "false",
+    "userImgs": [
+     "https://img.alicdn.com/imgextra/i1/O1CN01bMZ0oW1WC0GXqoK9h_!!6000000002751-0-tps-500-500.jpg",
+     "http://perico.damai.cn/userheadphotosnew/3553453/710690630_1784297024859.jpg",
+     "https://img.alicdn.com/imgextra/i4/O1CN01ZtJoYQ1p4CDLYGtuD_!!6000000005306-0-tps-500-500.jpg",
+     "http://perico.damai.cn/userheadphotosnew/2640755/528151138_1758766048917.jpg",
+     "https://img.alicdn.com/imgextra/i1/O1CN01bMZ0oW1WC0GXqoK9h_!!6000000002751-0-tps-500-500.jpg"
+    ],
+    "wantDesc": "超过96%同类演出",
+    "wantNum": "437805",
+    "wantNumStr": "43.8万",
+    "wantNumSuffix": "人"
+   }
+  },
+  "serviceTips": {
+   "importantNotes": [
+    {
+     "content": "每笔订单最多购买4张、每个账号最多购买4张。",
+     "icon": "https://gw.alicdn.com/imgextra/i3/O1CN01xHaeqo1zO1kHtIOEa_!!6000000006703-2-tps-144-144.png",
+     "title": "限购规则"
+    },
+    {
+     "content": "本项目支持有条件退款，具体可申请退票的期间、退票手续费等退票条件以项目主办方提供的退票政策为准，详见服务说明或项目详情页公示的退票政策。",
+     "icon": "https://gw.alicdn.com/imgextra/i3/O1CN017tQHWJ1HHlETFHUP0_!!6000000000733-2-tps-144-144.png",
+     "title": "退票/换票规则"
+    },
+    {
+     "content": "须携带购票时对应证件验证入场。",
+     "icon": "https://gw.alicdn.com/imgextra/i1/O1CN01Q4zdmq1fUAkDGHxvo_!!6000000004009-2-tps-144-144.png",
+     "title": "入场方式说明"
+    },
+    {
+     "content": "儿童一律凭票入场",
+     "icon": "https://gw.alicdn.com/imgextra/i1/O1CN018BKxF526fcGcgOjBP_!!6000000007689-2-tps-144-144.png",
+     "title": "儿童购票"
+    },
+    {
+     "content": "演出开始前，去【订单详情页】提交发票申请。我们会将电子发票发送至您的邮箱。",
+     "icon": "https://gw.alicdn.com/imgextra/i2/O1CN01XnP8vt1l85L3ZSuW1_!!6000000004773-2-tps-144-144.png",
+     "title": "发票说明"
+    },
+    {
+     "content": "一张门票对应一个证件；证件支持：身份证/港澳居民来往内地通行证/台湾居民来往大陆通行证/港澳台居民居住证/外国人永久居留身份证/外国护照",
+     "icon": "https://gw.alicdn.com/imgextra/i2/O1CN0176YBG91aNh407l1Jh_!!6000000003318-2-tps-144-144.png",
+     "title": "购票证件说明"
+    },
+    {
+     "content": "对于异常订购行为，大麦网有权在订单成立或者生效之后取消相应订单。异常订购行为包括但不限于以下情形：\n（1）通过同一ID订购超出限购张数的订单。\n（2）经合理判断认为非真实消费者的下单行为，包括但不限于通过批量相同或虚构的支付账号、收货地址（包括下单时填写及最终实际收货地址）、收件人、电话号码订购超出限购张数的订单。",
+     "icon": "https://gw.alicdn.com/imgextra/i4/O1CN01unvwa31zkT9Y7bm7m_!!6000000006752-2-tps-144-144.png",
+     "title": "异常排单说明"
+    },
+    {
+     "content": "1.购买前请您提前规划好行程，做好相应准备，以免影响您的正常观演，感谢您的理解和配合。2.若演出受不可抗力影响延期或取消，大麦将对演出票订单按照项目官方通知方案进行处理，其他因观演发生的费用需由您自行承担。",
+     "icon": "https://gw.alicdn.com/imgextra/i1/O1CN0133g7B81S91RyhPhBS_!!6000000002203-2-tps-144-144.png",
+     "title": "温馨提示"
+    },
+    {
+     "content": "约150分钟，仅供参考，最终以现场实际时长为准",
+     "icon": "https://gw.alicdn.com/imgextra/i3/O1CN01Wa3Akl1hbA1Fg2zpP_!!6000000004295-2-tps-144-144.png",
+     "title": "演出时长"
+    },
+    {
+     "content": "请于演出前约120分钟入场",
+     "icon": "https://gw.alicdn.com/imgextra/i2/O1CN01QHyDGA1rEOUPLb3WY_!!6000000005599-2-tps-144-144.png",
+     "title": "入场时间"
+    },
+    {
+     "content": "150分钟",
+     "icon": "https://gw.alicdn.com/imgextra/i3/O1CN01Wa3Akl1hbA1Fg2zpP_!!6000000004295-2-tps-144-144.png",
+     "title": "最低演出时长"
+    },
+    {
+     "content": "薛之谦",
+     "icon": "https://gw.alicdn.com/imgextra/i4/O1CN01N7Icez1vcu9JtnH1e_!!6000000006194-2-tps-144-144.png",
+     "title": "主要演员"
+    },
+    {
+     "content": "22",
+     "icon": "https://gw.alicdn.com/imgextra/i2/O1CN01fuJhB01iSHxot8hmu_!!6000000004411-2-tps-144-144.png",
+     "title": "最低演出曲目"
+    },
+    {
+     "content": "由于安保和版权的原因，大多数演出、展览及比赛场所禁止携带食品、饮料、专业摄录设备、打火机等物品，请您注意现场工作人员和广播的提示，予以配合",
+     "icon": "https://gw.alicdn.com/imgextra/i3/O1CN01hOmBKs1l7AXuHwWV3_!!6000000004771-2-tps-144-144.png",
+     "title": "禁止携带物品"
+    },
+    {
+     "content": "无寄存处,请自行保管携带物品，谨防贵重物品丢失。",
+     "icon": "https://gw.alicdn.com/imgextra/i1/O1CN0191908w1a92OBNIwsi_!!6000000003286-2-tps-144-144.png",
+     "title": "寄存说明"
+    },
+    {
+     "content": "38426",
+     "icon": "https://gw.alicdn.com/imgextra/i1/O1CN01g1Fs6025i4mGCqzxa_!!6000000007559-2-tps-144-144.png",
+     "title": "大麦网初始开售时全场可售门票总张数"
+    },
+    {
+     "content": "演出现场气氛热烈，请您务必根据自身身体状况酌情是否购票参与观演，特别是患有心脏类疾病、急性心脑血管疾病、心肌炎、高血压等相关疾病的人群，请您务必遵照医嘱，结合病史及个人身体状况进行观演，观演期间请自行承担身体健康相关责任。",
+     "icon": "https://gw.alicdn.com/imgextra/i2/O1CN01K5z31n1FrpBlutAJ1_!!6000000000541-2-tps-144-144.png",
+     "title": "重要提示"
+    }
+   ],
+   "serviceTerm": [
+    {
+     "icon": "https://gw.alicdn.com/imgextra/i3/O1CN01W71UiF1LeRIVqb1Ci_!!6000000001324-2-tps-45-45.png",
+     "isSupport": "true",
+     "renderType": "1",
+     "tagDescWithStyle": "预售期间，由于主办未正式开票，下单后无法立即为您配票。一般于演出前<b>1-2周</b>开票，待正式开票后，请您通过订单详情页或者票夹详情，查看票品信息、取票方式等演出相关信息",
+     "tagName": "重要通知"
+    },
+    {
+     "icon": "https://gw.alicdn.com/imgextra/i4/O1CN01U4xvGO1qlzvKaYVze_!!6000000005537-2-tps-45-45.png",
+     "isSupport": "false",
+     "renderType": "2",
+     "tagDesc": "本项目支持有条件退款，若需要收取退票手续费，将以用户实际支付票款为基准收取。基于项目主办方提供的退票政策不同，具体可支持用户申请退款的情形请详见该项目详情页退票政策相关说明或公告。",
+     "tagDescJson": "{\"generalNote\":\"该演出支持退票，您可以在【我的-订单详情页】中申请退票，退票需要收取手续费，不同场次规则不同，请选择具体场次查看详细退票规则：\",\"performRules\":[{\"performDate\":\"2026-10-17 周六 19:00\",\"rules\":[{\"endTime\":1790820000000,\"ruleStage\":3,\"ruleType\":2,\"startTime\":1790733600000},{\"endTime\":1791623820000,\"ruleFeeBP\":2000,\"ruleStage\":2,\"ruleType\":1,\"startTime\":1790820000000},{\"ruleStage\":1,\"ruleType\":4,\"startTime\":1791623820000}]},{\"performDate\":\"2026-10-18 周日 19:00\",\"rules\":[{\"endTime\":1790820000000,\"ruleStage\":3,\"ruleType\":2,\"startTime\":1790733600000},{\"endTime\":1791623820000,\"ruleFeeBP\":2000,\"ruleStage\":2,\"ruleType\":1,\"startTime\":1790820000000},{\"ruleStage\":1,\"ruleType\":4,\"startTime\":1791623820000}]},{\"performDate\":\"2026-10-24 周六 19:00\",\"rules\":[{\"endTime\":1791019020000,\"ruleStage\":3,\"ruleType\":2,\"startTime\":1790932620000},{\"endTime\":1792228620000,\"ruleFeeBP\":2000,\"ruleStage\":2,\"ruleType\":1,\"startTime\":1791019020000},{\"ruleStage\":1,\"ruleType\":4,\"startTime\":1792228620000}]},{\"performDate\":\"2026-10-25 周日 19:00\",\"rules\":[{\"endTime\":1791019020000,\"ruleStage\":3,\"ruleType\":2,\"startTime\":1790932620000},{\"endTime\":1792228620000,\"ruleFeeBP\":2000,\"ruleStage\":2,\"ruleType\":1,\"startTime\":1791019020000},{\"ruleStage\":1,\"ruleType\":4,\"startTime\":1792228620000}]}],\"refundProcedureFeeRule\":4}",
+     "tagName": "条件退",
+     "tagType": "2"
+    },
+    {
+     "icon": "https://gw.alicdn.com/imgextra/i3/O1CN01W71UiF1LeRIVqb1Ci_!!6000000001324-2-tps-45-45.png",
+     "isSupport": "true",
+     "renderType": "1",
+     "tagDesc": "本项目需实名制购票及入场，购票完成后观演人信息不可更改，须购票时填写的实名观演人携带本人有效证件验证入场。",
+     "tagName": "实名制购票和入场",
+     "tagType": "1"
+    },
+    {
+     "icon": "https://gw.alicdn.com/imgextra/i4/O1CN01U4xvGO1qlzvKaYVze_!!6000000005537-2-tps-45-45.png",
+     "isSupport": "false",
+     "renderType": "1",
+     "tagDesc": "本项目不支持自主选座，同一个订单优先连座",
+     "tagName": "不支持选座",
+     "tagType": "3"
+    },
+    {
+     "icon": "https://gw.alicdn.com/imgextra/i3/O1CN01W71UiF1LeRIVqb1Ci_!!6000000001324-2-tps-45-45.png",
+     "isSupport": "true",
+     "renderType": "1",
+     "tagDesc": "通过身份证验票入场",
+     "tagDescWithStyle": "通过身份证验票入场",
+     "tagName": "电子票",
+     "tagType": "4"
+    },
+    {
+     "icon": "https://gw.alicdn.com/imgextra/i3/O1CN01W71UiF1LeRIVqb1Ci_!!6000000001324-2-tps-45-45.png",
+     "isSupport": "true",
+     "renderType": "1",
+     "tagDesc": "发票开具方：上海潮声音乐有限公司\r\n本项目支持开具电子发票。需要在演出开始前在订单详情页提交发票申请，一般演出结束后1个月左右开具并发送至您的邮箱。",
+     "tagDescWithStyle": "<b>发票开具方：上海潮声音乐有限公司</b><br>本项目支持开具电子发票。需要在演出开始前在订单详情页提交发票申请，一般演出结束后1个月左右开具并发送至您的邮箱。",
+     "tagName": "电子发票",
+     "tagType": "5"
+    },
+    {
+     "icon": "https://gw.alicdn.com/imgextra/i3/O1CN01W71UiF1LeRIVqb1Ci_!!6000000001324-2-tps-45-45.png",
+     "isSupport": "true",
+     "renderType": "1",
+     "tagDesc": "若您已在票夹中完成实人认证，则可通过票夹中本人票页面查看您于本项目下的本人名下票相关信息。",
+     "tagName": "本人票",
+     "tagType": "6"
+    }
+   ],
+   "tips": [
+    "<span style=\"color: #FE6D92\">部分场次即将停止退票</span>",
+    "<span style=\"color: #8B93A5\"><b>预售</b> | 本商品为预售，正式开票后将第一时间配票</span>"
+   ]
+  },
+  "desc": {
+   "introduce": "<!DOCTYPE html><html><head></head><body><p><span style=\"font-size: 20px;\"><strong>10月17日-18日场次第二次销售时间：10月7日17:17 <br>10月24日-25日场次第二次销售时间：10月9日17:17<br>本次销售，根据已公布的票务规则执行，请仔细阅读、谨慎购买！</strong></span></p>\n<p>&nbsp;</p>\n<p><span style=\"font-size: 20px;\"><strong>10月17日-18日场次开启预售，预售时间：9月30日10:00</strong></span><br><span style=\"font-size: 20px;\"><strong>10月24日-25日场次开启预售，预售时间：10月2日17:17</strong></span><br><span style=\"font-size: 20px;\"><strong>本次销售，根据已公布的票务规则执行，请仔细阅读、谨慎购买！<br><img src=\"https://img.alicdn.com/imgextra/i4/2251059038/O1CN01LlbFn3IqXAL2pEWS_!!2251059038.jpg\" width=\"1392\" height=\"1836\"><img src=\"https://img.alicdn.com/imgextra/i4/2251059038/O1CN016LvFCc8teIB2t0ec_!!2251059038.jpg\" width=\"1422\" height=\"1808\"><img src=\"https://img.alicdn.com/imgextra/i2/2251059038/O1CN014lcj87jVJmI2ulv6_!!2251059038.jpg\" width=\"1436\" height=\"1812\"></strong></span><br><img src=\"https://img.alicdn.com/imgextra/i4/2251059038/O1CN01oLXNk7dSLuD24P4m_!!2251059038.jpg\" width=\"1020\" height=\"1360\"></p>\n<p><img src=\"https://img.alicdn.com/imgextra/i2/2251059038/O1CN01mS3zAONjoAC1JZb2_!!2251059038.png\" width=\"648\" height=\"756\"></p></body></html>"
+  },
+  "performLimits": [
+   {
+    "performId": "286932052",
+    "singleLimitation": "4"
+   },
+   {
+    "performId": "286932053",
+    "singleLimitation": "4"
+   },
+   {
+    "performId": "286932054",
+    "singleLimitation": "4"
+   },
+   {
+    "performId": "286932055",
+    "singleLimitation": "4"
+   }
+  ]
+ }
+}

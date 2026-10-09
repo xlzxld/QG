@@ -1,67 +1,220 @@
 {
-  "_说明": "大麦演出项目已探测库。探针与爬虫采集的信息保存在此，控制台直接下拉选择，无需手动打字。",
-  "updatedAt": "2026-10-08T22:25:00.000Z",
+  "_说明": "大麦演出项目已探测库。探针真实采集（H5 详情接口），控制台直接下拉选择。巡演按 tourId 分组，含多城市站。",
+  "updatedAt": "2026-10-09T05:49:11.413Z",
   "items": [
     {
-      "id": "item-ella-nb",
-      "itemId": "88123456",
-      "name": "宁波·2026 Ella陈嘉桦It's Me艾拉主意演唱会-宁波站",
-      "city": "宁波",
-      "venue": "宁波奥体中心体育馆",
-      "status": "在售",
-      "saleTime": "即时可购",
-      "sessions": [
-        { "id": "s1", "name": "2026-10-10 周六 19:00", "inStock": true },
-        { "id": "s2", "name": "2026-10-11 周日 19:00", "inStock": true }
-      ],
-      "priceTiers": [
-        { "price": "280", "name": "看台280元", "inStock": false, "tag": "缺货登记" },
-        { "price": "480", "name": "看台480元", "inStock": false, "tag": "缺货登记" },
-        { "price": "680", "name": "看台680元", "inStock": true, "tag": "有票" },
-        { "price": "880", "name": "内场880元", "inStock": true, "tag": "有票" },
-        { "price": "880", "name": "看台880元", "inStock": true, "tag": "有票" },
-        { "price": "980", "name": "内场980元", "inStock": true, "tag": "有票" }
-      ]
-    },
-    {
-      "id": "item-xzq-gy",
-      "itemId": "87541290",
-      "name": "薛之谦“万兽之王”巡回演唱会-贵阳站",
-      "city": "贵阳",
+      "id": "st-1085142029424",
+      "itemId": "1085142029424",
+      "projectId": "240256009",
+      "tourId": "5850",
+      "tourName": "薛之谦“万兽之王”巡回演唱会",
+      "stationName": "贵阳站",
+      "name": "贵阳·薛之谦“万兽之王”巡回演唱会- 贵阳站",
+      "city": "贵阳市",
       "venue": "贵阳奥林匹克体育中心体育场",
-      "status": "预售待开抢",
-      "saleTime": "2026-10-09 17:17:00",
-      "sessions": [
-        { "id": "s1", "name": "2026-10-24 周六 19:00", "inStock": true },
-        { "id": "s2", "name": "2026-10-25 周日 19:00", "inStock": true }
+      "venueAddr": "贵阳市观山湖区云潭南路",
+      "showTime": "2026.10.17-10.25",
+      "stationShowTime": "10.17-10.25",
+      "saleStatus": "预约",
+      "status": "预约",
+      "priceRange": "317-1717",
+      "purchaseLimit": "4",
+      "duration": "约150分钟，仅供参考，最终以现场实际时长为准",
+      "saleTimeHints": [
+        "10月17日-18日 → 10月7日 17:17",
+        "10月24日-25日 → 10月9日 17:17",
+        "10月17日-18日 → 9月30日 10:00",
+        "10月24日-25日 → 10月2日 17:17"
       ],
-      "priceTiers": [
-        { "price": "317", "name": "看台317元", "inStock": true, "tag": "预约热度高" },
-        { "price": "517", "name": "看台517元", "inStock": true, "tag": "有票" },
-        { "price": "717", "name": "看台717元", "inStock": true, "tag": "有票" },
-        { "price": "917", "name": "看台917元", "inStock": true, "tag": "有票" },
-        { "price": "1117", "name": "内场1117元", "inStock": true, "tag": "有票" },
-        { "price": "1317", "name": "内场1317元", "inStock": true, "tag": "有票" },
-        { "price": "1717", "name": "内场1717元", "inStock": true, "tag": "有票" }
+      "fullData": true,
+      "source": "damai-h5-live",
+      "updatedAt": "2026-10-09T05:49:11.413Z",
+      "sessions": [
+        {
+          "id": "p1",
+          "name": "2026-10-17 周六 19:00",
+          "inStock": true
+        },
+        {
+          "id": "p2",
+          "name": "2026-10-18 周日 19:00",
+          "inStock": true
+        },
+        {
+          "id": "p3",
+          "name": "2026-10-24 周六 19:00",
+          "inStock": true
+        },
+        {
+          "id": "p4",
+          "name": "2026-10-25 周日 19:00",
+          "inStock": true
+        }
+      ],
+      "priceTiers": [],
+      "stations": [
+        {
+          "stationName": "贵阳站",
+          "itemId": "1085142029424",
+          "saleStatus": "预约",
+          "showTime": "10.17-10.25",
+          "tourId": "5850",
+          "current": false
+        },
+        {
+          "stationName": "厦门站",
+          "itemId": "1083650546473",
+          "saleStatus": "预约",
+          "showTime": "10.31-11.08",
+          "tourId": "5850",
+          "current": false
+        },
+        {
+          "stationName": "成都站",
+          "itemId": "1076554197906",
+          "saleStatus": "缺货",
+          "showTime": "10.10-10.11",
+          "tourId": "5850",
+          "current": true
+        }
       ]
     },
     {
-      "id": "item-weightlifting-nb",
-      "itemId": "88990011",
-      "name": "2026年世界举重锦标赛",
-      "city": "宁波",
-      "venue": "宁波奥体中心",
-      "status": "在售",
-      "saleTime": "即时可购",
-      "sessions": [
-        { "id": "d27", "name": "10月27日", "inStock": true },
-        { "id": "d28", "name": "10月28日", "inStock": true },
-        { "id": "d29", "name": "10月29日", "inStock": true }
+      "id": "st-1083650546473",
+      "itemId": "1083650546473",
+      "projectId": "240047079",
+      "tourId": "5850",
+      "tourName": "薛之谦“万兽之王”巡回演唱会",
+      "stationName": "厦门站",
+      "name": "厦门·薛之谦“万兽之王”巡回演唱会- 厦门站",
+      "city": "厦门市",
+      "venue": "厦门奥林匹克体育中心-白鹭体育场",
+      "showTime": "2026.10.31-11.08",
+      "stationShowTime": "10.31-11.08",
+      "saleStatus": "预约",
+      "status": "预约",
+      "priceRange": "317-1717",
+      "purchaseLimit": "4",
+      "saleTimeHints": [
+        "10月31日 → 10月8日 17:17",
+        "11月7日 → 10月10日 17:17"
       ],
-      "priceTiers": [
-        { "price": "68", "name": "A票 68元", "inStock": true, "tag": "有票" },
-        { "price": "128", "name": "VIP 128元", "inStock": true, "tag": "有票" }
-      ]
+      "fullData": true,
+      "source": "damai-h5-live",
+      "sessions": [
+        {
+          "id": "p1",
+          "name": "2026-10-31  周六 19:00",
+          "inStock": true
+        },
+        {
+          "id": "p2",
+          "name": "2026-11-01 周日 19:00",
+          "inStock": true
+        },
+        {
+          "id": "p3",
+          "name": "2026-11-07 周六 19:00",
+          "inStock": true
+        },
+        {
+          "id": "p4",
+          "name": "2026-11-08 周日 19:00",
+          "inStock": true
+        }
+      ],
+      "priceTiers": [],
+      "updatedAt": "2026-10-09T05:49:11.413Z",
+      "stations": [
+        {
+          "stationName": "贵阳站",
+          "itemId": "1085142029424",
+          "saleStatus": "预约",
+          "showTime": "10.17-10.25",
+          "tourId": "5850",
+          "current": false
+        },
+        {
+          "stationName": "厦门站",
+          "itemId": "1083650546473",
+          "saleStatus": "预约",
+          "showTime": "10.31-11.08",
+          "tourId": "5850",
+          "current": false
+        },
+        {
+          "stationName": "成都站",
+          "itemId": "1076554197906",
+          "saleStatus": "缺货",
+          "showTime": "10.10-10.11",
+          "tourId": "5850",
+          "current": true
+        }
+      ],
+      "venueAddr": "福建省厦门市翔安区鸿江道998号",
+      "duration": "约150分钟（以现场为准）"
+    },
+    {
+      "id": "st-1076554197906",
+      "itemId": "1076554197906",
+      "projectId": "239787001",
+      "tourId": "5850",
+      "tourName": "薛之谦“万兽之王”巡回演唱会",
+      "stationName": "成都站",
+      "name": "成都·薛之谦“万兽之王”巡回演唱会- 成都站",
+      "city": "成都市",
+      "venue": "成都东安湖体育公园主体育场",
+      "showTime": "2026.10.10-10.11",
+      "stationShowTime": "10.10-10.11",
+      "saleStatus": "缺货",
+      "status": "缺货",
+      "priceRange": "317-1717",
+      "purchaseLimit": "4",
+      "saleTimeHints": [],
+      "fullData": true,
+      "source": "damai-h5-live",
+      "sessions": [
+        {
+          "id": "p1",
+          "name": "2026-10-10 周六 19:00",
+          "inStock": true
+        },
+        {
+          "id": "p2",
+          "name": "2026-10-11 周日 19:00",
+          "inStock": true
+        }
+      ],
+      "priceTiers": [],
+      "updatedAt": "2026-10-09T05:49:11.413Z",
+      "stations": [
+        {
+          "stationName": "贵阳站",
+          "itemId": "1085142029424",
+          "saleStatus": "预约",
+          "showTime": "10.17-10.25",
+          "tourId": "5850",
+          "current": false
+        },
+        {
+          "stationName": "厦门站",
+          "itemId": "1083650546473",
+          "saleStatus": "预约",
+          "showTime": "10.31-11.08",
+          "tourId": "5850",
+          "current": false
+        },
+        {
+          "stationName": "成都站",
+          "itemId": "1076554197906",
+          "saleStatus": "缺货",
+          "showTime": "10.10-10.11",
+          "tourId": "5850",
+          "current": true
+        }
+      ],
+      "venueAddr": "四川省成都市龙泉驿区体育公园路16号",
+      "duration": "约150分钟（以现场为准）"
     }
   ]
 }

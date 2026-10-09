@@ -689,16 +689,15 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/probe' && req.method === 'POST') {
     try {
       const body = await readJsonBody(req);
-      const targetId = body.itemId || body.keyword || '';
-      if (!targetId) return sendJson(res, 400, { error: '请提供演出 ID 或关键词' });
-      const { probeItem, loadCatalog, saveCatalog } = await import('../platforms/damai/probe-damai.mjs');
+      const targetId = String(body.itemId || body.keyword || '').trim();
+      if (!targetId) return sendJson(res, 400, { error: '请提供演出 ID 或链接' });
+      const { probeItem, loadCatalog, saveCatalog, mergeIntoCatalog } = await import('../platforms/damai/probe-damai.mjs');
       const item = await probeItem(targetId);
       if (item) {
         const cat = loadCatalog();
-        const idx = cat.items.findIndex(i => i.id === item.id || i.itemId === item.itemId);
-        if (idx >= 0) cat.items[idx] = item; else cat.items.push(item);
+        const touched = mergeIntoCatalog(cat, item);
         saveCatalog(cat);
-        return sendJson(res, 200, { status: 'ok', item, catalog: cat });
+        return sendJson(res, 200, { status: 'ok', item, touched, catalog: cat });
       }
       return sendJson(res, 404, { error: '未探测到演出信息' });
     } catch (e) {
