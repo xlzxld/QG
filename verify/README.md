@@ -1,7 +1,7 @@
 # verify —— 验证与探针区
 
 > 2026-10-08 结构重组：本目录 = 验证区。
-> - 根目录 = **活跃回归工具**：`verify-console-settings.mjs`（控制台面板冒烟）／`verify-list-gate.mjs`、`verify-spa-gate.mjs`（白名单闸门）／`verify-login-detect.mjs`、`verify-login-cdp.mjs`（登录判据）／`verify-submit-entry.mjs`（提交入口真机）／`verify-picker-refresh.mjs`（采集下拉栏，净零）／`verify-3plans-pick.mjs`（三方案逻辑回归）／`bench-internal-chain.mjs`（内部链路基准）／`collect-rush-evidence.mjs`（复盘取证）／`sample_windows.py`
+> - 根目录 = **活跃回归工具**：`verify-console-settings.mjs`（控制台面板冒烟）／`verify-list-gate.mjs`、`verify-spa-gate.mjs`（白名单闸门）／`verify-login-detect.mjs`、`verify-login-cdp.mjs`（登录判据）／`verify-submit-entry.mjs`（提交入口真机）／`verify-picker-refresh.mjs`（采集下拉栏，净零）／`verify-3plans-pick.mjs`（三方案逻辑回归）／`verify-damai-console-ui.mjs`（大麦控制台巡回站下拉）／`verify-grab-prefill-refresh.mjs`（链接解析后关键词/开抢时间自动重填，真中枢+真浏览器）／`verify-grab-time-guard.mjs`（开抢时间闸门：12/24 小时制陷阱 + 已过去/剩余不足分开提示，真中枢+真浏览器）／`verify-grab-console-v2.mjs`（2026-10-10 抢购卡片改版：测试按钮/盲点开关/四节奏参数下发报文/全面自检，真中枢+真浏览器）／`bench-internal-chain.mjs`（内部链路基准）／`collect-rush-evidence.mjs`（复盘取证）／`sample_windows.py`
 > - `history/` = 冻结的一次性探针（不再保证可跑；下方文档描述的 `probe.mjs` 框架在这里）
 > - `tmp/` = Chrome 临时 profile（不入库）；`output/`、`evidence/` = 产物与证据（不入库）
 > - URL 约定：桥接 `/` = 工作台外壳；控制台 = `/console-huawei`

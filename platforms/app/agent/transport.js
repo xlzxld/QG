@@ -10,6 +10,16 @@
  */
 
 var Transport = {
+    // ★ 端侧脚本版本 —— 唯一权威来源 (hello/自检上报给中枢; 中枢据此判断"手机脚本是否最新" + phone_op 能力闸门)
+    //   1.3.0: 新增 phone_op verify_script (手机本地自检"我是不是最新") ; 1.1.0 起支持 phone_op (中枢闸门 ≥1.1.0)
+    //   1.4.0: grab 改版 —— 双读/盲点/弹窗与看护节奏四参数 + 到点盲点开关 (USB/WiFi 通用) ; 移除彩排/无脑高频
+    //   1.5.0: 删无障碍手势兜底 ; 弹窗/验证码现场取证 ; 日志人话化
+    //   1.5.1: 按用户口径撤掉"页面被点走就暂停判定"的前置闸门 (出手判定保持无条件执行)
+    //   1.5.2: 停止脚本改为"手机退场前回报中枢 + 中枢复探"; 控制指令抽出 applyControl, 长轮询也能秒级收到停止
+    //   1.5.3: hello(上线注册) 也上报脚本体积 —— 换引擎后中枢能立刻确认新版生效
+    //   1.5.4: 心跳补报版本号 + 中枢不认识本机时自动补发 hello (修"中枢重启后手机版本号丢失→被误判成旧脚本")
+    //   1.5.5: 中枢不可达熔断 (hubReachable) —— 上报/ADB 点击失败不再阻塞抢购热路径, 一律回落本地 Shizuku
+    AGENT_VERSION: "1.5.5",
     hubUrls: [
         "http://127.0.0.1:3120"      // USB (adb reverse) 首选: 最稳定
         // 局域网地址：由 hub.conf（PC 部署时写入）追加在后面（2026-10-09: 修掉"局域网被插到队首、
@@ -37,6 +47,37 @@ var Transport = {
      *   口径: **USB(ADB) 优先 → 无 USB 时立刻转本地能力**, 不等超时。
      *   判据: 走的就是 USB 反向隧道 → 必有 adb; 否则看中枢心跳自报的 channel.usb。
      */
+    /* ===== 中枢可达性熔断 (2026-10-10) =====
+     * 抢购的判定与出手都在手机本地闭环 —— 中枢只是"看客 + 可选加速器"。
+     * 所以中枢不可达时: 上报一律降级为"尽力而为", 连发失败 N 次就熔断一段时间, 期间直接丢弃,
+     * 绝不让一条日志阻塞盯梢循环 (那会直接毁掉出手时机)。 */
+    _hubFails: 0,
+    _hubDownUntil: 0,
+    HUB_FAIL_LIMIT: 3,
+    HUB_DOWN_COOLDOWN_MS: 15000,
+    hubReachable: function() {
+        var t = 0;
+        try { t = java.lang.System.currentTimeMillis(); } catch (e) { t = Date.now(); }
+        if (this._hubDownUntil && t < this._hubDownUntil) return false;
+        return true;
+    },
+    noteHubFail: function() {
+        var t = 0;
+        try { t = java.lang.System.currentTimeMillis(); } catch (e) { t = Date.now(); }
+        this._hubFails = (this._hubFails || 0) + 1;
+        if (this._hubFails >= this.HUB_FAIL_LIMIT) {
+            if (!this._hubDownUntil) {
+                console.warn("【中枢熔断】连续 " + this._hubFails + " 次上报失败 → 暂停上报 " + (this.HUB_DOWN_COOLDOWN_MS / 1000) + " 秒 (抢购照常在手机本地跑, 不受影响)");
+            }
+            this._hubDownUntil = t + this.HUB_DOWN_COOLDOWN_MS;
+        }
+    },
+    noteHubOk: function() {
+        if (this._hubFails || this._hubDownUntil) console.log("【中枢恢复】上报已恢复正常");
+        this._hubFails = 0;
+        this._hubDownUntil = 0;
+    },
+
     remoteUsb: function() {
         if (this.activeHubUrl === this.USB_URL) return true;
         // 正在走局域网地址 = 手机必然不在 USB 反向隧道上 → 中枢的 ADB 注入轮不到这台手机, 立即转本地能力
@@ -239,6 +280,58 @@ var Transport = {
     },
 
     /**
+     * 统一处理中枢下发的控制指令 (两条下行通道共用: 心跳响应 + 长轮询响应)
+     * 2026-10-10 抽出: 以前只有心跳能带指令 → 手机空闲挂在长轮询里时, 停止/更新要等最多 4 秒。
+     */
+    applyControl: function(ctl) {
+        if (!ctl) return;
+        if (ctl.cancelTaskId) {
+            if (this.cancelRequestedTaskId !== ctl.cancelTaskId) {
+                console.warn("【终止指令】收到中枢取消请求: " + ctl.cancelTaskId);
+            }
+            this.cancelRequestedTaskId = ctl.cancelTaskId;
+        }
+        // 停止整个脚本 (2026-10-09: 电脑端一键让手机 Agent 下线, 不用碰手机)
+        if (ctl.stopAgent && !this.stopRequested) {
+            this.stopRequested = true;
+            console.warn("【停止指令】收到中枢「停止脚本」请求, 本轮心跳后退出");
+        }
+        // 局域网自更新 (2026-10-09: 免数据线更新手机脚本)
+        if (ctl.selfUpdate && !this.updateRequested) {
+            this.updateRequested = true;
+            console.warn("【自更新】收到中枢「更新脚本」请求, 下次 tick 执行");
+        }
+        // USB 推送后的自重启 (2026-10-10: Agent 自己换引擎, 中枢绝不 force-stop 应用 → 不碰无障碍)
+        if (ctl.restartAgent && !this.restartRequested) {
+            this.restartRequested = true;
+            console.warn("【自重启】收到中枢「重启引擎」请求, 下次 tick 执行");
+        }
+    },
+
+    /**
+     * ★ 2026-10-10 新增「退场告知」: 脚本真退之前，最后给中枢发一条"我要走了"。
+     * 中枢收到就**立刻**把设备标成已停止 (不用再等 20 秒心跳超时), 并据此开始复探。
+     * 发不出去也不影响退出 —— 中枢那边还有心跳超时兜底。
+     */
+    notifyStopping: function(reason) {
+        if (!this.activeHubUrl) return false;
+        try {
+            var res = http.postJson(this.activeHubUrl + "/api/device/stopping", {
+                deviceId: this.deviceId,
+                reason: reason || "收到中枢停止指令",
+                version: this.AGENT_VERSION,
+                ts: java.lang.System.currentTimeMillis()
+            }, { timeout: 3000 });
+            var ok = !!(res && res.statusCode === 200);
+            console.log("【退场告知】" + (ok ? "已上报中枢" : ("上报失败: HTTP " + (res && res.statusCode))));
+            return ok;
+        } catch (e) {
+            console.warn("【退场告知】上报异常(不影响退出): " + (e ? (e.message || e) : "?"));
+            return false;
+        }
+    },
+
+    /**
      * 设备注册握手
      */
     hello: function() {
@@ -258,12 +351,13 @@ var Transport = {
             } catch (eV) {}
             var payload = {
                 deviceId: this.deviceId,
-                agentVersion: "1.2.0",   // 1.2.0: 修复 unknown_mode 上报/发件箱/统一锚点默认; 1.1.0 起支持 phone_op (中枢版本闸门 ≥1.1.0)
+                agentVersion: this.AGENT_VERSION,   // 见文件头 AGENT_VERSION (中枢/控制台据此判断手机脚本是否最新)
                 autoX: runtimeVer,       // 实际运行时版本 (此前写死 7.2.4 是错误信息)
                 screen: [sw, sh],
                 accessibility: isAcc,
                 battery: bat,
                 shizuku: this.shizukuState(),   // 手机自主点击能力 (本地 input 注入, 免 PC)
+                scriptSize: this.scriptSize(),  // ★ 2026-10-10: 上线时就报体积 —— 换引擎后中枢能**立刻**确认新版生效 (不用再等下一次心跳)
                 bootAt: java.lang.System.currentTimeMillis()
             };
             var res = http.postJson(this.activeHubUrl + "/api/device/hello", payload, { timeout: 4000 });
@@ -306,6 +400,9 @@ var Transport = {
                 battery: bat,
                 charging: chg,
                 accessibility: isAcc,
+                // ★ 2026-10-10: 心跳也带上版本号 —— 中枢重启后它的设备表是空的, 只靠"脚本启动时那一次 hello"
+                //   会把版本号弄丢, 控制台就误报"手机端版本号未上报（旧脚本）"。
+                agentVersion: this.AGENT_VERSION,
                 shizuku: this.shizukuState(),   // 状态可能变化 (服务被杀/重启失效), 心跳随行
                 scriptSize: this.scriptSize(),   // 本脚本体积: 中枢据此判断"手机脚本是否最新"
                 ts: java.lang.System.currentTimeMillis()
@@ -323,30 +420,13 @@ var Transport = {
                         this.hubOffsetMs = Number(hbJson.serverTime) - (hbT0 + Math.floor(this.hubRttMs / 2));
                     }
                     if (hbJson && hbJson.channel) this.hubChannel = hbJson.channel;   // ★ 通道自报: 决定 ADB 类操作走中枢还是走本地
-                    if (hbJson && hbJson.control) {
-                        var ctl = hbJson.control;
-                        if (ctl.cancelTaskId) {
-                            if (this.cancelRequestedTaskId !== ctl.cancelTaskId) {
-                                console.warn("【终止指令】收到中枢取消请求: " + ctl.cancelTaskId);
-                            }
-                            this.cancelRequestedTaskId = ctl.cancelTaskId;
-                        }
-                        // 停止整个脚本 (2026-10-09: 电脑端一键让手机 Agent 下线, 不用碰手机)
-                        if (ctl.stopAgent && !this.stopRequested) {
-                            this.stopRequested = true;
-                            console.warn("【停止指令】收到中枢「停止脚本」请求, 本轮心跳后退出");
-                        }
-                        // 局域网自更新 (2026-10-09: 免数据线更新手机脚本)
-                        if (ctl.selfUpdate && !this.updateRequested) {
-                            this.updateRequested = true;
-                            console.warn("【自更新】收到中枢「更新脚本」请求, 下次 tick 执行");
-                        }
-                        // USB 推送后的自重启 (2026-10-10: Agent 自己换引擎, 中枢绝不 force-stop 应用 → 不碰无障碍)
-                        if (ctl.restartAgent && !this.restartRequested) {
-                            this.restartRequested = true;
-                            console.warn("【自重启】收到中枢「重启引擎」请求, 下次 tick 执行");
-                        }
+                    // ★ 2026-10-10: 中枢说"我不认识你这台设备" (它刚重启 / 设备表是空的) → 立刻补发一次 hello,
+                    //   把分辨率/运行时/上线时间等"只在注册时上报"的信息补回去。否则中枢重启后那些字段一直是空的。
+                    if (hbJson && hbJson.registered === false) {
+                        console.warn("【重新注册】中枢不认识这台设备 (它刚重启?) → 立刻补发 hello");
+                        try { this.hello(); } catch (eRS) {}
                     }
+                    if (hbJson && hbJson.control) this.applyControl(hbJson.control);
                 } catch (eH) {
                     // 解析失败不影响心跳本身
                 }
@@ -402,6 +482,10 @@ var Transport = {
                             if (typeof Transport._pollCallback === "function") {
                                 Transport._pollCallback(json.task);
                             }
+                        } else if (json.status === "control" && json.control) {
+                            // ★ 2026-10-10: 中枢把控制指令直接塞进长轮询响应 —— 手机闲着挂在轮询上也能**秒级**收到"停止脚本"
+                            console.log("【长轮询收到指令】" + JSON.stringify(json.control));
+                            Transport.applyControl(json.control);
                         }
                     } else if (res && res.body) {
                         try { res.body.close(); } catch (e) {}
@@ -434,6 +518,10 @@ var Transport = {
      * 上报事件
      */
     sendEvent: function(taskId, eventName, detail) {
+        // ★ 2026-10-10 (用户口径): 「开售判定与出手必须手机本地闭环」—— 中枢不可达时上报是**尽力而为**,
+        //   绝不能让一条日志把抢购热路径卡住 (以前失败要干等 3 秒, 正好卡在盯梢循环里会毁掉出手时机)。
+        //   连发失败 3 次 → 熔断 15 秒, 期间直接丢弃; 窗口过后再试一次, 成功即恢复。
+        if (!this.hubReachable()) return;
         if (!this.activeHubUrl) this.detectHub();
         if (!this.deviceId) this.deviceId = "phone-vivo";
         if (!this.activeHubUrl) return;
@@ -445,12 +533,16 @@ var Transport = {
                 detail: detail || {},
                 ts: java.lang.System.currentTimeMillis()
             };
-            var res = http.postJson(this.activeHubUrl + "/api/device/event", payload, { timeout: 3000 });
+            // 已经在失败中 → 用更短的超时 (600ms), 别让热路径反复干等
+            var to = (this._hubFails || 0) > 0 ? 600 : 2500;
+            var res = http.postJson(this.activeHubUrl + "/api/device/event", payload, { timeout: to });
+            if (res && res.statusCode === 200) this.noteHubOk(); else this.noteHubFail();
             if (res && res.body) {
                 try { res.body.close(); } catch (e) {}
             }
         } catch (e) {
             console.warn("上报事件失败: " + e.message);
+            this.noteHubFail();
         }
     },
 
@@ -459,14 +551,18 @@ var Transport = {
      * 实测大麦 SKU 票档滚轮等自绘控件会无视 dispatchGesture 但响应 adb input)
      */
     adbTap: function(x, y, timeoutMs) {
+        if (!this.hubReachable()) return false;   // 中枢已熔断 → 直接交本地 Shizuku, 别让每一发都去撞墙
         if (!this.activeHubUrl) this.detectHub();
         if (!this.activeHubUrl) return false;
-        // WiFi 通道: 中枢没有 ADB —— 直接判失败转本地手势, 不让首击的 3 发重试白等 ~2.4s
+        // WiFi 通道: 中枢没有 ADB —— 直接判失败转本地注入, 不让首击的重试白等
         if (!this.remoteUsb()) return false;
         try {
             var res = http.postJson(this.activeHubUrl + "/api/adb/tap", { x: Math.round(x), y: Math.round(y) }, { timeout: timeoutMs || 2500 });
-            return res && res.statusCode === 200;
+            var ok = !!(res && res.statusCode === 200);
+            if (ok) this.noteHubOk(); else this.noteHubFail();
+            return ok;
         } catch (e) {
+            this.noteHubFail();
             return false;
         }
     },
@@ -716,6 +812,7 @@ var Transport = {
      * @param {{x:number,y:number,count?:number,gapMs?:number,jitter?:number,pressMs?:number}} opts
      */
     adbTapBurst: function(opts) {
+        if (!this.hubReachable()) return false;   // 中枢已熔断 → 走本地
         if (!this.activeHubUrl) this.detectHub();
         if (!this.activeHubUrl) return false;
         if (!this.remoteUsb()) return false;   // WiFi: 中枢无法注入连发 tap
@@ -728,8 +825,11 @@ var Transport = {
                 jitter: opts.jitter || 0,
                 pressMs: opts.pressMs || 0
             }, { timeout: opts.timeoutMs || 2500 });
-            return !!(res && res.statusCode === 200);
+            var ok = !!(res && res.statusCode === 200);
+            if (ok) this.noteHubOk(); else this.noteHubFail();
+            return ok;
         } catch (e) {
+            this.noteHubFail();
             return false;
         }
     },

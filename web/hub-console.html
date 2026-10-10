@@ -229,6 +229,14 @@
   .connect-steps .cs.ok::before { content: "✅"; }
   .connect-steps .cs.bad::before { content: "❌"; }
 
+  /* ============ 全面自检结果列表 ============ */
+  #grab-check-steps { font-size: 12px; margin-top: 8px; }
+  #grab-check-steps .cs { padding: 3px 0; line-height: 1.65; }
+  #grab-check-steps .cs.ok { color: var(--ok); }
+  #grab-check-steps .cs.bad { color: var(--err); }
+  #grab-check-steps .cs.warn { color: var(--warn); }
+  #grab-check-steps .cs.chain { color: var(--text); background: var(--panel3); border: 1px solid var(--line2); border-left: 3px solid var(--accent); padding: 10px 12px; border-radius: 8px; margin-top: 8px; }
+
   /* ============ details/参数区 ============ */
   details.params { border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; margin: 8px 0 12px; background: rgba(255,255,255,.012); }
   details.params summary { cursor: pointer; padding: 9px 0; font-size: 12px; color: var(--muted); font-weight: 700; list-style: none; }
@@ -274,9 +282,11 @@
         <div class="btnrow">
           <button class="btn ok" id="btn-connect" onclick="connectDevice()">⚡ 一键连接设备 (全自动)</button>
           <button class="btn" id="btn-update" onclick="updateScript()">📦 更新手机脚本并重启 Agent</button>
+          <button class="btn" id="btn-verify-script" onclick="verifyPhoneScript()">🔍 验证手机脚本是否最新</button>
           <button class="btn danger" id="btn-stop-agent" onclick="stopAgent()">🛑 停止手机脚本</button>
         </div>
         <div class="connect-steps" id="connect-steps"></div>
+        <div class="connect-steps" id="verify-steps"></div>
         <div class="hint" style="margin-top:8px">一键连接 = USB 检测 → 端口代理 → 写入通信配置 → 推送脚本与省市区数据 → 拉起 AutoJs6 运行 → 验证上线。全程无需操作手机；Agent 掉线后中枢每分钟自动重连一次（自愈）。</div>
         <div class="hint" id="chan-hint">通道判定中…</div>
       </div>
@@ -300,39 +310,42 @@
         </div>
         <div class="frow">
           <div><label>页面核对关键词 (逗号分隔)</label><input id="grab-keywords" placeholder="薛之谦,贵阳"></div>
-          <div><label>执行方式</label>
-            <select id="grab-exec" onchange="onGrabExecChange()">
-              <option value="live" selected>🔴 正式开抢 (变化→瞬间点击→连点到提交)</option>
-              <option value="rehearsal">🟢 彩排 (到点真打: 首击+连点, 不打提交)</option>
-              <option value="blind">⚡ 无脑高频 (不判跳转, 直接连点)</option>
-            </select>
-          </div>
+          <div id="grab-time-wrap"><label>开抢时间</label><input id="grab-time" placeholder="2026-10-10 13:30:00" oninput="updateGrabTimeHint()"></div>
         </div>
         <div class="frow">
-          <div id="grab-time-wrap"><label>开抢时间</label><input id="grab-time" placeholder="2026-10-10 17:17:00"></div>
-          <div id="grab-reh-wrap" style="display:none"><label>彩排时间 (仅彩排模式)</label><input id="grab-reh-time" placeholder="2026-10-10 16:45:00"></div>
           <div><label>进入高频提前量 (毫秒)</label><input id="grab-lead" type="number" value="1000" min="300" max="10000"></div>
+          <div><label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:22px">
+            <input type="checkbox" id="grab-blindfire" style="width:auto" onchange="updateGrabBlindHint()">
+            ⚡ 到点盲点一发 (默认关)
+          </label>
+            <div class="hint" id="grab-blind-hint">开: 到开抢时刻若还没检测到页面变化, 先盲打一发保底 (USB 数据线 / Wi-Fi 都支持), 打完继续盯梢; 关: 只等页面变化才出手。</div>
+          </div>
         </div>
+        <div class="hint" id="grab-time-parsed" style="margin-top:-4px"></div>
         <div class="hint" id="grab-rate-hint"></div>
         <details class="params" open>
           <summary>⚙️ 点击参数（可直接调；收起也照样生效）</summary>
           <div class="frow" style="margin-top:10px">
-            <div><label>连点节拍 最少 (几下/秒)</label><input id="grab-rate-min" type="number" value="8" min="1" max="20" oninput="updateGrabRate()"></div>
-            <div><label>连点节拍 最多 (几下/秒)</label><input id="grab-rate-max" type="number" value="12" min="1" max="20" oninput="updateGrabRate()"></div>
+            <div><label>连点节拍 最少 (几下/秒)</label><input id="grab-rate-min" type="number" value="8" min="1" max="50" oninput="updateGrabRate()"></div>
+            <div><label>连点节拍 最多 (几下/秒)</label><input id="grab-rate-max" type="number" value="12" min="1" max="50" oninput="updateGrabRate()"></div>
           </div>
           <div class="frow">
             <div style="grid-column:1/-1"><label>系统自动推算 (间隔 / 按压 / 真实节拍)</label><div class="hint" id="grab-cadence-hint">—</div></div>
           </div>
           <div class="frow">
-            <div><label>落点抖动 X 轴 上限 (px)</label><input id="grab-jitter-x" type="number" value="3" min="0" max="100"></div>
-            <div><label>落点抖动 Y 轴 上限 (px)</label><input id="grab-jitter-y" type="number" value="3" min="0" max="40"></div>
+            <div style="grid-column:1/-1"><div class="hint">节拍完全由你填的上下限决定 —— 系统只负责反解出<b>间隔 / 按压 / 真实节拍</b>，不设「防超频风控」硬上限。真实节拍还受通道往返影响，以「系统自动推算」显示为准。</div></div>
           </div>
           <div class="frow">
-            <div style="grid-column:1/-1"><label>抖动规则</label><div class="hint">每次点击都在 <b>-上限 ~ +上限</b> 之间随机（填 9 → -9~+9），<b>XY 各自独立、两轴同时生效</b>；填 0 = 该轴不抖。几何上限 X±100 / Y±40，推荐 X 20~40 / Y 8~16。</div></div>
+            <div><label>落点抖动 X 轴 上限 (px)</label><input id="grab-jitter-x" type="number" value="30" min="0" max="100"></div>
+            <div><label>落点抖动 Y 轴 上限 (px)</label><input id="grab-jitter-y" type="number" value="12" min="0" max="40"></div>
           </div>
           <div class="frow">
-            <div><label>首击重试次数 (默认 1 = 不重试)</label><input id="grab-ft-tries" type="number" value="1" min="1" max="5"></div>
+            <div style="grid-column:1/-1"><label>抖动规则</label><div class="hint">每次点击都在 <b>-上限 ~ +上限</b> 之间随机（填 9 → -9~+9），<b>XY 各自独立、两轴同时生效</b>；填 0 = 该轴不抖。几何上限 X±100 / Y±40，推荐 X 20~40 / Y 8~16，默认 X 30 / Y 12。</div></div>
+          </div>
+          <div class="frow">
+            <div><label>首击最多发数 (1 = 只发一次, 不重试)</label><input id="grab-ft-tries" type="number" value="1" min="1" max="5"></div>
             <div><label>首击单发超时 (ms, 超过即走 Shizuku)</label><input id="grab-ft-timeout" type="number" value="50" min="30" max="3000"></div>
+            <div style="grid-column:1/-1"><div class="hint">首击 = 检测到开售变化后的第一击，走 PC-ADB(USB)。填 1 发：打不通就直接转手机本地 Shizuku 注入（不干等）；填多发：第 1 发用「单发超时」，后续每发多加 200ms 再试。单发超时正常往返只需 3~8ms，填 30~3000 都有效。</div></div>
           </div>
           <div class="frow">
             <div><label>连点链总时长 (ms)</label><input id="grab-chain-ms" type="number" value="12000" min="3000" max="60000"></div>
@@ -347,8 +360,16 @@
               <div class="hint">用深链重开商品页让状态变新，刷新后自动重新核对+重新锚定；刷新期间不做判定。解决“页面开着很久、开售时状态还是旧的”的问题。</div>
             </div>
           </div>
-          <div class="frow" id="grab-reh-ms-wrap" style="display:none">
-            <div><label>彩排连点时长 (ms)</label><input id="grab-reh-ms" type="number" value="4000" min="1000" max="60000"></div>
+          <div class="frow">
+            <div><label>双读确认延迟 (ms)</label><input id="grab-double-read" type="number" value="50" min="0" max="500"></div>
+            <div><label>弹窗处置 起始延迟 (ms, 首击后)</label><input id="grab-popup-delay" type="number" value="300" min="0" max="3000"></div>
+          </div>
+          <div class="frow">
+            <div><label>「继续尝试」探测间隔 (ms)</label><input id="grab-popup-poll" type="number" value="50" min="10" max="1000"></div>
+            <div><label>终态看护间隔 (ms)</label><input id="grab-watch-poll" type="number" value="400" min="50" max="5000"></div>
+          </div>
+          <div class="frow">
+            <div style="grid-column:1/-1"><div class="hint">① <b>双读确认</b>：发现变化后隔这么久再读一次，两次都变才出手（防一次读异常误触）—— 你可自己测最佳值（越小越快、越大越稳）。② <b>弹窗处置</b>：首击后多久开始探「继续尝试」弹窗、多久探一次。③ <b>终态看护</b>：多久看一眼支付页/售罄/滑块/页面漂移。</div></div>
           </div>
           <div class="frow">
             <div><label>主按钮坐标 (留空 = 统一锚点)</label><input id="grab-btn-xy" placeholder="841,2310"></div>
@@ -362,12 +383,16 @@
         </details>
         <div class="btnrow">
           <button class="btn" onclick="grabOpenItem()">📲 打开商品页</button>
-          <button class="btn primary" onclick="grabArm()">🚀 抢购</button>
+          <button class="btn ok" onclick="grabArm(true)" title="和「抢购」同一条链路, 但按你填的开抢时间模拟测试: 到点直接出手 + 跑完整连点链 (不等页面变化), 用来提前验证整条链">🧪 测试</button>
+          <button class="btn primary" onclick="grabArm(false)">🚀 抢购</button>
           <button class="btn danger" style="flex:none" onclick="grabDisarm()">⛔ 停止</button>
-          <button class="btn" style="flex:none" onclick="resetGrabParams()" title="清空本机保存的参数, 恢复页面默认值">↺ 清空已存</button>
+          <button class="btn" style="flex:none" onclick="grabFullCheck()" title="开抢前把整条链路体检一遍">🩺 全面自检</button>
+          <button class="btn" style="flex:none" onclick="exportRunRecord()" title="把这次抢购的全程记录（手机每一步 + 你的操作）导成一份可读文件，存到 data/grab/digest/">📄 导出本次记录</button>
+          <button class="btn" style="flex:none" onclick="saveGrabParams()" title="把当前这一份抢购参数原样保存到本机浏览器（不自动保存、不覆盖成默认值）">💾 保存参数</button>
         </div>
-        <div class="hint" id="grab-save-hint">参数会自动保存在本机浏览器（换 IP 打开控制台 = 换了一份存储）</div>
-        <div class="hint">抢购 = 把这个任务下发给手机, 到点自动开抢；停止 = 立刻终止本次抢购（等同「最近任务」里的 ⛔ 终止，含撤销已预置的击发）。</div>
+        <div class="hint" id="grab-save-hint">点「保存参数」把当前参数存到本机浏览器（不点就不保存；换 IP 打开控制台 = 换一份存储）</div>
+        <div id="grab-check-steps" style="display:none;margin-top:8px"></div>
+        <div class="hint">抢购 = 把这个任务下发给手机, 到点自动开抢；测试 = 同一条链, 但按你填的时间模拟（到点直接出手，不等页面变化），用来提前验证；停止 = 立刻终止本次抢购。</div>
       </div>
 
       <!-- ③ 目标演出 -->
@@ -422,6 +447,7 @@
           <button class="btn" onclick="saveConfig()">💾 保存配置</button>
         </div>
       </div>
+
 
       <!-- ④ 观演人与收货地址 -->
       <div class="card">
@@ -564,11 +590,14 @@ async function api(path, opts) {
  *       只有 WiFi → 依旧可用的: 打开商品页 / 自测 / 抢购 / 停止 / 更新脚本
  *                  (手机端用本地 deep-link + Shizuku 自主点击, 中枢下发 phone_op 任务);
  *       只有 USB 才行的: 中枢预置击发 / adb shell 保活优化 / 界面树+截图取证。
+ * ★ 2026-10-10: **点击不再有无障碍手势兜底** (对自绘按钮无效, 已删) ——
+ *   WiFi 通道下没开 Shizuku 就是点不动, 控制台会如实说明, 不伪造成功。
  */
-let chanState = { mode: 'none', usb: false, wifi: false };
+let chanState = { mode: 'none', usb: false, wifi: false, shizuku: 'unknown' };
 
 function applyChannel(ch, adbFallback) {
-  chanState = ch || { mode: adbFallback ? 'usb' : 'none', usb: !!adbFallback, wifi: false };
+  chanState = ch || { mode: adbFallback ? 'usb' : 'none', usb: !!adbFallback, wifi: false, shizuku: 'unknown' };
+  if (chanState.shizuku === undefined) chanState.shizuku = 'unknown';
   const m = chanState.mode;
   const badge = $('chan-badge');
   if (badge) {
@@ -577,12 +606,17 @@ function applyChannel(ch, adbFallback) {
   }
   const hint = $('chan-hint');
   if (hint) {
+    const sz = chanState.shizuku;
+    const szText = sz === 'active' ? 'Shizuku ✓ 已开' : (sz === 'none' ? 'Shizuku ✗ 没装/读不到' : 'Shizuku ✗ ' + (sz === 'inactive' ? '没打开' : '状态未知'));
     hint.textContent = m === 'usb'
-      ? '通道: USB (ADB) — 全部能力可用（含中枢预置击发 / 保活优化）'
+      ? '通道: USB (ADB) — 全部能力可用（点击走数据线, 最快最稳；含中枢预置击发 / 保活优化）· 手机侧 ' + szText
       : m === 'wifi'
-        ? '通道: Wi-Fi — 可用（打开商品页 / 自测 / 抢购 / 停止 / 更新脚本）；点击走手机本地 Shizuku 注入（未启用则退无障碍手势，大麦自绘按钮可能无效）；中枢预置击发与保活优化需插数据线'
+        ? '通道: Wi-Fi — 可用（打开商品页 / 自测 / 抢购 / 停止 / 更新脚本）；点击走手机本地 Shizuku 注入 · 手机侧 '
+          + (sz === 'active'
+            ? 'Shizuku ✓ 已开（能点出去）'
+            : 'Shizuku ✗ ' + (sz === 'inactive' ? '没打开' : '没装/读不到') + ' —— **不打开就一个都点不出去**：先启动 Shizuku App，再在 AutoJs6 抽屉里打开 Shizuku 开关')
         : '通道: 未连接 — 插 USB 数据线，或在同一 Wi-Fi 下启动手机脚本';
-    hint.style.color = m === 'wifi' ? 'var(--warn)' : '';
+    hint.style.color = (m === 'wifi' && sz !== 'active') ? 'var(--err)' : (m === 'wifi' ? 'var(--warn)' : '');
   }
   // 保活优化 = adb shell 独占: WiFi 下按钮置灰并说明, 不点了才报错
   const usbOnly = m !== 'usb';
@@ -641,15 +675,18 @@ async function refreshDevices(manual) {
       const ch = $('grab-calib-hint');
       if (ch) ch.textContent = `标定分辨率：${targetScreen.w}×${targetScreen.h}（统一锚点按它标定, 换设备自动按比例换算）`;
     }
-    // 手机脚本体积对账（判断"手机上的脚本是不是电脑上这一版"）
+    // 手机脚本体积对账（判断"手机上的脚本是不是电脑上这一版"）—— 口径与「🔍 验证手机脚本是否最新」一致
     const sh = $('agent-script-hint');
     if (sh) {
       const dev = list.find(d => !d.isAdbOnly && d.isAlive);
       const hubSz = Number(data.hubAgentScriptSize || 0);
       const devSz = dev && Number(dev.scriptSize || 0);
+      const kb = n => (n / 1024).toFixed(1) + ' KB';
       if (!devSz) sh.textContent = '手机脚本体积：未上报（旧版脚本 / 刚重启 / 设备离线）';
-      else if (hubSz && Math.abs(devSz - hubSz) < 2048) sh.innerHTML = '手机脚本 <b>已是电脑上最新版</b>（' + (devSz / 1024).toFixed(1) + ' KB · Agent v' + esc(dev.agentVersion || '?') + '）';
-      else sh.innerHTML = '<span style="color:var(--warn)">⚠ 手机脚本与电脑不一致</span>（手机 ' + (devSz / 1024).toFixed(1) + ' KB / 电脑 ' + (hubSz / 1024).toFixed(1) + ' KB）→ 点「📦 更新手机脚本并重启 Agent」';
+      else if (!hubSz) sh.textContent = '手机脚本体积：' + kb(devSz) + '（电脑端读不到 main.js，无法对账）';
+      else if (devSz === hubSz) sh.innerHTML = '手机脚本 <b>已是电脑上最新版</b>（' + kb(devSz) + ' · 字节数完全一致 · Agent v' + esc(dev.agentVersion || '?') + '）';
+      else if (Math.abs(devSz - hubSz) <= 2048) sh.innerHTML = '<span style="color:var(--warn)">⚠ 手机脚本与电脑体积接近但不完全一致</span>（差 ' + (devSz - hubSz) + ' B）→ 点「🔍 验证手机脚本是否最新」看明细, 或「📦 更新手机脚本并重启 Agent」对齐';
+      else sh.innerHTML = '<span style="color:var(--warn)">⚠ 手机脚本不是最新版</span>（手机 ' + kb(devSz) + ' / 电脑 ' + kb(hubSz) + '）→ 点「📦 更新手机脚本并重启 Agent」';
     }
     if (!list.length) {
       area.innerHTML = `<div class="dev"><div class="icon">🔌</div><div class="info">
@@ -660,19 +697,29 @@ async function refreshDevices(manual) {
       return;
     }
     const agentOnline = list.some(d => !d.isAdbOnly && d.isAlive);
-    $('dev-badge').textContent = agentOnline ? 'Agent 在线' : (data.adbDevicesCount ? 'USB 已连接' : '未连接');
-    $('dev-badge').className = 'badge ' + (agentOnline ? 'green' : data.adbDevicesCount ? 'blue' : 'gray');
+    const anyStopped = list.some(d => !d.isAdbOnly && d.stoppingAt);
+    $('dev-badge').textContent = agentOnline ? 'Agent 在线' : anyStopped ? '已停止' : (data.adbDevicesCount ? 'USB 已连接' : '未连接');
+    $('dev-badge').className = 'badge ' + (agentOnline ? 'green' : anyStopped ? 'gray' : data.adbDevicesCount ? 'blue' : 'gray');
     area.innerHTML = list.map(d => {
       if (d.isAdbOnly) return `<div class="dev"><div class="icon">📱</div><div class="info">
         <div class="name">${esc(d.model)} <span class="badge blue">USB 已连接</span></div>
         <div class="meta">Agent 未运行 — 点击上方「一键连接设备」自动部署并启动。</div></div></div>`;
       const alive = d.isAlive;
-      const state = d.state === 'busy' ? `执行任务中 ${d.currentTaskId || ''}` : (d.state || 'idle');
+      const stopping = !!d.stoppingAt;                 // 手机已回报「我要退了」→ 中枢判定已停止
+      const stoppingNow = !stopping && !!d.stopPushedAt;   // 指令已发, 还没等到手机回报
+      const state = stopping ? '手机已确认退出 (脚本没在跑)'
+        : stoppingNow ? '已请求停止, 等手机回报 (通常 1 秒内)'
+        : d.state === 'busy' ? `执行任务中 ${d.currentTaskId || ''}` : (d.state || 'idle');
       const syncBits = [];
       if (lastSync.damaiOffsetMs !== null) syncBits.push(`大麦 ${lastSync.damaiOffsetMs >= 0 ? '+' : ''}${lastSync.damaiOffsetMs}ms (RTT ${lastSync.damaiRttMs}ms)`);
       if (lastSync.hubOffsetMs !== null) syncBits.push(`电脑 ${lastSync.hubOffsetMs >= 0 ? '+' : ''}${lastSync.hubOffsetMs}ms`);
-      return `<div class="dev"><div class="icon">${alive ? '🟢' : '🔴'}</div><div class="info">
-        <div class="name">${esc(d.model || d.deviceId)} <span class="badge ${alive ? 'green' : 'gray'}">${alive ? '在线' : '失联'}</span>
+      const stateBadge = stopping
+        ? '<span class="badge gray" title="手机退出前回报过, 中枢已确认停止">⏹ 已停止</span>'
+        : stoppingNow
+          ? '<span class="badge amber" title="停止指令已下发, 等手机回报">正在停止…</span>'
+          : `<span class="badge ${alive ? 'green' : 'gray'}">${alive ? '在线' : '失联'}</span>`;
+      return `<div class="dev"><div class="icon">${stopping ? '⏹' : (stoppingNow ? '🟡' : (alive ? '🟢' : '🔴'))}</div><div class="info">
+        <div class="name">${esc(d.model || d.deviceId)} ${stateBadge}
           <span class="badge gray" title="手机端 Agent 版本 (hello 上报)">v${esc(d.agentVersion || '?')}</span></div>
         <div class="meta">${esc(d.connectionMode || '')}${d.autoX ? ' · 运行时 ' + esc(d.autoX) : ''}</div>
         <div class="kv">
@@ -739,15 +786,88 @@ async function updateScript() {
     $('connect-steps').innerHTML = stepsHtml;
     $('connect-steps').style.display = '';
   }
-  if (r.ok) {
-    if (viaWifi) toast('⬇ 已下发更新指令', (r.note || '手机将自行下载并重启') + (r.localSize ? '（电脑端 ' + (r.localSize / 1024).toFixed(1) + ' KB）' : ''), 'success', 9000);
-    else toast('脚本已更新', 'Agent 已使用最新脚本重启', 'success');
+  // ★ 2026-10-10 修: WiFi 路径的中枢回的是 {ok:true, pending:true}（"已下发, 手机自己下载"）——
+  //   以前只看 r.ok 且把它当"已完成", 而旧版中枢连 ok 都没回 → **必然**误报"更新未完成"。
+  if (r.ok && r.pending) {
+    toast('⬇ 已下发更新指令', (r.note || '手机将自行下载并重启') + (r.localSize ? '（电脑端 ' + (r.localSize / 1024).toFixed(1) + ' KB）' : '') + ' —— 正在核对是否真的换上新版…', 'success', 9000);
+    localLog('[更新]', `已下发更新指令 (Wi-Fi 路径): 手机会自己下载最新脚本并重启; 电脑端 ${(Number(r.localSize || 0) / 1024).toFixed(1)} KB`);
+    setTimeout(async () => { await confirmScriptUpdated(Number(r.localSize || 0)); refreshDevices(); }, 10000);
+  } else if (r.ok) {
+    toast('✅ 脚本已更新', 'Agent 已用最新脚本重启并上线', 'success', 9000);
+    localLog('[更新]', '脚本已推送 + Agent 已重启, 体积对账一致 → 新版已生效');
+  } else if (r.warn) {
+    // 脚本确实推成功了、重启指令也发了, 只是没在窗口内确认到 —— 别吓唬人, 说清"待确认"
+    toast('⚠ 更新已下发, 还没确认到', r.error || '', 'warn', 13000);
+    localLog('[更新]', `⚠ 更新已下发但未确认: ${r.error || ''}`);
+    setTimeout(async () => { await confirmScriptUpdated(0); }, 8000);
   } else {
     toast('更新未完成', r.error || '', 'error', 9000);
+    localLog('[更新]', `✘ 更新失败: ${r.error || ''}`);
   }
   btn.disabled = false; btn.textContent = '📦 更新手机脚本并重启 Agent';
   refreshDevices();
   if (viaWifi) setTimeout(refreshDevices, 10000);
+}
+
+/** 更新后用**真实凭据**复核: 手机上报的脚本体积 vs 电脑端 main.js 体积 */
+async function confirmScriptUpdated(localSize) {
+  try {
+    const dv = await api('/api/devices');
+    const dev = (dv.devices || []).find(d => !d.isAdbOnly && d.isAlive);
+    const hubSz = Number(dv.hubAgentScriptSize || 0) || Number(localSize || 0);
+    const kb = n => (n / 1024).toFixed(1) + ' KB';
+    if (!dev) {
+      toast('⚠ 手机还没上线, 无法核对', '它应该正在重启 —— 等设备卡片变「在线」后, 点「🔍 验证手机脚本是否最新」', 'warn', 12000);
+      localLog('[更新]', '⚠ 复核时手机不在线（多半在重启）—— 等它上线再点「验证手机脚本是否最新」');
+      return;
+    }
+    const devSz = Number(dev.scriptSize || 0);
+    if (!devSz) {
+      toast('⚠ 手机没上报脚本体积, 无法核对', '点「🔍 验证手机脚本是否最新」看明细', 'warn', 10000);
+      return;
+    }
+    if (hubSz && devSz === hubSz) {
+      toast('✅ 手机脚本已更新并生效', `手机上报 ${kb(devSz)}, 与电脑端完全一致 · v${dev.agentVersion || '?'}`, 'success', 10000);
+      localLog('[更新]', `✅ 复核通过: 手机上报 ${kb(devSz)} = 电脑端 ${kb(hubSz)}, v${dev.agentVersion || '?'} —— 新版已生效`);
+    } else {
+      toast('⚠ 还没切到新版', `手机 ${kb(devSz)} / 电脑 ${hubSz ? kb(hubSz) : '?'} —— 可能还在重启；稍等再点「🔍 验证手机脚本是否最新」`, 'warn', 13000);
+      localLog('[更新]', `⚠ 复核未通过: 手机 ${kb(devSz)} / 电脑 ${hubSz ? kb(hubSz) : '未知'} —— 可能还在重启`);
+    }
+  } catch (e) {
+    toast('核对失败', e.message, 'error', 8000);
+  }
+}
+
+/**
+ * 验证手机脚本是否为最新 (2026-10-10 用户新增) —— 提示要"全面", 手机与控制台都要有提示:
+ *   电脑侧: 三步对账明细 (电脑脚本 / 手机上报体积 / 版本号 / 指令能力) + 结论 + 下一步, 落在本卡片里, 同时弹 toast
+ *   手机侧: 由中枢下发 phone_op verify_script → 手机自己 toast + 震动 (旧脚本不认指令时中枢尽力 USB 直投通知)
+ */
+async function verifyPhoneScript() {
+  const btn = $('btn-verify-script');
+  const box = $('verify-steps');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = '⏳ 正在校验…';
+  box.innerHTML = '<div class="cs">正在比对「电脑上的脚本」与「手机上正在跑的脚本」…</div>';
+  let r;
+  try {
+    r = await api('/api/device/verify-script', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  } catch (e) {
+    r = e.body || { verdict: 'error', headline: '校验失败', hint: e.message, steps: [] };
+  }
+  const v = r.verdict || 'error';
+  const good = v === 'latest';
+  const head = `<div class="cs ${good ? 'ok' : 'bad'}"><b>${esc(r.headline || v)}</b></div>`;
+  const lines = (r.steps || []).map(s => `<div class="cs ${s.ok ? 'ok' : 'bad'}">${esc(s.name)}${s.detail ? ' — ' + esc(s.detail) : ''}</div>`).join('');
+  const pp = r.phonePrompt;
+  const ppLine = pp ? `<div class="cs ${pp.delivered ? 'ok' : 'bad'}">手机侧提示 — ${esc(pp.note || pp.via || '')}</div>` : '';
+  const hintLine = r.hint ? `<div class="cs">下一步 — ${esc(r.hint)}</div>` : '';
+  box.innerHTML = head + lines + ppLine + hintLine;
+  box.style.display = '';
+  toast(good ? '✅ 手机脚本已是最新' : (v === 'offline' ? '📴 手机未在线' : '⚠ 手机脚本不是最新'),
+    r.hint || r.headline || '', good ? 'success' : 'warn', 10000);
+  btn.disabled = false; btn.textContent = '🔍 验证手机脚本是否最新';
+  refreshDevices();
 }
 
 /* ==================== 探针库与表单 ==================== */
@@ -756,6 +876,11 @@ let targetScreen = null;   // 当前在线手机的分辨率（保底坐标的�
 let profile = { viewers: [], addresses: [] };
 let lastSync = { damaiOffsetMs: null, damaiRttMs: null, hubOffsetMs: null, hubRttMs: null };   // 三源对时证据 (timesync_done 事件)
 
+/**
+ * 拉取探针库 (2026-10-10: 「目标演出」卡片已整体移除)。
+ * ★ 数据本身还留着 —— 「链接抢购」卡片要靠它自动填「页面核对关键词 / 开抢时间 / 站点」,
+ *   所以这里静默加载, 不再渲染任何下拉栏。
+ */
 async function loadCatalog(manual) {
   try {
     const data = await api('/api/catalog');
@@ -768,6 +893,7 @@ async function loadCatalog(manual) {
     }
   } catch (e) { if (manual) toast('刷新失败', e.message, 'error'); }
 }
+
 function renderCatalog() {
   const sel = $('catalog-select');
   const prevIdx = sel.value;
@@ -854,13 +980,8 @@ async function reprobeCurrent() {
 }
 function onSessionChange() { }
 function onPriceChange() { }
-function onModeChange() {
-  const m = $('task-mode').value;
-  $('mode-hint').textContent = m === 'test'
-    ? '演练完整跑通: 详情→选票→观演人→停在「立即提交」前'
-    : '立即购买: 全流程直通提交订单';
-}
 function currentMode() { return $('task-mode').value; }
+
 
 async function loadProfile(manual) {
   try {
@@ -879,6 +1000,7 @@ async function loadProfile(manual) {
     }
   } catch (e) { if (manual) toast('读取账号库失败', e.message, 'error'); }
 }
+/* ==================== 动作 ==================== */
 function pickPrimary(name) {
   const s1 = $('slot-1');
   if (s1) { s1.value = name; toast('已设为主观演人', name, 'success', 2000); }
@@ -911,7 +1033,6 @@ function collectViewers() {
   return out.filter(Boolean);
 }
 
-/* ==================== 动作 ==================== */
 async function addViewer() {
   const name = $('nv-name').value.trim(), idCard = $('nv-idcard').value.trim();
   if (!name) return toast('请输入姓名', '', 'warn');
@@ -939,6 +1060,7 @@ async function addAddress() {
     toast('任务已下发', '手机正在自动填写并选择省市区', 'success', 5000);
   } catch (e) { toast('下发失败', e.message, 'error'); }
 }
+
 async function runProbe() {
   const v = $('probe-input').value.trim();
   if (!v) return toast('请输入演出 ID 或链接', '', 'warn');
@@ -975,7 +1097,6 @@ function currentItem() {
   const idx = $('catalog-select').value;
   return (idx !== '' && catalog[idx]) ? catalog[idx] : null;
 }
-
 async function dispatchTask(forcedMode) {
   const mode = forcedMode || currentMode();
   const viewers = collectViewers();
@@ -1041,16 +1162,21 @@ async function cancelTask(taskId) {
   const ok = await confirmModal('⛔ 确认终止该任务?',
     `任务: ${taskId}\n\n手机端将在几秒内停下（若正在倒计时等待开抢，也会取消击发并撤销已预置的击发）。\n说明: 若任务已进入提交订单环节，可能无法拦截。`,
     '⛔ 确认终止');
-  if (!ok) return;
+  if (!ok) { localLog('[操作]', `你在终止确认框上点了取消 (任务 ${taskId} 继续)`); return; }
+  localLog('[操作]', `你确认终止任务 ${taskId}`);
   try {
     const r = await api('/api/tasks/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId }) });
     if (r.status === 'already_done') toast('该任务已完成', '无需终止', 'warn');
     else if (r.status === 'already_cancelling') toast('已在取消中', '等待手机响应…', 'warn');
     else if (r.status === 'cancelling') toast('⛔ 已发送终止指令', '等待手机响应（最多几秒）…', 'success');
     else toast('⛔ 任务已终止', r.scope === 'queued' ? '任务尚未下发，已直接取消' : '已标记取消', 'success');
+    localLog('[终止]', `中枢回复: ${r.status}${r.scope ? ' (' + r.scope + ')' : ''} — 手机最多几秒内停下`);
     if (grabTask && grabTask.taskId === taskId) { grabTask = null; updateCountdown(); }
     loadTaskStates();
-  } catch (e) { toast('终止失败', e.message, 'error'); }
+  } catch (e) {
+    toast('终止失败', e.message, 'error');
+    localLog('[终止]', `✘ 终止失败: ${e.message}`);
+  }
 }
 
 /* ==================== 任务进度跟踪 ==================== */
@@ -1058,13 +1184,14 @@ let currentTask = null;
 const STEP_NAMES = {
   wakeup: '唤起大麦 (热启动)', goto_detail: '就位演出详情页', open_sku: '打开选票页',
   select_sku: '选择场次/票档/数量',
-  item_open: '链接就位商品页', page_verify: '页面核对 (白名单)', anchor: '按钮锚定',
-  prewatch: '预监视 (低频)', mutation: '突变检测 (高频)', first_tap: '瞬间一击',
-  tap_chain: '连点链 (拟人)', submit: '提交订单', order_confirm: '确认订单与观演人',
-  refresh: '开售前自动刷新',
+  item_open: '打开商品页 (链接就位)', page_verify: '页面核对 (确认没抢错场)', anchor: '记住按钮位置 (定位)',
+  prewatch: '开抢前等待', mutation: '盯梢 (高频看页面变化)', first_tap: '打出第一下',
+  tap_chain: '高频连点', submit: '提交订单', order_confirm: '确认订单与观演人',
+  refresh: '开抢前自动刷新页面',
   selftest: '检测通道自测',
   add_viewer: '添加观演人', add_address: '添加收货地址',
 };
+const STEP_STATUS_CN = { start: '开始', done: '完成 ✓', failed: '失败 ✕' };
 const stepState = {};
 
 function startTracking(task) {
@@ -1124,6 +1251,20 @@ let eventCursor = Date.now();
 let logLines = [];
 const dismissedAlerts = new Set();
 
+/** 把你"在本页点了什么、填了什么"也写进日志面板 (纯本地记录, 不走中枢) */
+function localLog(tag, msg) {
+  const t = new Date().toTimeString().slice(0, 8);
+  logLines.push({ t, e: tag, m: msg });
+  renderLogs();
+  // ★ 同时落盘到中枢 (data/grab/device-events.jsonl), 这样"人工操作"能和手机事件进同一条时间线, 事后可导出复盘
+  try {
+    fetch('/api/events/console', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+      body: JSON.stringify({ tag, msg, at: Date.now(), taskId: (grabTask && grabTask.taskId) || (currentTask && currentTask.taskId) || null }),
+    }).catch(() => {});
+  } catch (e) { /* 中枢不在也不影响本地显示 */ }
+}
+
 async function pollEvents() {
   try {
     const data = await api(`/api/events?sinceMs=${eventCursor}&limit=200`);
@@ -1148,14 +1289,14 @@ function processEvent(e) {
     logLines.push({ t: time, e: '[日志]', m: det.msg, taskId: e.taskId });
   } else if (e.event === 'step') {
     stepState[det.step] = { status: det.status, detail: det.detail || '' };
-    logLines.push({ t: time, e: '[步骤]', m: `${STEP_NAMES[det.step] || det.step} → ${det.status}${det.detail ? ' · ' + det.detail : ''}`, taskId: e.taskId });
+    logLines.push({ t: time, e: '[步骤]', m: `${STEP_NAMES[det.step] || det.step} → ${STEP_STATUS_CN[det.status] || det.status}${det.detail ? ' · ' + det.detail : ''}`, taskId: e.taskId });
     renderSteps();
   } else if (e.event === 'task_dispatched') {
-    logLines.push({ t: time, e: '[下发]', m: `${det.mode} · ${det.target || ''} · ${det.viewers?.join('+')} × ${det.count}`, taskId: det.taskId });
+    logLines.push({ t: time, e: '[下发]', m: `任务已发给手机 · ${modeText(det.mode)} · ${det.target || ''}${det.viewers?.length ? ' · 观演人 ' + det.viewers.join('+') : ''} × ${det.count}`, taskId: det.taskId });
   } else if (e.event === 'task_result') {
     const r = det;
     const rCls = (r.outcome === 'success' || r.outcome === 'ordered') ? 'resultline success' : r.outcome === 'failed' ? 'resultline failed' : '';
-    logLines.push({ t: time, e: '[结果]', m: `${r.outcome} — ${r.message || r.evidence || ''}`, taskId: r.taskId, cls: rCls });
+    logLines.push({ t: time, e: '[结果]', m: `任务${outcomeText(r.outcome)} — ${r.message || r.evidence || ''}`, taskId: r.taskId, cls: rCls });
     if (selfTestTaskId && r.taskId === selfTestTaskId) { selfTestInFlight = false; selfTestTaskId = null; }   // 自测出结果, 解除单飞
     showTaskResult(r);
     if (r.outcome === 'success' && (r.data?.viewers || r.data?.addresses || String(r.taskId || '').includes('add'))) loadProfile();
@@ -1163,9 +1304,9 @@ function processEvent(e) {
     logLines.push({ t: time, e: '[终止]', m: `已请求终止任务 ${det.taskId || ''} · 等待手机响应…`, taskId: det.taskId });
     loadTaskStates();
   } else if (e.event === 'task_started') {
-    logLines.push({ t: time, e: '[开始]', m: `${det.mode} ${det.target || ''}`, taskId: e.taskId });
+    logLines.push({ t: time, e: '[开始]', m: `手机开始执行: ${modeText(det.mode)} ${det.target || ''}`, taskId: e.taskId });
   } else if (e.event === 'ticket_status_change') {
-    logLines.push({ t: time, e: '[监控]', m: `票务状态 → ${det.status}`, taskId: e.taskId });
+    logLines.push({ t: time, e: '[监控]', m: `票务状态变成: ${det.status}`, taskId: e.taskId });
   } else if (e.event === 'timesync_done') {
     // 三源对时证据: 手机↔大麦 (MTOP) / 手机↔电脑 (心跳 serverTime)
     lastSync = {
@@ -1178,20 +1319,117 @@ function processEvent(e) {
       sb.className = 'badge ' + (Math.abs(lastSync.damaiOffsetMs) < 500 ? 'green' : 'amber');
       sb.title = `RTT ${lastSync.damaiRttMs}ms` + (lastSync.hubOffsetMs !== null ? ` · 电脑 ${lastSync.hubOffsetMs >= 0 ? '+' : ''}${lastSync.hubOffsetMs}ms` : '');
     }
-    logLines.push({ t: time, e: '[对时]', m: `大麦 offset ${det.damaiOffsetMs}ms (RTT ${det.damaiRttMs}ms)` + (det.hubOffsetMs !== null ? ` · 电脑 offset ${det.hubOffsetMs}ms` : '') + (det.pageSellText ? ` · 页面开售「${det.pageSellText}」` + (det.pageVsT0Ms !== undefined ? ` 与 T0 差 ${Math.round(det.pageVsT0Ms / 1000)}s` : '') : ''), taskId: e.taskId });
+    logLines.push({ t: time, e: '[对时]', m: `手机跟大麦服务器对过表: 手机比大麦 ${det.damaiOffsetMs >= 0 ? '快' : '慢'} ${Math.abs(det.damaiOffsetMs)}ms (一次来回 ${det.damaiRttMs}ms)` + (det.hubOffsetMs !== null ? ` · 手机比电脑 ${det.hubOffsetMs >= 0 ? '快' : '慢'} ${Math.abs(det.hubOffsetMs)}ms` : '') + (det.pageSellText ? ` · 页面写的开抢时间「${det.pageSellText}」` + (det.pageVsT0Ms !== undefined ? ` 与你填的差 ${Math.round(det.pageVsT0Ms / 1000)}s` : '') : ''), taskId: e.taskId });
   } else if (e.event === 't0_mismatch') {
     logLines.push({ t: time, e: '[对时]', m: `⚠ 页面开售时间「${det.sellText}」与填写的开抢时间差 ${Math.round(det.driftMs / 1000)}s — 请确认抢的是同一场!`, taskId: e.taskId, cls: 'resultline failed' });
     toast('⚠ 开抢时间与页面不一致', `页面开售「${det.sellText}」与填写时间差 ${Math.round(det.driftMs / 1000)}s`, 'warn', 12000);
+  } else if (e.event === 'grab_armed') {
+    logLines.push({ t: time, e: '[布防]', m: `已下发抢购任务 · 商品 ${det.itemId || '?'} · ${det.test ? '测试模式(到点直接出手, 不等页面变化)' : '正式开抢'} · 到点盲点一发 ${det.blindFire ? '开' : '关'} · 双读确认 ${det.doubleReadMs}ms`, taskId: e.taskId });
+  } else if (e.event === 'channel_probe') {
+    logLines.push({ t: time, e: '[通道]', m: det.ok ? `手机↔电脑一个来回 ${det.ms}ms（合格, 用来算连点节奏）` : `点击通道不通: ${det.ms || ''} —— 会改用手机本地 Shizuku 注入`, taskId: e.taskId });
+  } else if (e.event === 'channel_warn') {
+    logLines.push({ t: time, e: '[通道]', m: `⚠ ${det.phase === 'prewatch' ? '点击通道自检' : '预置击发'} 有问题: ${det.reason || ''}`, taskId: e.taskId });
+  } else if (e.event === 'item_open_ok') {
+    logLines.push({ t: time, e: '[就位]', m: `${det.landed ? '✓ 已停到目标商品页' : '✘ 没停到商品页'} (ID ${det.itemId}) · 方式 ${det.hit || '深链'}${det.tried?.length ? ' · 试过 ' + det.tried.join(' → ') : ''}`, taskId: e.taskId });
+  } else if (e.event === 'item_open_fail') {
+    logLines.push({ t: time, e: '[就位]', m: `✘ 打不开商品页: ${det.reason || ''}`, taskId: e.taskId, cls: 'resultline failed' });
+  } else if (e.event === 'page_verify_ok') {
+    logLines.push({ t: time, e: '[核对]', m: `✓ 页面核对通过${det.sellText ? ' · 页面写的是「' + det.sellText + '」' : ''}`, taskId: e.taskId });
+  } else if (e.event === 'page_verify_fail') {
+    logLines.push({ t: time, e: '[核对]', m: `✘ 页面核对不通过 (关键词${det.kwOk ? '命中' : '未命中'}) → 拒绝操作, 不乱点`, taskId: e.taskId, cls: 'resultline failed' });
+  } else if (e.event === 'page_id_degraded') {
+    logLines.push({ t: time, e: '[核对]', m: `⚠ ${det.reason || '页面身份退化判定'}`, taskId: e.taskId });
+  } else if (e.event === 'station_switch') {
+    logLines.push({ t: time, e: '[切站]', m: `点站点卡切到「${det.station}」(${det.x},${det.y})`, taskId: e.taskId });
+  } else if (e.event === 'anchor_ok') {
+    logLines.push({ t: time, e: '[定位]', m: `按钮位置锁定 (${det.x},${det.y}) · 来源 ${{ console: '控制台填的坐标', unified: '内置标准锚点', container: '页面实测' }[det.src] || det.src} · 预约结构基线 ${String(det.presale || '').split(' ')[0]}`, taskId: e.taskId });
+  } else if (e.event === 'anchor_degraded') {
+    logLines.push({ t: time, e: '[定位]', m: `⚠ ${det.reason || '锚点退化'} → 建议在控制台填主按钮坐标`, taskId: e.taskId });
+  } else if (e.event === 'anchor_no_presale') {
+    logLines.push({ t: time, e: '[定位]', m: '⚠ 页面此刻读不到「预约结构」→ 开售只能靠兜底信号判断', taskId: e.taskId });
+  } else if (e.event === 'prewatch_change') {
+    logLines.push({ t: time, e: '[盯梢]', m: `低频预监视期页面就有变化了 (比开抢时刻 ${det.deltaMs >= 0 ? '晚' : '早'} ${Math.abs(det.deltaMs)}ms)`, taskId: e.taskId });
+  } else if (e.event === 'signal_anomaly') {
+    logLines.push({ t: time, e: '[盯梢]', m: '⚠ 连续读不到页面结构（页面在重绘 / 被系统弹窗挡住）—— 不算「有变化」', taskId: e.taskId });
+  } else if (e.event === 'text_signal_fire') {
+    logLines.push({ t: time, e: '[盯梢]', m: '结构没变但页面文字变了（「开抢」这行字消失）→ 也判定已开售, 出手', taskId: e.taskId });
+  } else if (e.event === 'blind_fire') {
+    logLines.push({ t: time, e: '[出手]', m: `⚡ 到点页面还没变化 → 按「到点盲点一发」先打一发保底 · 晚 ${det.deltaMs}ms · 方式 ${viaText(det)}`, taskId: e.taskId });
   } else if (e.event === 'first_tap_sent') {
-    logLines.push({ t: time, e: '[首击]', m: `ΔT0 ${det.deltaMs}ms · ${det.viaName || (det.via ? 'persist' : 'gesture')} · 第${det.tries}发 (${det.x},${det.y})`, taskId: e.taskId });
+    logLines.push({ t: time, e: '[出手]', m: `首击已发出 · 比开抢时刻晚 ${det.deltaMs}ms · 方式 ${viaText(det)} · 落点 (${det.x},${det.y})`, taskId: e.taskId });
+  } else if (e.event === 'first_tap_failed') {
+    logLines.push({ t: time, e: '[出手]', m: `✘ 首击打不出去: ${det.why || ''} —— 请开手机 Shizuku 或插数据线`, taskId: e.taskId, cls: 'resultline failed' });
   } else if (e.event === 'popup_retry_click') {
-    logLines.push({ t: time, e: '[弹窗]', m: `继续尝试 第${det.n}击 (${det.x},${det.y} via=${det.via})`, taskId: e.taskId });
+    logLines.push({ t: time, e: '[副手]', m: `看到「继续尝试」弹窗 → 帮你点它, 第 ${det.n} 下 (${det.x},${det.y})`, taskId: e.taskId });
+  } else if (e.event === 'popup_first_seen') {
+    logLines.push({ t: time, e: '[副手]', m: `★ 首次探到「继续尝试」弹窗 · 命中方式 ${det.via === 'node' ? '直接读到按钮节点(最准)' : '靠正文推算'} · 落点 (${det.x},${det.y})`
+      + (det.nodeText ? ` · 节点文字「${det.nodeText}」` : '') + (det.w ? ` · 按钮 ${det.w}×${det.h}` : ''), taskId: e.taskId, cls: 'resultline success' });
+  } else if (e.event === 'popup_evidence' || e.event === 'captcha_evidence') {
+    const files = (det.files || []).map(f => String(f).split(/[\\/]/).pop()).join(' + ');
+    logLines.push({ t: time, e: '[取证]', m: files ? `已留现场证据: ${files} · 位置 ${files && det.tag ? 'data/grab/diag/' + det.tag : ''}` : `证据没取到（不影响抢购）: ${det.error || '需要插数据线才能导界面树/截图'}`, taskId: e.taskId });
+  } else if (e.event === 'popup_never_seen') {
+    logLines.push({ t: time, e: '[副手]', m: '全程没探到「继续尝试」弹窗（也可能这场压根没弹）—— 这本身就是结论', taskId: e.taskId });
+  } else if (e.event === 'captcha_seen') {
+    logLines.push({ t: time, e: '[副手]', m: '⚠ 出现滑块验证码 → 已立刻停止连点, 屏幕交给人工（脚本不会自动滑、也不会再碰屏幕）', taskId: e.taskId, cls: 'resultline failed' });
+    toast('⚠ 手机上出现滑块验证码', '脚本已停止连点并震动提醒，请手动滑一下；滑完不用管脚本', 'warn', 15000);
+  } else if (e.event === 'agent_stopping') {
+    logLines.push({ t: time, e: '[停止]', m: `手机回报「我要退了」(${det.reason || ''}) → 中枢已即时判定"已停止", 状态立刻刷新`, taskId: null, cls: 'resultline success' });
+    if (currentTask && currentTask.grab) { /* 任务随之终止由手机另行上报 result */ }
+    refreshDevices();   // ★ 手机自己确认了停止 → 立刻刷新通道/设备状态, 不等 3 秒轮询
+  } else if (e.event === 'agent_stop_failed') {
+    logLines.push({ t: time, e: '[停止]', m: `⚠ 停止没生效: 手机回报过停止, 但脚本仍在回应（${det.why || ''}）→ 已撤销"已停止"状态; 需要的话请再点一次「停止手机脚本」`, taskId: null, cls: 'resultline failed' });
+    toast('⚠ 停止没生效', '手机脚步还在运行 —— 已恢复为在线；需要的话请再点一次「停止手机脚本」', 'warn', 10000);
+    refreshDevices();
   } else if (e.event === 'sidecar_start') {
-    logLines.push({ t: time, e: '[侧车]', m: `连点侧车已启动 · 弹窗点(${det.popupPoint?.x},${det.popupPoint?.y}) · Shizuku ${det.shizuku ? '✓' : '✗'}`, taskId: e.taskId });
+    logLines.push({ t: time, e: '[副手]', m: `连点期间一直在旁边看着: 每 ${det.pollMs}ms 查弹窗、每 ${det.watchMs}ms 查是否已成功/售罄/出验证码 · 手机 Shizuku ${det.shizuku ? '✓ 可用' : '✗ 没开'}`, taskId: e.taskId });
+  } else if (e.event === 'submit_tap_loop') {
+    logLines.push({ t: time, e: '[连点]', m: `连点结束 · 共 ${det.totalClicks} 下, 最快 ${det.peakPerSec} 下/秒, 弹窗补点 ${det.popupClicks} 下 · 原因: ${mEndReason(det.endReason)}${det.injectFails ? ` · 有 ${det.injectFails} 下发不出去` : ''}`, taskId: e.taskId });
+  } else if (e.event === 'watch_timeout') {
+    logLines.push({ t: time, e: '[盯梢]', m: `⏱ 连续盯了 ${Math.round((det.waitedMs || 0) / 1000)} 秒页面结构一直没变化 → 收工未点击 (兜底闸门, 防任务挂死)`, taskId: e.taskId, cls: 'resultline failed' });
+  } else if (e.event === 'diag_saved') {
+    logLines.push({ t: time, e: '[诊断]', m: `已保存现场证据: ${(det.files || []).map(f => String(f).split(/[\\/]/).pop()).join(' + ')}`, taskId: e.taskId });
+  } else if (e.event === 'selftest_result') {
+    logLines.push({ t: time, e: '[自测]', m: `按钮基线抖动 ${det.baselineChanges} 次 · 读取 ${det.readsPerSec} 次/秒 · 发现一次真实变化用了 ${det.detectMs >= 0 ? det.detectMs + 'ms' : '没测到'}`, taskId: e.taskId });
+  } else if (e.event === 'script_verified') {
+    logLines.push({ t: time, e: '[脚本]', m: `手机侧自检完成: ${det.exact ? '与电脑端完全一致' : '与电脑端不一致'} (手机 ${det.mySize}B / 电脑 ${det.hubSize}B)`, taskId: e.taskId });
+  } else if (e.event === 'page_refreshed') {
+    logLines.push({ t: time, e: '[刷新]', m: `${det.label} 已用深链重开商品页并重新定位, 页面状态变新了`, taskId: e.taskId });
+  } else if (e.event === 'first_tap_degraded') {
+    logLines.push({ t: time, e: '[出手]', m: '（历史事件, 无障碍手势兜底已删除, 不会再出现）', taskId: e.taskId });
   } else {
-    logLines.push({ t: time, e: '[' + e.event + ']', m: JSON.stringify(det).slice(0, 160), taskId: e.taskId });
+    logLines.push({ t: time, e: '[' + e.event + ']', m: friendlyDetail(e.event, det), taskId: e.taskId });
   }
   if (logLines.length > 600) logLines = logLines.slice(-500);
+}
+
+/** 任务模式 → 人话 */
+function modeText(m) {
+  return { grab: '链接抢购', test: '安全演练', dryrun: '安全演练', buy: '立即购买(会真下单)', monitor: '余票盯梢',
+    phone_op: '手机代操作', add_viewer: '添加观演人', add_address: '添加收货地址' }[m] || (m || '任务');
+}
+/** 任务结果 → 人话 */
+function outcomeText(o) {
+  return { success: '成功', ordered: '已下单', failed: '失败', cancelled: '已取消' }[o] || (o || '结束');
+}
+/** 出手方式 → 人话 */
+function viaText(det) {
+  const v = det.viaName || (det.via ? 'persist' : 'failed');
+  if (det.hubArmed) return '电脑时钟预置的那一发（最准）';
+  return { persist: '电脑下发点击（数据线 ADB，最快）', shizuku: '手机本地注入（Shizuku，免数据线）', failed: '没打出去' }[v] || v;
+}
+/** 连点结束原因 → 人话 */
+function mEndReason(r) {
+  return { ordered: '已点进支付/成功页 ✅', captcha: '出现滑块验证码, 需你手动滑 ⚠', no_stock: '已售罄/无票', page_shifted: '页面已跑偏', timeout: '连点时间用完', adb_down: '注入通道断了' }[r] || (r || '未知');
+}
+/** 未知/杂项事件: 尽量给人话, 兜底才显示原始字段 (不再整段 JSON) */
+function friendlyDetail(ev, det) {
+  const parts = [];
+  for (const [k, v] of Object.entries(det || {})) {
+    if (v === null || v === undefined || v === '') continue;
+    const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+    parts.push(`${k}=${s.length > 40 ? s.slice(0, 40) + '…' : s}`);
+  }
+  return parts.join(' · ').slice(0, 200) || '(无附加信息)';
 }
 
 function renderLogs() {
@@ -1215,7 +1453,7 @@ async function clearLogs() {
   eventCursor = Date.now();
   logLines = [];
   renderLogs();
-  toast('日志已清空', '服务端与本地日志均已清空', 'success', 2500);
+  localLog('[操作]', '你点了「清空日志」—— 服务端与本页日志都已清掉, 从这里重新开始记录');
 }
 
 /* ==================== 最近任务 ==================== */
@@ -1265,7 +1503,7 @@ function updateCountdown() {
       const mm = String(Math.floor(s / 60)).padStart(2, '0');
       const ss = String(s % 60).padStart(2, '0');
       $('grab-cd-time').textContent = `${mm}:${ss}`;
-      $('grab-cd-note').textContent = grabTask.grab?.dryRun ? '(彩排)' : '手机本地倒计时, 无需电脑参与';
+      $('grab-cd-note').textContent = grabTask.grab?.dryRun ? '(测试)' : '手机本地倒计时, 无需电脑参与';
     } else {
       $('grab-cd-time').textContent = '00:00';
       $('grab-cd-note').textContent = '已到点 — 手机端高频监测/连点进行中';
@@ -1275,6 +1513,7 @@ function updateCountdown() {
   }
 }
 setInterval(updateCountdown, 1000);
+setInterval(updateGrabTimeHint, 1000);   // 时间回显每秒刷新, 距现在多久实时可见
 
 /** 从分享链接/纯数字中解析商品 ID (认不出返回 null, 不兜底) */
 function parseItemId(text) {
@@ -1300,19 +1539,30 @@ function buildKeywords(item) {
   return out.join(',');
 }
 
-/** 从探针库的"开售提示"文本反推开抢时间预填 (如 "10月7日17:17") */
+/** 从探针库的"开售提示"文本反推开抢时间预填 (如 "10月7日17:17"); 返回是否真的填上了 */
 function autoFillGrabTime(hints) {
-  if ($('grab-time').value.trim()) return;
+  if ($('grab-time').value.trim()) return false;   // 已有值不覆盖 (调用方要覆盖时会先清空)
   const joined = (hints || []).join(' ');
   const re = /(\d{1,2})月(\d{1,2})日[^0-9]{0,6}(\d{1,2}):(\d{2})/g;
   let m, last = null;
   while ((m = re.exec(joined)) !== null) last = m;
-  if (!last) return;
+  if (!last) return false;
   const y = new Date().getFullYear();
   const mm = String(last[1]).padStart(2, '0');
   const dd = String(last[2]).padStart(2, '0');
   const hh = String(last[3]).padStart(2, '0');
   $('grab-time').value = `${y}-${mm}-${dd} ${hh}:${last[4]}:00`;
+  return true;
+}
+
+/* ★ 当前"关键词/开抢时间"预填所属的商品 ID (2026-10-10 修 bug)
+ * 旧写法是"字段非空就永不覆盖" → 换商品后仍留着上一个商品的城市词与开抢时间 (页面核对必翻车)。
+ * 现在: 解析出的商品 ID 一变 = 换商品 → 关键词与开抢时间**跟着重填**; 同一个商品则只补空值, 不冲掉手改。 */
+let lastParsedItemId = null;
+
+/** 启动时对齐基线: 从本机恢复出来的链接就是"当前预填所属的商品", 不能在第 1 次解析时当成换商品而冲掉已存值 */
+function primeGrabLinkBaseline() {
+  lastParsedItemId = parseItemId($('grab-link').value) || null;
 }
 
 function onGrabLinkInput() {
@@ -1324,13 +1574,23 @@ function onGrabLinkInput() {
     return;
   }
   const item = catalog.find(x => String(x.itemId || '') === String(itemId));
+  const changed = lastParsedItemId !== String(itemId);   // 换商品 (含首次解析) → 预填必须刷新
   hint.style.color = '';
   if (item) {
     const extra = item.saleTimeHints?.length ? ` · 开售提示: ${esc(item.saleTimeHints.join('; '))}` : '';
     hint.innerHTML = `✔ 已识别: <b>${esc(item.name || '')}</b>${item.stationName ? ' · ' + esc(item.stationName) : ''}${extra}`;
-    autoFillGrabTime(item.saleTimeHints);
-    if (!$('grab-keywords').value.trim()) $('grab-keywords').value = buildKeywords(item);
+    // 关键词: 换商品时覆盖 (旧逻辑只在空值时填 → 换商品后留着上一个城市的词)
+    if (changed || !$('grab-keywords').value.trim()) $('grab-keywords').value = buildKeywords(item);
+    // 开抢时间: 同样换商品就重填; 探针没读到开售提示时**清空**并提示手填 (宁可不填, 也绝不拿上一个商品的时间去抢)
+    if (changed || !$('grab-time').value.trim()) {
+      if (changed) $('grab-time').value = '';   // 换商品: 先清掉上一个商品的时间
+      const filled = autoFillGrabTime(item.saleTimeHints);
+      if (changed && !filled) hint.innerHTML += ' <span style="color:var(--warn)">— 探针没读到该商品的开售提示, 开抢时间请手动填</span>';
+    }
+    lastParsedItemId = String(itemId);
   } else {
+    // 不在探针库: 上一个商品的预填同样不能留 (城市/时间都不是这个商品的)
+    if (changed) { $('grab-keywords').value = ''; $('grab-time').value = ''; }
     hint.innerHTML = `✔ 已识别商品 ID: <b>${esc(itemId)}</b> — 不在探针库, <button class="btn sm" style="padding:1px 8px" onclick="grabProbe('${esc(itemId)}')">📥 采集此商品</button> (若手机已停在该页面也可直接抢购)`;
   }
 }
@@ -1345,81 +1605,147 @@ async function grabProbe(itemId) {
   } catch (e) { toast('采集失败', e.message, 'error', 6000); }
 }
 
+
 function parseXY(s) {
   const m = String(s || '').match(/^\s*(\d{2,5})\s*[,，]\s*(\d{2,5})\s*$/);
   if (!m) return null;
   return { x: parseInt(m[1], 10), y: parseInt(m[2], 10) };
 }
 
+/**
+ * 解析「开抢时间」输入 → { ok:true, ms, norm, onlyTime } | { ok:false, err, raw }
+ * 认: "2026-10-10 13:30:00" / "2026-10-10 13:30" / "13:30" / "13:30:00"(按今天算, 全角冒号也认)
+ * ★ 2026-10-10 血案: 用户想填 13:30 却写成 "1:30" → 被解析成 **01:30(已过去 12 小时)**;
+ *   而旧代码把"时间已过去"和"不足 8 秒"混成同一句提示("距离现在不足 8 秒, 来不及就位"),
+ *   用户完全看不懂为什么不让他抢 —— 现在两种情形分开报, 并把"解析成了几点"直接回显。
+ */
+function parseFireTime(raw, nowMs) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s) return { ok: false, err: '空' };
+  const hms = /^(\d{1,2})[:：](\d{1,2})(?:[:：](\d{1,2}))?$/.exec(s);   // 只写时分 → 按"今天"补日期
+  let text = s.replace(/：/g, ':');
+  if (hms) {
+    const d = new Date(nowMs || Date.now());
+    text = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} `
+      + `${hms[1]}:${hms[2]}:${hms[3] || '00'}`;
+  }
+  const ms = new Date(text.replace(/-/g, '/')).getTime();
+  if (!isFinite(ms)) return { ok: false, err: '无法识别', raw: s };
+  const d = new Date(ms);
+  const p2 = (n) => String(n).padStart(2, '0');
+  return {
+    ok: true, ms, onlyTime: !!hms,
+    norm: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`,
+  };
+}
+
+/** 把毫秒差说成人话 (12 小时 0 分 / 30 分 12 秒 / 6 秒) */
+function fmtSpan(ms) {
+  const a = Math.abs(Math.round(ms / 1000));
+  const h = Math.floor(a / 3600), m = Math.floor((a % 3600) / 60), s = a % 60;
+  if (h) return `${h} 小时 ${m} 分`;
+  if (m) return `${m} 分 ${s} 秒`;
+  return `${s} 秒`;
+}
+
+/** "12/24 小时制大概率写错"的提示 (下午却填了 1~11 点, 且已过去 1 小时以上) */
+function twelveHourTypoHint(ms, deltaMs) {
+  if (deltaMs >= 0) return '';
+  const h = new Date(ms).getHours();
+  return (h < 12 && -deltaMs > 3600000) ? '（下午请用 24 小时制: 13:30 而不是 1:30）' : '';
+}
+
+/** 开抢时间输入框的实时回显 —— 解析成了几点 + 距现在多久, 写错一眼可见 */
+function updateGrabTimeHint() {
+  const el = $('grab-time-parsed');
+  if (!el) return;
+  const raw = ($('grab-time')?.value || '').trim();
+  if (!raw) {
+    el.style.color = '';
+    el.textContent = '填 24 小时制, 例 2026-10-10 13:30:00（也可只写 13:30, 按今天算）';
+    return;
+  }
+  const t = parseFireTime(raw);
+  if (!t.ok) {
+    el.style.color = 'var(--err)';
+    el.textContent = `无法识别「${raw}」— 请按 2026-10-10 13:30:00 写全（24 小时制, 下午别写 1:30）`;
+    return;
+  }
+  const d = t.ms - Date.now();
+  if (d < 0) {
+    el.style.color = 'var(--err)';
+    el.textContent = `解析为 ${t.norm} — 已过去 ${fmtSpan(-d)}${twelveHourTypoHint(t.ms, d)}`;
+  } else if (d < 8000) {
+    el.style.color = 'var(--warn)';
+    el.textContent = `解析为 ${t.norm} — 只剩 ${(d / 1000).toFixed(1)} 秒（手机开页+核对+对时约需 5~8 秒）`;
+  } else {
+    el.style.color = 'var(--ok)';
+    el.textContent = `解析为 ${t.norm} — 距现在 ${fmtSpan(d)}`;
+  }
+}
+
 /** 打开商品页 —— 统一通道: USB→中枢 ADB deep-link; Wi-Fi→下发 phone_op 到手机本地 deep-link */
 async function grabOpenItem() {
   const itemId = parseItemId($('grab-link').value);
   if (!itemId) return toast('请先粘贴商品链接或 ID', '', 'warn');
-  if (requireChannel()) return;
+  if (requireChannel()) { localLog('[操作]', '点「打开商品页」被挡下: 通道未连接'); return; }
   const btn = event && event.target ? event.target : null;
   if (btn && btn.disabled) return;
   if (btn) { btn.disabled = true; setTimeout(() => { btn.disabled = false; }, 3000); }
+  localLog('[操作]', `你点了「打开商品页」→ 让手机打开商品 ${itemId}`);
   try {
     const r = await api('/api/phone/cmd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'open_item', params: { itemId } }) });
     if (r.via === 'wifi') {
       toast('📲 已下发到手机 (Wi-Fi 通道)', '手机正用本地 deep-link 打开商品页 — 结果看「任务执行状态」', 'success', 7000);
+      localLog('[就位]', `已下发到手机 (Wi-Fi 通道), 手机本地深链打开 ${itemId}`);
     } else {
       toast('📲 已打开商品页', (r.hit || '') + ' — 看一眼手机是否停在目标演出', 'success', 6000);
+      localLog('[就位]', `已用数据线打开商品 ${itemId} (方式 ${r.hit || '深链'})`);
     }
-  } catch (e) { toast('打开失败', e.message, 'error', 7000); }
+  } catch (e) {
+    toast('打开失败', e.message, 'error', 7000);
+    localLog('[就位]', `✘ 打开商品页失败: ${e.message}`);
+  }
 }
 
-/* ==================== 抢购参数本机保存 (localStorage) ==================== */
+/* ==================== 抢购参数本机保存 (localStorage) ====================
+ * 2026-10-10 用户口径: 去掉「清空已存 (=恢复默认值)」, 改成显式「💾 保存参数」——
+ *   只有点按钮才写盘, 写的就是输入框里当前的一切; 不自动保存、不覆盖成默认值。 */
 const GRAB_SAVE_KEY = 'qg.grab.params.v1';
-const GRAB_FIELDS = ['grab-link', 'grab-keywords', 'grab-exec', 'grab-time', 'grab-reh-time', 'grab-lead',
+const GRAB_FIELDS = ['grab-link', 'grab-keywords', 'grab-time', 'grab-lead',
   'grab-rate-min', 'grab-rate-max', 'grab-jitter-x', 'grab-jitter-y', 'grab-ft-tries', 'grab-ft-timeout',
-  'grab-chain-ms', 'grab-reh-ms', 'grab-btn-xy', 'grab-sub-xy', 'grab-popup-xy'];
-const GRAB_CHECKS = ['grab-autorefresh'];   // 复选框单独存 checked
+  'grab-chain-ms', 'grab-btn-xy', 'grab-sub-xy', 'grab-popup-xy',
+  'grab-double-read', 'grab-popup-delay', 'grab-popup-poll', 'grab-watch-poll'];
+const GRAB_CHECKS = ['grab-autorefresh', 'grab-blindfire'];   // 复选框单独存 checked
 
+/** 把当前所有输入原样存到本机 (手动触发) */
 function saveGrabParams() {
+  const h = $('grab-save-hint');
   try {
     const o = {};
     for (const id of GRAB_FIELDS) { const el = $(id); if (el) o[id] = el.value; }
     for (const id of GRAB_CHECKS) { const el = $(id); if (el) o['#' + id] = !!el.checked; }
     localStorage.setItem(GRAB_SAVE_KEY, JSON.stringify(o));
-    const h = $('grab-save-hint');
-    if (h) h.textContent = '✔ 已保存到本机 ' + new Date().toLocaleTimeString('zh-CN');
-  } catch (e) { /* 隐私模式等场景忽略 */ }
+    if (h) h.textContent = '✔ 已保存到本机 ' + new Date().toLocaleTimeString('zh-CN') + '（点「保存参数」才会覆盖）';
+    toast('💾 参数已保存', '当前参数已存到本机浏览器, 下次打开自动带回', 'success', 3000);
+    localLog('[操作]', `你点了「保存参数」—— 已把 ${GRAB_FIELDS.length + GRAB_CHECKS.length} 项当前参数存进本机浏览器 (下次打开自动带回)`);
+  } catch (e) {
+    if (h) h.textContent = '✘ 保存失败（本机存储不可用, 如隐私模式）';
+    toast('保存失败', '本机存储不可用(隐私模式?)', 'error', 5000);
+  }
 }
+
+/** 打开控制台时把上次保存的参数填回输入框 (没保存过就保持页面默认值) */
 function loadGrabParams() {
   const h = $('grab-save-hint');
   try {
     const raw = localStorage.getItem(GRAB_SAVE_KEY);
-    if (!raw) { if (h) h.textContent = '参数会自动保存在本机浏览器（换 IP 打开控制台 = 换一份存储）'; return; }
+    if (!raw) return;   // 没保存过 → 保持页面默认值, 提示文案由 HTML 给出
     const o = JSON.parse(raw);
     for (const id of GRAB_FIELDS) { const el = $(id); if (el && o[id] !== undefined && o[id] !== null) el.value = o[id]; }
     for (const id of GRAB_CHECKS) { const el = $(id); if (el && o['#' + id] !== undefined) el.checked = !!o['#' + id]; }
-    if (h) h.textContent = '✔ 已恢复上次保存的参数（改动会自动保存）';
+    if (h) h.textContent = '✔ 已恢复上次保存的参数（点「保存参数」才会覆盖）';
   } catch (e) { if (h) h.textContent = '参数恢复失败（本机存储不可用）'; }
-}
-function bindGrabParamAutosave() {
-  for (const id of GRAB_FIELDS.concat(GRAB_CHECKS)) {
-    const el = $(id);
-    if (!el) continue;
-    el.addEventListener('input', saveGrabParams);
-    el.addEventListener('change', saveGrabParams);
-  }
-}
-function resetGrabParams() {
-  try { localStorage.removeItem(GRAB_SAVE_KEY); } catch (e) {}
-  const opts = {
-    'grab-link': '', 'grab-keywords': '', 'grab-exec': 'live', 'grab-time': '', 'grab-reh-time': '',
-    'grab-lead': '1000', 'grab-rate-min': '8', 'grab-rate-max': '12', 'grab-jitter-x': '3', 'grab-jitter-y': '3',
-    'grab-ft-tries': '1', 'grab-ft-timeout': '50', 'grab-chain-ms': '12000', 'grab-reh-ms': '4000',
-    'grab-btn-xy': '', 'grab-sub-xy': '', 'grab-popup-xy': '',
-  };
-  for (const id of Object.keys(opts)) { const el = $(id); if (el) el.value = opts[id]; }
-  if ($('grab-autorefresh')) $('grab-autorefresh').checked = false;
-  const h = $('grab-save-hint');
-  if (h) h.textContent = '已清空本机保存，恢复默认值';
-  updateGrabRate(); onGrabExecChange();
-  $('grab-parsed').textContent = '粘贴后自动解析商品';
-  toast('已清空已存参数', '恢复为页面默认值', 'success', 3000);
 }
 
 /* ==================== 抢购保活优化 (开关 + 恢复原状) ==================== */
@@ -1465,14 +1791,25 @@ async function perfBoost(on) {
 async function stopAgent() {
   if (requireChannel()) return;
   const ok = await confirmModal('🛑 停止手机端脚本?',
-    '手机上的 AutoJs6 脚本会退出：不再发心跳、不再接任务（等于"断开服务"）。\n\n若当时有任务在跑，手机退出前会先把任务上报为「已取消」。\n需要时点「一键连接设备」或在手机上重开脚本即可重新上线（USB 连着时中枢每分钟也会自动拉起）。\n（最多 4 秒生效）',
+    '手机上的 AutoJs6 脚本会退出：不再发心跳、不再接任务（等于"断开服务"）。\n\n若当时有任务在跑，手机退出前会先把任务上报为「已取消」。\n需要时点「一键连接设备」或在手机上重开脚本即可重新上线（USB 连着时中枢每分钟也会自动拉起）。\n\n流程：中枢先把指令送到手机 → **手机退出前回报「我要退了」** → 中枢收到就把状态刷成「已停止」（不用等心跳超时）。',
     '停止脚本');
-  if (!ok) return;
+  if (!ok) { localLog('[操作]', '你在「停止手机端脚本」确认框上点了取消'); return; }
+  localLog('[操作]', '你点了「停止手机端脚本」→ 等手机回报「我要退了」后状态才会刷成已停止');
   try {
     const r = await api('/api/device/stop-agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    toast('🛑 已下发停止指令', r.note || '最多 4 秒生效', 'success', 8000);
-  } catch (e) { toast('下发失败', e.message, 'error', 6000); }
-  setTimeout(refreshDevices, 7000);
+    const fast = r.delivered ? '（指令已即时送达手机）' : '';
+    toast(r.status === 'offline_stopped' ? '⏹ 该设备本来就不在线' : '🛑 已请求停止手机脚本' + fast, r.note || '', 'success', 9000);
+    localLog('[停止]', (r.status === 'offline_stopped'
+      ? '这台设备本来就没心跳, 中枢已直接判定为已停止'
+      : `停止指令已发出${r.delivered ? '(即时送达)' : '(最多 4 秒)'} —— 等手机回报「我要退了」, 收到就立刻刷新状态`));
+  } catch (e) {
+    toast('下发失败', e.message, 'error', 6000);
+    localLog('[停止]', `✘ 停止指令下发失败: ${e.message}`);
+  }
+  // 立刻刷一次 (指令已发出 → 卡片会显示"正在停止…"), 之后 1.5s/6s 再核; 手机回报时控制台还会被事件立刻触发刷新
+  refreshDevices();
+  setTimeout(refreshDevices, 1500);
+  setTimeout(refreshDevices, 6000);
 }
 
 /** 读一个数字输入 (带范围夹) */
@@ -1484,12 +1821,12 @@ function numVal(id, lo, hi, dft) {
   return Math.max(lo, Math.min(hi, n));
 }
 
-/** 连点节拍提示 (由"目标击数/秒"反解间隔与按压, 含预估真实节拍) */
+/** 连点节拍提示 (由"目标击数/秒"反解间隔与按压, 含预估真实节拍) —— 与手机端 deriveCadence 同一条公式 */
 let lastRttMs = 0;   // 最近一次实测往返 (channel_probe)
 function deriveCadence(rateMin, rateMax, rttMs) {
   const OVERHEAD = 30;   // 设备端 input 进程开销经验值
-  const rMin = Math.max(1, Math.min(20, parseInt(rateMin, 10) || 8));
-  const rMax = Math.max(rMin, Math.max(1, Math.min(20, parseInt(rateMax, 10) || 12)));
+  const rMin = Math.max(1, Math.min(50, parseInt(rateMin, 10) || 8));
+  const rMax = Math.max(rMin, Math.max(1, Math.min(50, parseInt(rateMax, 10) || 12)));
   const rtt = Math.max(0, parseInt(rttMs, 10) || 40);
   const Tmax = 1000 / rMax, Tmin = 1000 / rMin;
   const pressMax = Math.max(6, Math.min(56, Math.floor(Tmax - OVERHEAD)));
@@ -1505,81 +1842,100 @@ function deriveCadence(rateMin, rateMax, rttMs) {
   };
 }
 function updateGrabRate() {
-  const rMin = numVal('grab-rate-min', 1, 20, 8);
-  const rMax = Math.max(rMin, numVal('grab-rate-max', 1, 20, 12));
+  const rMin = numVal('grab-rate-min', 1, 50, 8);
+  const rMax = Math.max(rMin, numVal('grab-rate-max', 1, 50, 12));
   const cad = deriveCadence(rMin, rMax, lastRttMs || 40);
   const el = $('grab-rate-hint');
-  if (el) el.textContent = '目标 ' + rMin + '~' + rMax + ' 击/秒 · 预估真实约 ' + cad.estPerSec + ' 击/秒（按往返 ' + (lastRttMs || 40) + 'ms 算；端侧硬上限 20 击/秒）';
+  if (el) el.textContent = '目标 ' + rMin + '~' + rMax + ' 击/秒 · 预估真实约 ' + cad.estPerSec + ' 击/秒（按往返 ' + (lastRttMs || 40) + 'ms 算）';
   const cd = $('grab-cadence-hint');
   if (cd) cd.textContent = '间隔 ' + cad.gapMin + '~' + cad.gapMax + 'ms · 按压 ' + cad.pressMin + '~' + cad.pressMax + 'ms · 单发路径上限约 ' + cad.ceilingPerSec + ' 击/秒';
 }
 
-/** 执行方式切换: 彩排时间 / 彩排连点时长 只有彩排模式能设 */
-function onGrabExecChange() {
-  const isReh = $('grab-exec').value === 'rehearsal';
-  $('grab-reh-wrap').style.display = isReh ? '' : 'none';
-  $('grab-time-wrap').style.display = isReh ? 'none' : '';
-  $('grab-reh-ms-wrap').style.display = isReh ? '' : 'none';
-  if (isReh && !$('grab-reh-time').value.trim()) {
-    const t = $('grab-time').value.trim();
-    if (t) $('grab-reh-time').value = t;   // 顺手从开抢时间带过来, 再自己改
-  }
+/** 到点盲点开关的实时提示 */
+function updateGrabBlindHint() {
+  const el = $('grab-blind-hint');
+  if (!el) return;
+  const on = $('grab-blindfire')?.checked;
+  el.innerHTML = on
+    ? '<b style="color:var(--ok)">已开</b>：到开抢时刻若还没检测到页面变化，先盲打一发保底（USB 数据线 / Wi-Fi 都支持），打完继续盯梢等确认。'
+    : '开: 到开抢时刻若还没检测到页面变化, 先盲打一发保底 (USB 数据线 / Wi-Fi 都支持), 打完继续盯梢; 关: 只等页面变化才出手。';
 }
 
-async function grabArm() {
+/**
+ * 下发抢购任务 (2026-10-10: 执行方式只剩一种 —— 正式开抢)。
+ * @param {boolean} testMode true = 绿色「测试」按钮: 同一条链, 但按你填的开抢时间模拟 (到点直接出手, 不等页面变化)
+ */
+async function grabArm(testMode) {
+  const dryRun = !!testMode;
+  const btnName = dryRun ? '测试' : '抢购';
   const itemId = parseItemId($('grab-link').value);
-  if (!itemId) return toast('请先粘贴商品链接或 ID', '', 'warn');
-  const exec = $('grab-exec').value;
-  const dryRun = exec === 'rehearsal';
-  const hammer = exec === 'blind';
-  const ft = (dryRun ? $('grab-reh-time').value : $('grab-time').value).trim();
-  if (!ft) return toast(dryRun ? '请填写彩排时间' : '请填写开抢时间', '如 2026-10-10 17:17:00', 'warn');
-  const fireAt = new Date(ft.replace(/-/g, '/')).getTime();
-  if (isNaN(fireAt)) return toast('时间格式错误', '如 2026-10-10 17:17:00', 'warn');
-  if (fireAt - Date.now() < 8000) return toast('时间太近', '距离现在不足 8 秒, 来不及就位', 'warn');
+  if (!itemId) { localLog('[操作]', `你点了「${btnName}」, 但商品链接没填/解析不出 → 没下发`); return toast('请先粘贴商品链接或 ID', '', 'warn'); }
+  const ft = ($('grab-time')?.value || '').trim();
+  if (!ft) { localLog('[操作]', `你点了「${btnName}」, 但开抢时间空着 → 没下发`); return toast('请填写开抢时间', '例 2026-10-10 13:30:00（24 小时制）', 'warn'); }
+  const tp = parseFireTime(ft);
+  if (!tp.ok) { localLog('[操作]', `你点了「${btnName}」, 开抢时间「${ft}」看不懂 → 没下发`); return toast('开抢时间无法识别', `「${ft}」看不懂 — 请按 2026-10-10 13:30:00 写全（24 小时制, 下午别写 1:30）`, 'error', 11000); }
+  const fireAt = tp.ms;
+  // ★ 2026-10-10 用户口径: **抢购前不做任何拦截** —— 点「抢购」就直接下发, 不弹二次确认、不拒绝。
+  //   时间已过去 / 只剩几秒 一律只"提醒"不阻断: 到点行为由手机端自己的迟到保护决定。
+  const deltaMs = fireAt - Date.now();
+  if (deltaMs < 0) {
+    toast('⚠ 提醒: 开抢时间已过去',
+      `解析为 ${tp.norm} — 已过去 ${fmtSpan(-deltaMs)}${twelveHourTypoHint(fireAt, deltaMs)}；手机端迟到超 5 秒就不再出手。已按你的设置直接下发。`,
+      'warn', 13000);
+  } else if (deltaMs < 8000) {
+    toast(`⚠ 提醒: 距开抢只剩 ${(deltaMs / 1000).toFixed(1)} 秒`,
+      '手机开页+核对+对时约需 5~8 秒, 可能来不及就位。已按你的设置直接下发。', 'warn', 13000);
+  }
 
-  // 前置检查 (统一通道): USB 或 Wi-Fi 任一在线即可 —— Wi-Fi 时点击走手机本地 Shizuku/手势
-  if (requireChannel()) return;
+  // 前置检查 (统一通道): USB 或 Wi-Fi 任一在线即可 —— Wi-Fi 时点击走手机本地 Shizuku 注入
+  if (requireChannel()) { localLog('[操作]', `你点了「${btnName}」, 但通道没连上 → 没下发`); return; }
+  let chInfo = null;
   try {
     const dv = await api('/api/devices');
-    const online = (dv.devices || []).filter(d => d.isAlive && !d.isAdbOnly);
-    if (chanState.mode === 'wifi' && !online.length) return toast('抢购被拦下', '手机 Agent 未在线 — 请先「一键连接设备」或启动手机脚本', 'error', 8000);
+    const all = dv.devices || [];
+    const online = all.filter(d => d.isAlive && !d.isAdbOnly);
+    // ★ 2026-10-10 修: 以前只有 WiFi 通道查这个 —— 结果"USB 插着但脚本已停"时照样能下发,
+    //   任务排进队列没人执行。现在两种通道都要"脚本真的在跑"才让发 (这是事实必要条件, 不是拦截)。
+    if (!online.length) {
+      const stopped = all.find(d => d.stoppingAt);
+      const pending = all.find(d => !d.stoppingAt && d.stopPushedAt);
+      const why = stopped ? '手机脚本已停止（它退出前回报过，中枢已确认）'
+        : pending ? '手机脚本正在停止（等它回报）'
+        : '手机 Agent 没在跑';
+      localLog('[操作]', `你点了「${btnName}」, 但${why} → 没下发`);
+      return toast('手机 Agent 未在线, 发不出去',
+        stopped ? '手机脚本已停止 —— 点「⚡ 一键连接设备」或在手机上重开脚本，等设备卡片变「在线」再发'
+        : pending ? '停止指令已发出、手机还没回报 —— 等设备卡片变成「⏹ 已停止」再决定重开'
+        : '请在手机上启动脚本，或点「⚡ 一键连接设备」',
+        'error', 9000);
+    }
     if (!targetScreen && online[0]?.screen) targetScreen = { w: online[0].screen[0], h: online[0].screen[1] };
-  } catch (e) { return toast('抢购被拦下', '无法连接中枢: ' + e.message, 'error', 7000); }
+    try { chInfo = (await api('/api/channel')).channel; } catch (e2) {}
+  } catch (e) { localLog('[操作]', `你点了「${btnName}」, 但连不上中枢 → 没下发`); return toast('连不上中枢, 发不出去', '无法连接中枢: ' + e.message, 'error', 7000); }
+  // ★ 提醒(不阻断): Wi-Fi 通道 + 手机没开 Shizuku = 到点一个都点不出去
+  const armMode = (chInfo && chInfo.mode) || chanState.mode;
+  if (armMode === 'wifi' && (!chInfo || chInfo.shizuku !== 'active')) {
+    toast('⚠ 提醒: Wi-Fi 通道下手机没开 Shizuku',
+      '大麦按钮是自绘的, 没 Shizuku 就点不动（本程序已不用无障碍手势兜底）。任务照发, 但请先去手机: 启动 Shizuku App → AutoJs6 抽屉里打开 Shizuku 开关。',
+      'warn', 13000);
+    localLog('[提醒]', `⚠ Wi-Fi 通道但手机 Shizuku 未打开 (${(chInfo && chInfo.shizuku) || '读不到'}) —— 已照发, 但到点点不出去`);
+  }
 
   const lead = numVal('grab-lead', 300, 10000, 1000);
-  const rateMin = numVal('grab-rate-min', 1, 20, 8);
-  const rateMax = Math.max(rateMin, numVal('grab-rate-max', 1, 20, 12));
+  const rateMin = numVal('grab-rate-min', 1, 50, 8);
+  const rateMax = Math.max(rateMin, numVal('grab-rate-max', 1, 50, 12));
   const cad = deriveCadence(rateMin, rateMax, lastRttMs || 40);
-  const jitterX = numVal('grab-jitter-x', 0, 100, 3);
-  const jitterY = numVal('grab-jitter-y', 0, 40, 3);
-  const realMs = numVal('grab-reh-ms', 1000, 60000, 4000);
+  const jitterX = numVal('grab-jitter-x', 0, 100, 30);
+  const jitterY = numVal('grab-jitter-y', 0, 40, 12);
   const ftTries = numVal('grab-ft-tries', 1, 5, 1);
   const btnXY = parseXY($('grab-btn-xy').value);
   const subXY = parseXY($('grab-sub-xy').value);
   const popupXY = parseXY($('grab-popup-xy').value);
   const keywords = $('grab-keywords').value.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 6);
   const item = catalog.find(x => String(x.itemId || '') === String(itemId));
-  const rate = `目标 ${rateMin}~${rateMax} 击/秒 → 预估真实 ${cad.estPerSec} 击/秒 (硬上限 20)`;
-  const execText = dryRun
-    ? `彩排 (到点真打: 首击 + ${realMs}ms 连点; 不检测变化、不走提交)`
-    : hammer ? '无脑高频连点 (不判跳转)' : '正式开抢 (变化→瞬间首击→连点到提交订单)';
-  const chanLine = chanState.mode === 'wifi'
-    ? '\n⚠ 当前 Wi-Fi 通道: 点击走手机本地 Shizuku 注入 (未启用则退无障碍手势, 自绘按钮可能无效)'
-    : '\n通道: USB (首击 PC-ADB 注入, Shizuku 本地注入兜底, 最可靠)';
-
-  const ok = await confirmModal('🚀 确认抢购?',
-    `目标: ${item?.name || ('商品 ' + itemId)}\n商品ID: ${itemId}\n时间: ${ft}\n方式: ${execText}\n`
-    + `连点节拍: ${rate} (间隔 ${cad.gapMin}~${cad.gapMax}ms, 按压 ${cad.pressMin}~${cad.pressMax}ms, 抖动 X${jitterX}px / Y${jitterY}px)\n`
-    + `首击: ${dryRun ? '中枢预置击发 (排在中枢时钟, 不经 T0 网络)' : '手机检测到开售变化后瞬间出手'} · 最多 ${ftTries} 发重试\n`
-    + `落点: ${btnXY ? ('控制台标定 ' + btnXY.x + ',' + btnXY.y) : '统一锚点 (841,2310)'} @ ${targetScreen ? (targetScreen.w + '×' + targetScreen.h) : '未知分辨率'}`
-    + ` — 一个点通吃 立即预订/确定/立即提交 (几何余量 X±100/Y±40, 当前 X±${jitterX}/Y±${jitterY})\n`
-    + `弹窗连击: 「继续尝试」在首击 300ms 后由侧车探测处置 (命中即点节点中心, 与主链并行, 合计 ≤20 击/秒)\n`
-    + `对时: 手机直连大麦服务器校准, 开售判定与倒计时全程手机本地\n`
-    + chanLine + '\n\n'
-    + (dryRun ? '彩排会真实点击按钮区域 + 连点, 但不会点提交。' : '到点后将真实点击, 连点到提交订单!'),
-    dryRun ? '🟢 开始彩排' : '🚀 抢购 (真实抢购)');
-  if (!ok) return;
+  // ★ 2026-10-10 用户口径: 删掉「🚀 确认抢购?」二次确认 —— 点「抢购」= 直接下发。
+  const itemName = item?.name || ('商品 ' + itemId);
+  const execText = dryRun ? '测试 (到点直接出手)' : '正式开抢';
 
   const task = {
     taskId: 't-grab-' + Date.now(),
@@ -1597,32 +1953,64 @@ async function grabArm() {
     },
     timing: { fireAtEpochMs: fireAt, highFreqLeadMs: lead },
     grab: {
-      dryRun, hammer, button: btnXY, submit: subXY, popup: popupXY, calibScreen: targetScreen,
+      dryRun, button: btnXY, submit: subXY, popup: popupXY, calibScreen: targetScreen,
       gapMinMs: cad.gapMin, gapMaxMs: cad.gapMax,
       pressMinMs: cad.pressMin, pressMaxMs: cad.pressMax,
       jitterPx: Math.max(jitterX, jitterY), jitterXPx: jitterX, jitterYPx: jitterY,
       rateMin: rateMin, rateMax: rateMax,
       autoRefresh: $('grab-autorefresh').checked,
+      blindFire: $('grab-blindfire').checked,
       chainMs: numVal('grab-chain-ms', 3000, 60000, 12000),
-      rehearsalMs: realMs,
       firstTapTries: ftTries,
       firstTapTimeoutMs: numVal('grab-ft-timeout', 30, 3000, 50),
+      doubleReadMs: numVal('grab-double-read', 0, 500, 50),
+      popupDelayMs: numVal('grab-popup-delay', 0, 3000, 300),
+      popupPollMs: numVal('grab-popup-poll', 10, 1000, 50),
+      watchPollMs: numVal('grab-watch-poll', 50, 5000, 400),
     },
   };
   try {
     await api('/api/tasks/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task }) });
     grabTask = task;
-    $('grab-badge').textContent = dryRun ? '彩排中' : '已布防';
+    grabTaskSinceMs = Date.now() - 5000;   // 记下起始时刻: 导出"本次记录"时圈时间窗
+    $('grab-badge').textContent = dryRun ? '测试中' : '已布防';
     $('grab-badge').className = 'badge ' + (dryRun ? 'green' : 'amber');
     startTracking(task);
     updateCountdown();
-    toast(dryRun ? '🟢 彩排已启动' : '🚀 已布防抢购', `${task.target.name} · ${ft}${chanState.mode === 'wifi' ? ' · Wi-Fi 通道' : ' · USB 通道'}`, 'success', 7000);
-  } catch (e) { toast('抢购下发失败', e.message, 'error', 7000); }
+    toast(dryRun ? '🧪 测试已启动' : '🚀 已布防抢购',
+      `${itemName} · ${ft} · ${execText} · ${rateMin}~${rateMax} 击/秒 · 抖动 X${jitterX}/Y${jitterY}px · 盲点${$('grab-blindfire').checked ? '开' : '关'} · ${chanState.mode === 'wifi' ? 'Wi-Fi 通道' : 'USB 通道'}`,
+      'success', 8000);
+    localLog('[操作]', `你点了「${btnName}」→ 已把任务下发给手机 (${dryRun ? '测试模式: 到点直接出手' : '正式开抢'})`);
+    localLog('[参数]', `本次下发: ${itemName} · 开抢 ${tp.norm} · 节拍 ${rateMin}~${rateMax} 次/秒(间隔 ${cad.gapMin}~${cad.gapMax}ms/按压 ${cad.pressMin}~${cad.pressMax}ms) · 抖动 X±${jitterX}/Y±${jitterY}px`
+      + ` · 双读确认 ${task.grab.doubleReadMs}ms · 弹窗起始 ${task.grab.popupDelayMs}ms / 探测 ${task.grab.popupPollMs}ms · 终态看护 ${task.grab.watchPollMs}ms`
+      + ` · 到点盲点一发 ${task.grab.blindFire ? '开' : '关'} · 首击 ${task.grab.firstTapTries} 发/${task.grab.firstTapTimeoutMs}ms · 连点链 ${task.grab.chainMs}ms · 通道 ${chanState.mode === 'wifi' ? 'Wi-Fi' : 'USB'}`);
+  } catch (e) {
+    toast('抢购下发失败', e.message, 'error', 7000);
+    localLog('[操作]', `✘ 你点了「${btnName}」但下发失败: ${e.message}`);
+  }
 }
 
 async function grabDisarm() {
-  if (!grabTask) return toast('本页没有进行中的抢购', '可在「最近任务」里对任意任务点「⛔ 终止」', 'warn');
+  if (!grabTask) { localLog('[操作]', '你点了「停止」, 但本页没有进行中的抢购'); return toast('本页没有进行中的抢购', '可在「最近任务」里对任意任务点「⛔ 终止」', 'warn'); }
+  localLog('[操作]', `你点了「停止」→ 终止任务 ${grabTask.taskId}`);
   await cancelTask(grabTask.taskId);
+}
+
+/* ==================== 抢购全程记录导出 (含你的操作) ==================== */
+let grabTaskSinceMs = 0;   // 本次抢购的起始时刻 (导出记录时用它圈时间窗)
+
+async function exportRunRecord() {
+  const taskId = (grabTask && grabTask.taskId) || (currentTask && currentTask.taskId) || '';
+  const sinceMs = grabTaskSinceMs || (Date.now() - 2 * 3600 * 1000);
+  localLog('[操作]', '你点了「导出本次记录」' + (taskId ? `（任务 ${taskId}）` : '（没指定任务 → 导出最近 2 小时）'));
+  try {
+    const r = await api('/api/record/digest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId, sinceMs }) });
+    if (!r.ok) { toast('导出失败', r.error || '未知原因', 'error', 8000); return; }
+    localLog('[记录]', `已导出 ${r.count} 条记录` + (r.file ? ` → ${r.file}` : '（文件没落盘, 内容已回传）'));
+    modal('📄 抢购全程记录（含你的操作，可全选复制）',
+      `<div style="font-size:12px;color:var(--muted);margin-bottom:8px">${r.count} 条 · 存到 <code>${esc(r.file || '未落盘')}</code></div>
+       <pre style="max-height:54vh;overflow:auto;font-size:11px;line-height:1.65;white-space:pre-wrap;background:var(--panel3);border:1px solid var(--line2);border-radius:8px;padding:10px">${esc(r.markdown || '')}</pre>`);
+  } catch (e) { toast('导出失败', e.message, 'error', 8000); }
 }
 
 let selfTestInFlight = false;   // 自测单飞: 上一次自测出结果前禁止再点 (防任务排队连跑成"无限循环")
@@ -1636,7 +2024,8 @@ async function grabSelfTest() {
   const ok = await confirmModal('🧪 检测通道自测?',
     `脚本会: ①就位商品页 → ②采样按钮基线 3 秒 → ③点一次底栏「想看」触发真实变化, 测量"发现延迟" → ④自动还原。\n\n商品: ${esc(item?.name || itemId)}`,
     '开始自测');
-  if (!ok) return;
+  if (!ok) { localLog('[操作]', '你在「检测通道自测」确认框上点了取消 → 未下发'); return; }
+  localLog('[操作]', `你点了「检测通道自测」→ 让手机对商品 ${itemId} 采样按钮基线并测"发现变化"的延迟`);
   const task = {
     taskId: 't-grab-selftest-' + Date.now(),
     platform: 'damai',
@@ -1658,11 +2047,154 @@ async function grabSelfTest() {
   }
 }
 
+/* ==================== 全面自检 (开抢前把整条链路体检一遍) ==================== */
+/** 按当前通道, 用大白话说明整条抢购链路 */
+function buildGrabChainDoc(mode) {
+  const click = mode === 'usb'
+    ? '首击走 USB→电脑的 adb 注入（最快，一发只要几毫秒）'
+    : mode === 'wifi'
+      ? '首击走手机本地 Shizuku 注入（免数据线；手机没开 Shizuku 就点不动 —— 大麦按钮是自绘的, 无障碍手势点不动, 本程序已不再使用手势兜底）'
+      : '未连接，暂时没法出手';
+  return [
+    '① 就位：点「📲 打开商品页」把手机停到目标演出详情页（USB 走 am start 深链 / Wi-Fi 走手机本地深链）',
+    '② 核对：用你填的关键词核对页面身份；对不上就直接拒绝操作，不乱点',
+    '③ 锚定：记下底栏按钮的基线（预约结构 6 项 + 容器属性 + 页面文案）',
+    '④ 对时：手机跟大麦服务器对时，把开抢时刻换算到手机自己的时钟',
+    '⑤ 盯梢：开抢前 1 秒起每 10ms 读一次基线；「预约结构成片消失（≥2 项从有到无）」+ 双读确认 → 判定开售',
+    '⑥ 首击：' + click + (($('grab-blindfire') || {}).checked ? '；开了「到点盲点一发」，到点还没变化也会先盲打一发保底' : ''),
+    '⑦ 连点链：之后全程高频连点（节拍按你填的击/秒），旁边一个"侧车"线程盯着「继续尝试」弹窗 + 支付/售罄/滑块等收工信号',
+    '⑧ 结果：进支付页 → 成功收工；出滑块 → 停下并震动叫你；售罄 / 超时 → 停',
+  ].join('\n');
+}
+
+/** 全面自检: 中枢 / 手机 / 通道 / 脚本版本 / 商品 / 时间 / 参数 逐项体检, 末尾给通道链路说明 */
+async function grabFullCheck() {
+  const box = $('grab-check-steps');
+  if (!box) return;
+  const rows = [];
+  const push = (state, name, detail) => rows.push({ state, name, detail: detail || '' });
+  const draw = () => {
+    box.style.display = '';
+    box.innerHTML = rows.map(r => `<div class="cs ${r.state}">${r.state === 'ok' ? '✅' : r.state === 'warn' ? '⚠️' : '❌'} ${esc(r.name)}${r.detail ? ' — ' + esc(r.detail) : ''}</div>`).join('');
+  };
+  box.style.display = '';
+  box.innerHTML = '<div class="cs">正在体检整条链路…</div>';
+  localLog('[操作]', '你点了「全面自检」→ 开始逐项体检 (中枢 / 手机 / 通道 / 脚本版本 / 商品 / 时间 / 参数)');
+
+  // ① 中枢
+  let dv = null;
+  try { dv = await api('/api/devices'); push('ok', '中枢服务', '连通正常'); }
+  catch (e) { push('bad', '中枢服务', '连不上中枢：' + e.message + '（先用「服务启停」把中枢起来）'); draw(); toast('❌ 全面自检未通过', '中枢都连不上，后面都没法测', 'error', 8000); return; }
+
+  // ② 手机在线
+  const allDev = ((dv && dv.devices) || []);
+  const online = allDev.filter(d => d.isAlive && !d.isAdbOnly);
+  if (online.length) push('ok', '手机 Agent', '在线 ' + online.length + ' 台' + (online[0].screen ? ' · 分辨率 ' + online[0].screen[0] + '×' + online[0].screen[1] : '（未上报分辨率，锚点会用兜底坐标）'));
+  else if (allDev.some(d => d.stoppingAt)) push('bad', '手机 Agent', '已停止（手机退出前回报过）—— 点「⚡ 一键连接设备」或在手机上重开脚本');
+  else if (allDev.some(d => d.stopPushedAt)) push('bad', '手机 Agent', '正在停止（指令已发，等手机回报「我要退了」）');
+  else push('bad', '手机 Agent', '没检测到在线手机 → 点「⚡ 一键连接设备」或在手机上启动脚本');
+  if (!targetScreen && online[0] && online[0].screen) targetScreen = { w: online[0].screen[0], h: online[0].screen[1] };
+
+  // ③ 通道 + ★ Shizuku（WiFi 通道下这是"能不能点出去"的唯一出路, 必须开着）
+  let mode = chanState.mode;
+  let shizuku = online[0] ? (online[0].shizuku || 'unknown') : 'none';
+  try {
+    const ch = await api('/api/channel');
+    if (ch && ch.channel) { mode = ch.channel.mode || mode; if (ch.channel.shizuku) shizuku = ch.channel.shizuku; }
+  } catch (e) {}
+  const shizukuOk = shizuku === 'active';
+  const shizukuText = { active: '已打开 ✓', inactive: '装了但没打开', none: '手机没装 / 脚本读不到', unknown: '状态读不出来' }[shizuku] || shizuku;
+  if (mode === 'usb') {
+    push('ok', '链接通道', 'USB 数据线（全部能力可用，含中枢预置击发）');
+    push(shizukuOk ? 'ok' : 'warn', '手机自主点击 (Shizuku)', shizukuText + (shizukuOk ? ' —— 万一数据线掉了也能顶上' : ' —— 现在用不到（走数据线），但建议开着做备份'));
+  } else if (mode === 'wifi') {
+    push('warn', '链接通道', 'Wi-Fi（点击走手机本地 Shizuku 注入；大麦按钮是自绘的，没 Shizuku 就点不动）');
+    // ★ 用户口径 (2026-10-10): WiFi 通道时**必须**确保 Shizuku 是打开的 —— 不通过就是❌
+    push(shizukuOk ? 'ok' : 'bad', '手机自主点击 (Shizuku)',
+      shizukuOk ? '已打开 ✓ —— WiFi 下能点出去'
+        : ('✘ ' + shizukuText + ' —— **Wi-Fi 通道下不加这个就一个都点不出去**。去手机开一下：Shizuku App 先启动 → AutoJs6 侧边栏(抽屉) → 打开 Shizuku 开关'));
+  } else {
+    push('bad', '链接通道', '未连接（插数据线，或同一 Wi-Fi 下启动手机脚本）');
+    push(shizukuOk ? 'ok' : 'bad', '手机自主点击 (Shizuku)', shizukuText);
+  }
+
+  // ④ 手机脚本版本
+  try {
+    const v = await api('/api/device/verify-script', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (v.verdict === 'latest') push('ok', '手机脚本版本', '与电脑端一致');
+    else if (v.verdict === 'offline') push('bad', '手机脚本版本', '手机未在线，无法比对');
+    else push('warn', '手机脚本版本', (v.headline || v.verdict || '不一致') + (v.hint ? ' · ' + v.hint : ''));
+  } catch (e) { push('warn', '手机脚本版本', '校验失败：' + e.message); }
+
+  // ⑤ 商品链接 / 探针库 / 核对关键词
+  const itemId = parseItemId($('grab-link').value);
+  if (!itemId) push('bad', '商品链接', '没填或解析不出商品 ID');
+  else {
+    const item = catalog.find(x => String(x.itemId || '') === String(itemId));
+    if (item) push('ok', '商品链接', '已解析 ' + itemId + (item.name ? ' · ' + item.name : ''));
+    else push('warn', '商品链接', '已解析 ' + itemId + '，但探针库里没有（开抢时间不会被自动填，要手填）');
+  }
+  const kws = $('grab-keywords').value.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean);
+  if (kws.length) push('ok', '页面核对关键词', kws.join(' / '));
+  else push('bad', '页面核对关键词', '为空 → 手机无法核对页面，会直接拒绝操作');
+
+  // ⑥ 开抢时间
+  const ft = ($('grab-time') ? $('grab-time').value : '').trim();
+  const tp = ft ? parseFireTime(ft) : { ok: false };
+  if (!tp.ok) push('bad', '开抢时间', ft ? ('「' + ft + '」看不懂，请按 24 小时制写全（下午别写 1:30）') : '没填');
+  else if (tp.ms - Date.now() < 0) push('warn', '开抢时间', '解析为 ' + tp.norm + ' — 已过去（手机端迟到超 5 秒就不出手）');
+  else push('ok', '开抢时间', '解析为 ' + tp.norm + '（距现在 ' + fmtSpan(tp.ms - Date.now()) + '）');
+
+  // ⑦ 点击参数
+  const rMin = numVal('grab-rate-min', 1, 50, 8), rMax = Math.max(rMin, numVal('grab-rate-max', 1, 50, 12));
+  const cd = deriveCadence(rMin, rMax, lastRttMs || 40);
+  push('ok', '连点节拍', '目标 ' + rMin + '~' + rMax + ' 击/秒 → 间隔 ' + cd.gapMin + '~' + cd.gapMax + 'ms / 按压 ' + cd.pressMin + '~' + cd.pressMax + 'ms（真实约 ' + cd.estPerSec + ' 击/秒）');
+  push('ok', '落点抖动', 'X±' + numVal('grab-jitter-x', 0, 100, 30) + ' / Y±' + numVal('grab-jitter-y', 0, 40, 12) + ' px');
+  const blind = $('grab-blindfire') && $('grab-blindfire').checked;
+  push(blind ? 'warn' : 'ok', '到点盲点一发', blind ? '已开 — 到 T0 若没检测到变化会盲打一发（USB / Wi-Fi 都支持）' : '关（只等页面变化才出手）');
+  push('ok', '双读确认 / 看护节奏', '双读 ' + numVal('grab-double-read', 0, 500, 50) + 'ms · 弹窗起始 ' + numVal('grab-popup-delay', 0, 3000, 300) + 'ms · 弹窗间隔 ' + numVal('grab-popup-poll', 10, 1000, 50) + 'ms · 终态看护 ' + numVal('grab-watch-poll', 50, 5000, 400) + 'ms');
+
+  draw();
+
+  // ⑧ 通道链路说明 (按链接通道不同, 整个链路逻辑也讲清)
+  box.insertAdjacentHTML('beforeend',
+    `<div class="cs chain"><b>当前通道的完整抢购链路（${mode === 'usb' ? 'USB 数据线' : mode === 'wifi' ? 'Wi-Fi' : '未连接'}）</b>\n${esc(buildGrabChainDoc(mode))}</div>`);
+
+  const bad = rows.filter(r => r.state === 'bad').length;
+  const warn = rows.filter(r => r.state === 'warn').length;
+  rows.forEach(r => localLog('[自检]', `${r.state === 'ok' ? '✅' : r.state === 'warn' ? '⚠️' : '❌'} ${r.name}${r.detail ? ' — ' + r.detail : ''}`));
+  localLog('[自检]', `体检结束: ${bad ? bad + ' 项要处理' : '全部通过'}${warn ? ', 另有 ' + warn + ' 项提醒' : ''}`);
+  toast(bad ? ('⚠ 自检发现 ' + bad + ' 项要处理') : '✅ 自检通过, 链路就绪',
+    bad ? '看下方红色项' : (warn ? '有 ' + warn + ' 项提醒, 不阻塞' : '点「抢购」就好'),
+    bad ? 'warn' : 'success', 9000);
+}
+
 /* ==================== 初始化 ==================== */
+/* 「任何操作都有日志」兜底层: 凡是在本页点的按钮, 都往日志面板记一条人话 (上面各函数里已详细记录的除外) */
+const ACTION_NAMES = {
+  connectDevice: '一键连接设备', stopAgent: '停止手机脚本', updateScript: '更新手机脚本并重启 Agent',
+  verifyPhoneScript: '验证手机脚本是否最新', 'perfBoost(true)': '开启保活优化', 'perfBoost(false)': '恢复原状',
+  runProbe: '采集这条演出', reprobeCurrent: '重新采集当前演出', saveConfig: '保存配置',
+  addViewer: '添加观演人', addAddress: '添加收货地址', grabProbe: '按商品ID采集',
+  dispatchTask: '下发任务(演练/立即购买)', loadProfile: '刷新信息库', refreshDevices: '刷新设备列表',
+  copyText: '复制局域网地址', runDrill: '跑演练',
+};
+const ACTION_SKIP = /grabArm|grabDisarm|grabFullCheck|grabOpenItem|grabSelfTest|cancelTask|clearLogs|saveGrabParams|closeModal/;
+document.addEventListener('click', (ev) => {
+  const b = ev.target && ev.target.closest ? ev.target.closest('button') : null;
+  if (!b) return;
+  const oc = b.getAttribute('onclick') || '';
+  if (!oc || ACTION_SKIP.test(oc)) return;
+  const key = Object.keys(ACTION_NAMES).find((k) => oc.indexOf(k) === 0);
+  const label = key ? ACTION_NAMES[key] : (b.textContent || '').trim().slice(0, 18);
+  if (label) localLog('[操作]', '你点了「' + label + '」');
+});
+
 loadGrabParams();          // 先恢复上次保存的参数（在下面依赖输入的渲染之前）
-bindGrabParamAutosave();
 updateGrabRate();
-onGrabExecChange();
+updateGrabBlindHint();
+primeGrabLinkBaseline();   // ★ 恢复出来的链接 = 当前预填所属的商品, 免得第 1 次解析就被当"换商品"冲掉已存值
+updateGrabTimeHint();      // 开抢时间回显 (解析成几点 + 距现在多久)
 if ($('grab-link').value.trim()) onGrabLinkInput();
 perfStatus(true);          // 静默查一次保活优化状态
 refreshDevices();

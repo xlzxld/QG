@@ -1,87 +1,47 @@
 # 项目长期记忆 · 稀缺名额与稀缺商品抢购平台
 
-## 一、用户硬规则（操作纪律，跨模块）
-1. **白名单纪律**：不在清单内的对象一律不操作（不开窗/不加载/不点击/不发请求/不写缓存）。闸门必须装在副作用之前；匹配失败当错误处理，绝不兜底默认值（搜 `|| {}`/`|| []` 类静默兜底）。判定按 id（华为 prdId / 大麦 itemId），不按标题。测试必须带"该放行的要放行"对照组。
-2. **状态判据用真实凭据**，不看页面文案（华为登录态 = `sid`/`hwid_cas_sid` @ `.id1.cloud.huawei.com`；大麦页面核对 = Activity 名 + 标题关键词 + 特征控件）。
-3. **换绑即重置**：槽位换商品/规格 = 事件 → 重置 + 换绑确认弹窗；自测必须零副作用（弹框后取消）。
-4. **沟通**：大白话，先结论后细节，术语跟一句白话解释；给用户的操作文档只写点击路径、一页以内。
+## 一、用户硬规则（跨模块操作纪律）
+1. **白名单纪律**：清单外的对象一律不操作（不开窗/不加载/不点击/不发请求）。闸门必须在副作用之前；匹配失败当错误处理，绝不兜底默认值（搜 `|| {}`/`|| []`）。判定按 id（华为 prdId / 大麦 itemId），不按标题。测试必须带"该放行的要放行"对照组。
+2. **状态判据用真实凭据**，不看页面文案。3. **换绑即重置**；自测零副作用。4. **沟通**：大白话、先结论后细节、术语跟一句白话解释；给用户的文档只写点击路径、一页以内。
 
 ## 二、项目全景
-- 布局：`core/`（桥接 :3100 grab-bridge｜手机中枢 :3120 device-hub｜保活 keepalive｜启停 service-menu）｜`platforms/{huawei,damai,app}`｜`web/`（workbench + `web/platforms/grab-console.html` 华为控制台 + `hub-console.html` 手机中枢控制台）｜`tools/`｜`verify/`（活跃在根、history 冻结、tmp 草稿）｜`data/grab/`｜`tests/`。归档目录不入库不测。
-- git：`github.com/xlzxld/QG`（代理 127.0.0.1:7897；token 姿势见用户级记忆）；锚点 tag `baseline-pre-restructure` / `ebe8e4a` / `693ed86` / `6590126`。
-- 服务启停统一入口：`服务启停.bat/.command` → `core/service-menu.mjs`；**改 bridge/hub 代码必须重启**（用户点）；hub-console.html 刷新即生效。
-- 沙箱限制（我在沙箱里做的事）：进程活不过命令边界；**同步 spawn 一律 EBUSY**（新代码统一异步 spawn）；`npm test` 需 `ESBUILD_BINARY_PATH` 绕行（见测试节）。
+- 布局：`core/`（grab-bridge :3100｜device-hub :3120｜keepalive｜service-menu）｜`platforms/{huawei,damai,app}`｜`web/hub-console.html`（手机中枢控制台）｜`tools/`｜`verify/`（活跃在根）｜`data/grab/`｜`tests/`。归档目录不入库不测。
+- git `github.com/xlzxld/QG`（代理 127.0.0.1:7897；token 姿势见用户级记忆）。启停入口 `服务启停.bat/.command`。
+- **改 bridge/hub/agent 代码必须重启服务 / 重推脚本**（改 hub 不重启 → 新字段被白名单**静默丢弃**）；hub-console.html 刷新即生效。
+- 沙箱：进程活不过命令边界；同步 spawn 一律 EBUSY（统一异步 spawn）；`npm test` 需 `ESBUILD_BINARY_PATH` 绕行。
 
-## 三、技术约定与踩坑（高频）
-- spawn 子进程一律 `windowsHide:true`（后台/detached 进程尤其致命，每次调用弹黑窗）。
-- **Windows .bat 规范**：CRLF；含中文必须 GBK 编码 + `chcp 936`（UTF-8+BOM/chcp65001 会把 cmd 解析啃崩，实测 EXIT=255）；纯 ASCII bat 内不写中文（中文交给 node 打印）。守卫 = `tests/platform-compat.test.mjs` 第 5 项。
-- adb：本机 = 项目根 `platform-tools/`（不入库；hub 启动自动补子进程 PATH）；**任何 adb 调用超时 ≥6s**（冷启动 1~4s，2s 会被强杀误判）。
-- vmall 是 Next.js SPA：站内跳转不重载 → 守卫监听 `pushState/replaceState/popstate` + 轮询兜底；页面身份比对用启动时基准。
-- 下单动作只经页面自身代码（可信点击/内部函数），不构造不重放请求；只读接口（校时/队列/列表）不算越界。
-- 油猴 `$` = getElementById 包装（传纯 id；`$('#x')` 会整段静默死）。
-- 华为侧：控制台可调参数唯一入口 = 「抢购行为」面板（deepMerge 局部 patch；加字段三步）；预开提交闸门 `preOpenSubmitLeadMs`（默认 0 = 对准 T0）；驱动不热加载槽位（改槽位 stop→launch）；体检只查 slots[0]（`--slot=` 支持但桥接不带参）；保活守护控制口 `127.0.0.1:3101`（/ping = 状态权威；中途被停不会自动重启，巡检查 `/api/keepalive/status`，恢复 `POST /api/keepalive/start`）；派发定时用自动化任务 / `core/deferred-timers.mjs` / `tools/dispatch-huawei.mjs`（幂等）；`--only` 精确闸门 + 任何写商品列表入口后必须 `renderOnlyPicker()`。
-- 「抢购未中」排查三件套：① 取证 events 有无 `UNLOCK_SEEN`（无 = 按钮从未出现）② 直读 `queryRushbuyInfo.skuStatus`（开售前=1、售罄=2）③ buttonMode（1 现货/2 即将/9-10 缺货/29 未开售且**开售后不翻转**）。
-- 挪含 let/const 代码块时声明一起挪（TDZ）；`tsc --noEmit --allowJs --checkJs --target ES2022 --module ES2022 --moduleResolution bundler --skipLibCheck` 后 grep `TS2448|TS2454` 静态扫。
-- 遗留待清理：用户自建 Windows 计划任务 10:00 跑旧路径 `scripts\*.mjs`（已失效报模块找不到，输出 `data/grab/schtasks.log`）。
-- **★ `uiautomator dump` 在"有持续动画的页面"上会一直 `ERROR: could not get idle state.` 且不写文件（0 字节）**
-  → 拿到的空文件别当证据（2026-10-09 我据此误判过一次）。**判 dump 有效性先看大小/节点数**。
-  Agent 本身不走 uiautomator（用无障碍 `id().findOnce()` 直查），不受此影响；诊断快照接口已把 dump 失败降级为"仅截图"。
-- **大麦抢购的成熟路线（2026-10-09 调研）** = 盯**按钮文案/结构变化**（不是像素、不是固定时间戳）：
-  开源 ticket-purchase 盯"立即预订/立即购买/选座购买"文案；AutoJs6 作者原话"**按钮状态才是唯一可信的准点信号**"、
-  "到点前几秒高频但**避免毫秒级重复点击**"、"**忽略电池优化+后台白名单**防定时任务延迟"；
-  PC 端 DamaiGrabber 用 ADB+uiautomator2+"纯坐标连点"（与我们同构）；AutoJs6 甚至**不支持区域截图**（像素方案更慢）。
-- **★ 页面身份只认标题节点**（2026-10-09 修掉"跑错站"真 bug）：`cn.damai:id/info_v2_title_tv1`（标题含城市+站名）。
-  原来的 `grabKeywordsOk` 是**全页 textContains 搜字** → 巡演站选择器里列着**所有**站名，
-  于是"给厦门站布防、手机却停在贵阳站"也能通过核对 → 脚本不跳转、在**错误商品**上蹲守（实测复现）。
-  现行规则：① 只用标题比对；② `target.session`（目标站名）**必须出现在标题里**，否则直接否决；
-  ③ 标题读不到才退化全页并上报 `page_id_degraded`。
-- **第三重文案兜底只留"反向判据"**：实测 预约态(pos0,neg1) / 已开售(pos0,neg0) ——
-  "立即购买/立即预订/缺货登记"等正向词条**两态都读不到**（画在画布上），已清空不作依赖；
-  有效的是"…开抢"这行字**开售后从可读文本消失**（它按文字找、不按 id 找，改版换 id 时仍有效）。
-- 落点抖动**分 XY 轴**：`jitterXPx`/`jitterYPx`（控制台两个输入框；旧 `jitterPx` = 两轴最大值）。
-  **语义 = 每个值是"上限"**：每次点击在 `-上限~+上限` 随机、两轴各自独立且**每次同时生效**（`jitterInt = round(base+(random*2-1)*amp)`）；0 = 不抖。
-- **改控制台参数区后必须核对所有 input id 都在位**（2026-10-09 我误删 `grab-ft-timeout` 导致布防整条会抛错）；
-  `numVal` 已改为"元素缺失返回默认值"兜底，但新增/删除字段仍要回查一遍 id 与 `GRAB_FIELDS` 清单。
-- 中枢 `taskStates` 只保留最近 30 条 → 记录被清理后任务**撤不掉**（手机还在跑）。
-  已加 `deviceCancelOverride`（cancel 找不到记录时按"设备当前任务"登记，心跳回带 `cancelTaskId`）。
+## 三、技术约定与踩坑
+- spawn 一律 `windowsHide:true`。Windows .bat：CRLF；含中文必须 GBK + `chcp 936`；守卫 `tests/platform-compat.test.mjs`。
+- adb 在项目根 `platform-tools/`；**任何 adb 调用超时 ≥6s**。`uiautomator dump` 在动画页上会报错且写 0 字节文件 —— 空 dump 不当证据。挪含 let/const 的代码块时声明一起挪（TDZ）。
+- 设备 busy 新任务**排队** → 换参先 `POST /api/tasks/cancel` 再 dispatch。遗留：用户处有 10:00 跑旧路径的计划任务（已失效）。
 
-## 四、测试约定
-- 本机跑测：`cp node_modules/@esbuild/win32-x64/esbuild.exe /tmp/esb-test/esbuild.exe` + `ESBUILD_BINARY_PATH=/tmp/esb-test/esbuild.exe npm test`（低完整性级别目录的绕行；2026-10-09 52/52 全绿）。
-- 闸门/判据类改动必跑对应实测脚本（verify-list-gate / verify-spa-gate / verify-login-* / verify-picker-refresh / verify-keepalive-control / verify-damai-probe / verify-damai-console-ui）。
-- 垫片必须真实现（真回调/真代理）；测闸门必须同时验对照组；槽位/换绑类自测零副作用；控制台页面代码包在函数里 → 用 DOM 交互测，不能内省变量。
-- 服务常驻/"窗口弹不弹"类验证借用户环境（用户点 bat/按钮，我旁采样 `verify/sample_windows.py`）。
+## 四、大麦 grab 现行口径（2026-10-10 定案）
+- 链路：hub-console「🔗 链接抢购」→ `POST /api/tasks/dispatch`（mode:'grab'，闸门=itemId 纯数字 + fireAt>0）→ agent `executeDamaiGrab`：就位→核对→定位→对时→开抢前等待→T0-1s 高频盯梢→首击→高频连点链→readResult。
+- **结构信号（唯一可靠）**：预约结构 6 项（`id_new_project_normal_count_down_layout` / `id_project_count_sell_time` / `id_project_ticket_remind_me` / `id_project_count_down_remind_layout` / `id_project_count_down_layout` / `id_project_count_down_bg`）里 **≥2 项从有到无** ⇒ 开售；容器属性变化仅兜底；必须**底栏容器仍可读**才算数。**绝不用像素/截图**。干扰项：`id_new_project_grab_tip_text`、预售滚动条。文案兜底只留反向判据（"…开抢"消失）。
+- 页面身份**只认标题节点** `info_v2_title_tv1`，目标站名必须出现在标题里（旧 `grabKeywordsOk` 全页搜字 → "跑错站"真 bug）。
+- **一个统一锚点通吃 3 个按钮**（立即预订/确定/立即提交 → (841,2310)）；「继续尝试」弹窗是**另一个点位**（(540,1382)，优先点节点中心）。
+- **点击只有两路：PC-ADB(USB) → 手机本地 Shizuku**（2026-10-10 用户裁决）——**无障碍手势点击兜底已彻底删除**（真机实测对自绘按钮"返回成功但界面零变化"）：`fastPress` 已删；`adbPress`/`emitFirstTap`/`criticalTap` 不含 `press(`/`click(`/`humanPress`；`executePhoneOp op='gesture'` + 中枢 `case 'gesture'` 删除；能力矩阵 `gesture/gestureReliable` → `tapAdb/tapShizuku`。两路都不通 = 如实报 `first_tap_failed`，**绝不假装成功**。保留的手势用法：`humanPress`（UI 节点坐标点按）、`humanSlide`/`stepWheel` 的 `gesture()`（滑块/省市滚轮拖拽）。
+- **点击参数三处必须一致**：控制台 `hub-console.html`（含其**自己的 `deriveCadence`**）= 中枢 `device-hub.mjs` 白名单 = 手机端 `applyClickCfg`。改一处必须三处同改 + `npm run agent:build` + 跑护栏（`tests/mobile/grab-logic.test.mjs` 第16/21/23 条）。现行：抖动 **X0~100 / Y0~40，默认 30/12**（几何极限其实 ±173/±60，按用户口径卡 100/40）；首击超时 30~3000 默认 50；首击发数 1~5 默认 1；**节拍 1~50，无风控硬上限**（去掉 ≥50ms 间隔地板）。
+- **2026-10-10 新增四参**（默认）：`doubleReadMs 50`（双读确认延迟）、`blindFire false`（到点盲点一发开关）、`popupDelayMs 300`、`popupPollMs 50`、`watchPollMs 400`。盲点**走 emitFirstTap 统一出手链，USB/WiFi 都支持**，打完继续盯梢。
+- **执行方式只剩一种**：旧「彩排 / 无脑高频」已删；绿色「🧪 测试」= 同一份参数 + 到点直接出手（`dryRun`），之后走**同一条完整连点链**；「🩺 全面自检」= 中枢/手机/通道/脚本版本/商品/时间/参数逐项体检 + 按通道给链路说明。
+- **点「抢购」= 直接下发**：不许有 confirmModal、不许有会拒绝的 return（itemId/时间/能解析 fireAt/通道在线四条是事实必要条件）。时间异常只 toast + 照发。`mode==='buy'` 的确认框是资金闸门，别删。`parseFireTime(raw, nowMs)` 统一解析；⚠️ 陷阱 `2026-10-10 1:30` = 01:30。
+- 预填字段**绝不能"非空就永不覆盖"**：`lastParsedItemId` 记归属商品，商品 ID 一变就重填；同商品只补空值；探针无开售提示 → 清空并提示手填；启动先 `primeGrabLinkBaseline()`。
+- 控制台参数**只在点「💾 保存参数」写 localStorage**（无自动保存、无「清空已存」）。
+- 连点链**无注入熔断**（不再"连续 3 次失败就停"，只计数上报 `injectFails`）；侧车线程管弹窗处置 + 终态看护，与主链共享 TAP_SPACING（只防撞同一瞬间，不限速）。
+- **日志口径：任何操作都要有人话日志** —— 手机端 `sendLog` 一律"大白话 + 数字"（`[就位]/[核对]/[定位]/[对时]/[等待]/[盯梢]/[出手]/[副手]/[连点]/[诊断]/[取证]`，禁裸术语）；控制台 `localLog()` 记"你点了什么"（全局 click 兜底 + `grabArm` 的 `[参数]` 快照），`processEvent` 给每个抢购事件配人话解读，**不许再出现"整段 JSON 兜底"**。
+- **全程记录 / 复盘**：控制台 `localLog` 同步 `POST /api/events/console`（只落盘 `device-events.jsonl`，**不回灌事件环**）→ 人工操作与手机事件进同一条时间线；控制台「📄 导出本次记录」→ `POST /api/record/digest`（`buildDigest`）渲染成人话 Markdown（含【人工/控制台】标记 + 关键结论），落盘 `data/grab/digest/`。
+- **出手判定不许加"人工介入"前置闸门**（2026-10-10 用户裁决）：我一度加了"页面被点走就暂停判定"（`page_left_watch/skipFire/onDetailAct`），用户判定「基本不会出现这种切走的场景, 徒增负担」→ **已撤**, 护栏反向锁死不许复活。顺带更正一个错误说法：**手挡屏幕不影响无障碍读节点**；真正会整片读不到的是"别的窗口抢了焦点"（系统弹窗/通知栏/输入法, vivo VDialog 尤其明显），`invalidStreak` 只记日志不误判；手指真正会打架的是**注入点击**（按着时注入的 tap 可能被吞或与用户触摸合成多指手势）。
+- **现场取证**：`captureEvidenceAsync()` 必须**独立线程**跑 `diagSnapshot`（否则卡住连点链）；弹窗首见 `popup_first_seen` + 取证、验证码 `captcha_seen` + 取证、全场没弹窗 `popup_never_seen` + 补证据。
+- **停止脚本 = 手机回报 + 中枢复探**（2026-10-10 用户口径，**以这条为准**）：手机收到停止指令 → **退出前先 `notifyStopping()` 回报** `POST /api/device/stopping` → 中枢 `markStopConfirmed()` 立刻把 `stoppingAt` 打上、`liveAgents()` 当场摘除（通道/设备状态即时刷新）→ **复探**：回报后 3 秒宽限内若仍在发心跳/轮询 ⇒ 判定"停止没生效" `discardStopMark()`（撤状态 + `agent_stop_failed` 事件 + 提示再点一次）；指令发出 10 秒没等到回报 → 自动重发（最多 3 次）。**中枢绝不"点一下就假设停掉"**（`/api/device/stop-agent` 只记 `stopPushedAt`）。控制指令已抽成 `Transport.applyControl()`，**心跳与长轮询共用** → 手机闲着时停止指令经 `deliverControlNow()` 塞进挂起的长轮询，秒级送达。
+- **`isAlive` = "脚本真的在跑"，`usbAttached` = "数据线插着"**（两个概念**绝不许互相冒充**）：曾因 `/api/devices` 在 USB 插着时强制 `isAlive:true`，导致停止后控制台永远显示"在线"。现在 `isAlive = 心跳新鲜 && !stoppingAt`。控制台三档：`stopPushedAt` 未确认 → 「🟡 正在停止…」、`stoppingAt` → 「⏹ 已停止」、否则 在线/失联；`grabArm` 的"脚本在线"前置检查**两种通道都要过**。
+- **中枢重启 = 内存设备表清空**，而手机只在**脚本启动时**发一次 `hello` → 只在 hello 里上报的字段（`agentVersion` / `screen` / `autoX`）会全丢，控制台就会误报"版本号未上报（旧脚本）"。修法（2026-10-10）：① 心跳 payload 也带 `agentVersion`；② 中枢心跳响应带 `registered`，false 时手机**立刻补发 hello**；③ 校验类判据一律以**体积字节级一致**为准（`canVerifyOp = sizeExact || 版本≥1.3.0`），版本号缺失/不一致在体积一致时不显示❌。⚠️ 改这类判据后要检查测试里"排队任务"的相互干扰（体积一致会真的下发手机自检任务，会挤掉后面的用例）。
+- **接口成功判定必须看"契约字段"，不能靠"HTTP 200"或单一 `ok`**（2026-10-10 踩坑）：`/api/device/update-script-lan` 原来只回 `{status:'pending'}`（**没有 `ok`**），而控制台写 `if (r.ok) ... else toast('更新未完成')` → **WiFi 路径必然误报"更新未完成"**（实际已更新）。现在：中枢 LAN 端点回 `ok:true + pending:true`；控制台分三档（已下发 / 已生效 / 已下发未确认 `warn`）；并新增 `confirmScriptUpdated()` **下完 10 秒用体积对账复核**再下结论。`/api/device/verify-script` 支持 `body.deviceId` 指定设备。改任意"更新/自检"类端点时，先对照控制台的判断条件。
+- **中枢离线/拔线 = 抢购照跑**（2026-10-10 核实并加固）：开售判定（无障碍读结构）与对时（直连大麦 MTOP）都在手机本地，不经中枢；点击是**逐发尝试**「① PC-ADB(中枢) → ② 本地 Shizuku」，走局域网地址或中枢进程被杀时 ①毫秒级失败 → 自动走 ②；`openItem` USB 失败自动转 `openItemLocal`；结果失败进 `enqueueOutbox`，中枢回来 `flushOutbox` 补发；拔线后长轮询 catch 会 `detectHub()` 重新发现局域网地址。⚠️ **「中枢停止」(电脑程序退出, 不影响手机) ≠ 「停止手机脚本」(命令手机退出, 抢购会停)**。⚠️ 前提：**手机必须开 Shizuku**（WiFi/无数据线下唯一点击通道）。⚠️ 加固：中枢可达性熔断 `hubReachable/noteHubFail/noteHubOk`（连续 3 次失败 → 15 秒内丢弃上报、ADB 点击直接走本地），失败后上报超时 3000→600ms —— 否则"整台电脑关机"时 HTTP 干等会把盯梢循环从 10ms 拖到 3s、毁掉出手时机。
+- **WiFi 通道 = 必须开 Shizuku**（用户口径）：自检里 WiFi + Shizuku 未开 = ❌红项（USB 下只提醒）；通道提示也带 Shizuku 状态；下发时只提醒不阻断。中枢 `resolveChannel` 输出 `shizuku/shizukuReady/agentVersion`。
+- 其它：链接直达 `am start -a VIEW -d 'damai://detail' --es itemId <ID> -p cn.damai`；探针 = Playwright 无头拦 `mtop.damai.item.detail.getdetail`；手机脚本版本 `POST /api/device/verify-script`（体积对账为主），版本号唯一来源 `Transport.AGENT_VERSION`（正则取版本写 `agent_?version`）。
+
+## 五、测试约定
+- 跑测：`cp node_modules/@esbuild/win32-x64/esbuild.exe /tmp/esb-test/esbuild.exe` + `ESBUILD_BINARY_PATH=/tmp/esb-test/esbuild.exe npm test`（2026-10-10：88/88 绿）。
+- **控制台 UI 改动必跑"真中枢 + 真浏览器"实测**：`verify/verify-grab-console-v2.mjs`（抢购卡片全量：测试按钮/盲点/四节奏参数/抖动上限/日志面板/自检）、`verify-grab-prefill-refresh.mjs`、`verify-grab-time-guard.mjs` —— 自起中枢 33xxx + `DEVICE_HUB_DATA_DIR` 临时目录 + 探针库副本，不碰生产 data/grab 与 pid；用 `page.route` 截获下发报文断言。端口分配：33120/33121/33122/33123，别撞。
+- 垫片必须真实现；测闸门必须同时验对照组；控制台页面代码包在函数里 → 用 DOM 交互测，不能内省变量（会被 TDZ/闭包骗）。
 - 常规控制台操作用户自己点；我只做界面解决不了的代码行为层改动。
-
-## 五、大麦移动端执行面（2026-10-09 下午 grab 重写后）
-- 链路：hub-console「🔗 链接抢购」卡片 → `POST /api/tasks/dispatch`（`mode:'grab'`，校验 itemId 纯数字 + fireAt）→ 手机 agent `executeDamaiGrab`：就位→页面核对→信号锚定→对时→低频预监视→T0-1s 高频突变检测→瞬间首击→拟人连点链→提交风暴→readResult。
-- **链接直达（实测）**：分享链接 `/shows/item.html` 系统解析不到 App；改用 `am start -a VIEW -d 'damai://detail' --es itemId <ID> -p cn.damai` → 精确命中 `ProjectDetailActivity`。hub `/api/adb/open-item` 内置备用入口序列（trade/detail、projectdetail、perform/item.html、PRO_DETAIL）；闸门 = 纯数字 + 必须在探针库。
-- **检测信号（真机 dump 实证）**：底栏主按钮 = 自绘空容器（无文本/无子节点/clickable=false，中心 (682,2305)）；`tv_left_main_text` 预约态**不存在**（有票态才有）；倒计时数字 = 自绘 View 不可读。信号元组 = `tv文本 | 容器(childCount/text/desc/clickable/中心) | btn_buy | btn_buy_view`，任一变化即击发；容器消失时只认"正向信号"（防一次读异常误触）；异常不影响（全 catch）。
-- **点击通道**：自绘控件只认 PC-ADB。hub 内置**常驻 adb shell**（持久进程经 stdin 写命令）：连发 ≈29ms/次、echo 往返 3ms（对比每次 spawn adb.exe ≈210ms）；失活自愈 + 回落 execSync。`/api/adb/tap-burst` = 一次写入 N 枚（count/gapMs/jitter/pressMs）。
-- 击发策略：首击纯 ADB、无校验 sleep；随后拟人连点（±3px、按压 38-55ms、间隔 200-350ms）直到页面跳转（Activity 变化；超时即转无脑）；跳转后超高频连点（微瞄准 btn_buy_view/提交订单，burst 5、gap 30）直到支付/成功/验证码/超时；保底 = 到点未检测到变化盲点一发；迟到 >5s 拒绝盲点；彩排 dryRun 只检测不点击。
-- 「🧪 检测通道自测」：基线 3s 采样 + 自动点「想看」触发真实变化测发现延迟（测完还原）。
-- 旧 rush 全自动流程已删除（hub 拒 rush；`run-drill --rush` 提示改道；agent 保留 test/dryrun/buy 演练直通流）。
-- 关键文件：`core/device-hub.mjs`（open-item/tap-burst/常驻通道/dispatch grab 白名单 clamp）；`platforms/app/agent/{runner.js(executeDamaiGrab), adapters/damai.js(§13 grab), transport.js(adbOpenItem/adbTapBurst)}`；`web/hub-console.html`（新卡片 + parseItemId/onGrabLinkInput/grabArm/grabSelfTest 等）；测试 `tests/mobile/grab-logic.test.mjs` + `verify-device-hub.test.mjs`（12 项）。改 agent 必须 `npm run agent:build` 再经控制台推送。
-- 大麦探针口径：探针 = Playwright 无头拦截 `mtop.damai.item.detail.getdetail`（直连 HTTP 必被反爬）；字段：巡演站 = `guide.tour.projectList[]`、场次 = `performRules[].performDate`、开售提示 = `desc.introduce` 正则；catalog 按站 merge（当前站全量 + 其它站概要，补采升级不降级）；`/api/probe` 与 hub 代码改动 → 必须重启中枢。
-- 实名信息：观演人档案/大麦配置已移出仓库 + 忽略（本地保留）；公开历史仍含旧数据（彻底清除需重写历史，待定）；新增含个人信息的配置文件先问"要不要入库"。
-- vivo 特性：系统窗（VDialog/DMThemeDialog）会间歇抢占 active window → 该时段节点查询全空，需重试容忍；ASM 脚本拉起 = `org.autojs.autoxjs.v7/...RunIntentActivity -d file://`。
-- **★ 检测信号必须盯"结构"，不能盯自绘按钮的节点属性**（2026-10-09 17:17 实战失败实证，已定案并修复）：
-  大麦底栏按钮是自绘控件 → 无障碍树里只有一个**静态占位容器**，开售前后 `childCount/text/desc/clickable/中心` **完全不变**；
-  `tv_left_main_text`/`btn_buy`/`btn_buy_view` 在详情页**根本不存在**。
-  → 旧信号（容器五属性 + 那三个 id）在"预约态"与"开售后"两态下**字符串完全一致**，永远不可能触发
-  （两张真机 dump 差集实证；同期用户目视确认按钮准点变了）。
-  **正确信号 = 预约结构成片消失**：`id_new_project_normal_count_down_layout`（倒计时整块）
-  + `id_project_count_sell_time`（开抢时间文本）+ `id_project_ticket_remind_me`（预约提醒），
-  三者中 ≥2 项从有到无 ⇒ 开售。
-  **候选已放宽到 6 项**（另加 `id_project_count_down_remind_layout`、`id_project_count_down_layout`、`tour_city_select_bg`），
-  规则 = 6 项里 **≥2 项从有到无**；容器属性变化仅作兜底。**本项目已明确放弃"像素/截图"检测方案**（更慢且会拖慢触摸响应）。
-  **观察窗已被用户明确移除**（"等观察窗那早没票了"）：盯梢**绝不提前放弃**，一有变化立即出手；
-  只保留 `watchHardCapMs`（10 分钟）**兜底闸门防任务永久挂住**（名字不叫观察窗，超时报 `watch_timeout`）。
-  回归护栏（`tests/mobile/grab-logic.test.mjs`）：源码不得含 `blind_deadline` / `postFireWatchMs`，控制台不得有 `grab-watch-ms`。
-  ⚠️ 干扰项：`id_new_project_grab_tip_text` 与「预售 | 本商品为预售…」都是**滚动词条**，绝不可作信号。
-  ⚠️ 防假信号：整页读失败时所有结构都会"消失" ⇒ 结构触发必须要求**底栏容器仍可读**；且双读确认窗口拉到 80ms。
-- **★ 改中枢（device-hub）代码必须重启中枢**，否则新增的 `grab.*` 字段会被白名单**静默丢弃**、回退旧默认；
-  旧中枢在跑时想临时生效，只能下发它认识的旧字段（自行按 `deriveCadence` 算好 `gapMinMs/gapMaxMs/pressMinMs/pressMaxMs`）。
-- 设备 busy 时新任务会**排队**（不会自动替换）→ 换参必须**先 `POST /api/tasks/cancel` 再 dispatch**。
-- 手机端节拍/通道参数链路（2026-10-09 起）：控制台只填"最少/最多 几下每秒"→ `deriveCadence(rateMin,rateMax,rtt)` 反解间隔与按压；
-  通道「有数据线优先走 127.0.0.1（adb reverse），没插线才 WiFi」（实测往返 9~14ms vs WiFi 40ms+）。
-  数据线拔掉后 `adbDevicesCount=0`、推送脚本（走 USB）会直接失败 → 需要重插线；hub 会自动回落 WiFi 地址。

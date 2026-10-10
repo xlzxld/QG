@@ -177,6 +177,30 @@ function adbWriteLines(lines) {
   }
 }
 
+/**
+ * 手机侧"系统通知"提示 (尽力而为, 无回执) —— 只在手机脚本旧到不认 phone_op verify_script 时用:
+ * 那种情况下手机自己帮不上忙, 只能由电脑经 USB adb 直接往通知栏投一条 (Android 8+ 的 `cmd notification post`)。
+ * 返回 { ok, via, note };ok=false 时 note 说明原因 —— 不假装成功。走常驻 shell 是为了绕开 Windows 侧引号/中文编码坑。
+ */
+function notifyPhoneViaAdb(title, text) {
+  const adbList = scanAdbDevices();
+  if (!adbList.length) {
+    return { ok: false, via: 'none', note: '手机侧弹不出提示: 走不了手机自检通道（脚本不是当前这一版 / 端侧过旧）, 又没有 USB 数据线可直投通知' };
+  }
+  const clean = (s) => String(s == null ? '' : s).replace(/[\r\n]+/g, ' ').replace(/'/g, '').slice(0, 180);
+  const line = `cmd notification post -t '${clean(title)}' qg-script '${clean(text)}'`;
+  if (adbWriteLines([line])) {
+    return { ok: true, via: 'adb-notification', note: '走不了手机自检通道, 已改由 USB 直投系统通知 (无回执, 请看手机通知栏)' };
+  }
+  try {
+    runAdb(`adb -s ${adbList[0].serial} shell "${line}"`, 5000);
+    return { ok: true, via: 'adb-notification-exec', note: '已由 USB 直投系统通知 (无回执, 请看手机通知栏)' };
+  } catch (e) {
+    const why = String((e && (e.stderr || e.message)) || e).trim().replace(/\s+/g, ' ').slice(0, 150);
+    return { ok: false, via: 'adb-failed', note: '手机侧提示未送达: ' + why };
+  }
+}
+
 /* ============ 计划击发 (hub 侧预置首击) ============
  * 2026-10-09 实测教训: 「到点才发 HTTP 请求」不稳 —— 中枢每 5 秒的 adb 隧道维护/设备探测
  * 会把事件循环占住 1~2 秒, T0 那一发请求可能直接超时, 首击被拖到 T0+1.7s。
@@ -372,8 +396,14 @@ function addRecentEvent(evt) {
  *   只能走 USB 的: input tap 注入 / adb shell 保活 / 中枢时钟预置击发 / 界面树+截图取证
  *                 → 明确返回 needUsb, 不再笼统报「无USB」(避免让人以为是手机没连上)
  */
+/**
+ * 「活着的 Agent」= 心跳够新 **且没被按过停止**。
+ * ★ 2026-10-10 修: 以前只看心跳新鲜度 —— 点了「停止手机脚本」后中枢仍把设备当在线,
+ *   控制台会继续显示"已连接"、还能下发任务(排到队列里没人执行), 最长要等 20 秒心跳超时才纠正。
+ *   现在一按停止就立刻把它从"在线"里摘出去 (脚本重启会走 hello, 那时自动恢复)。
+ */
 function liveAgents(explicitDeviceId) {
-  const list = [...devices.values()].filter(d => !d.isAdbOnly && (Date.now() - d.lastSeen < 20000));
+  const list = [...devices.values()].filter(d => !d.isAdbOnly && !d.stoppingAt && (Date.now() - d.lastSeen < 20000));
   if (!explicitDeviceId) return list;
   const hit = list.find(d => d.deviceId === explicitDeviceId);
   return hit ? [hit] : list;
@@ -389,17 +419,69 @@ function resolveChannel(explicitDeviceId) {
     usb, usbCount: adb.length,
     wifi: !!agent,
     deviceId: agent ? agent.deviceId : null,
+    // ★ 2026-10-10: 手机自主点击能力 (Shizuku) 状态随心跳更新; 'active' = 已开, 其余都算不能点
+    shizuku: agent ? (agent.shizuku || 'unknown') : 'none',
+    shizukuReady: !!agent && agent.shizuku === 'active',
+    agentVersion: agent ? (agent.agentVersion || '') : '',
     connectionMode: agent ? (agent.connectionMode || '') : (usb ? 'USB (adb reverse)' : ''),
     caps: {
-      // 打开商品页 / 手势点击 / 自测: 两条通道都能做 (WiFi 走手机本地能力)
+      // 打开商品页 / 自测: 两条通道都能做 (WiFi 走手机本地能力)
       openItem: mode !== 'none',
-      gesture: mode !== 'none',
-      gestureReliable: usb,    // 只有 ADB input 注入对大麦自绘按钮可靠 (真机实证), WiFi 靠无障碍手势
+      // ★ 2026-10-10: 点击只有两路 —— USB(PC-ADB) 与 手机本地 Shizuku; 无障碍手势已删除 (对自绘按钮无效)
+      tapAdb: usb,
+      tapShizuku: !!agent,     // 手机端需已开 Shizuku, 实际可用性由端侧上报
       armTap: usb,             // 中枢时钟预置击发 = 常驻 adb shell, USB 独占
       perfBoost: usb,          // deviceidle/appops/standby 只能 adb shell, USB 独占
       diagSnapshot: usb,       // uiautomator dump + screencap, USB 独占
     },
   };
+}
+
+/* ================================================================
+ * 「停止脚本」的确认流程 (2026-10-10 用户口径)
+ *   用户原话: 手机收到停止指令后, **退出前先给中枢发一条消息**; 中枢收到就把状态刷成已停止,
+ *   然后再"复探一次" —— 若手机还在回应(心跳/轮询) 就说明没停成, 撤回标记。
+ *   比"用户点一下中枢就自己假设停掉了"准确得多。
+ * ================================================================ */
+
+/** 控制指令即时下发: 若手机正挂在长轮询上, 直接把指令塞进那个响应 (秒级送达, 不用等心跳) */
+function deliverControlNow(deviceId, control) {
+  if (!deviceId || !waitingPolls.has(deviceId)) return false;
+  const { res, timer } = waitingPolls.get(deviceId);
+  clearTimeout(timer);
+  waitingPolls.delete(deviceId);
+  try {
+    sendJson(res, 200, { status: 'control', control, serverTime: Date.now() });
+    log(`[控制指令] 经长轮询即时下发 → 设备 ${deviceId}: ${JSON.stringify(control)}`);
+    return true;
+  } catch (e) { return false; }
+}
+
+/** 手机回报"我要退了" → 立刻把设备摘出"在线"(isAlive=false), 状态即时刷新 */
+function markStopConfirmed(deviceId, reason) {
+  const dev = devices.get(deviceId);
+  if (!dev) return { ok: false, note: '设备不在列表 (可能已重启/换 id)' };
+  dev.stoppingAt = Date.now();
+  dev.stopConfirmedAt = Date.now();
+  dev.stopReason = String(reason || '').slice(0, 80);
+  dev.stopRequested = false;
+  log(`[停止确认] 手机回报「我要退了」→ 设备 ${deviceId} 即时按"已停止"处理 (${dev.stopReason})`);
+  return { ok: true };
+}
+
+/** 复探: 手机回报过停止却还在回应 (心跳/轮询) ⇒ 停止未生效, 撤回"已停止"标记并如实告警 */
+function discardStopMark(dev, why) {
+  if (!dev || (!dev.stoppingAt && !dev.stopPushedAt)) return;
+  const wasConfirmed = !!dev.stoppingAt;
+  delete dev.stoppingAt; delete dev.stopConfirmedAt; delete dev.stopReason; delete dev.stopPushedAt;
+  log(`[停止复探] ⚠ 设备 ${dev.deviceId} 停止没生效 (${why}) → 撤销停止状态, 脚本仍在运行, 需要的话请再点一次「停止手机脚本」`);
+  try {
+    addRecentEvent({
+      event: 'agent_stop_failed', at: Date.now(), taskId: null,
+      detail: { deviceId: dev.deviceId, why, wasConfirmed },
+      receivedAt: new Date().toISOString(),
+    });
+  } catch (e) {}
 }
 
 /** 把一条「手机本地执行」的指令下发给 Agent (WiFi 降级通道) */
@@ -413,6 +495,118 @@ function dispatchPhoneOp(op, params, deviceId) {
   };
   const r = dispatchTask(task, deviceId || null);
   return { ...r, task };
+}
+
+/* ================================================================
+ * 抢购全程记录导出 (2026-10-10) —— 把 device-events.jsonl 里的一次抢购
+ * 渲染成**人话 Markdown**（复盘用：手机每一步 + 你在控制台的操作，都在同一条时间线上）
+ * ================================================================ */
+const DIGEST_EVENT_CN = {
+  task_dispatched: '任务下发', task_started: '手机开始执行', step: '步骤', log: '手机日志',
+  console_op: '【你/控制台的操作】', task_result: '任务结果',
+  grab_armed: '布防参数', channel_probe: '通道预检', channel_warn: '通道告警',
+  item_open_ok: '链接就位', item_open_fail: '链接就位失败',
+  page_verify_ok: '页面核对通过', page_verify_fail: '页面核对失败', page_id_degraded: '页面身份退化判定',
+  station_switch: '巡演切站', anchor_ok: '按钮位置锁定', anchor_degraded: '定位退化', anchor_no_presale: '页面上没有预约结构',
+  timesync_done: '与大麦对时', t0_mismatch: '页面开售时间与填写值不符',
+  prewatch_change: '开抢前页面就有变化', signal_anomaly: '读不到页面结构', text_signal_fire: '文案兜底命中',
+  blind_fire: '到点盲点一发', first_tap_sent: '首击已发出', first_tap_failed: '首击打不出去',
+  popup_retry_click: '点了「继续尝试」弹窗', popup_first_seen: '首次发现「继续尝试」弹窗', popup_evidence: '弹窗取证结果', popup_never_seen: '全程没探到弹窗',
+  sidecar_start: '副手开工', submit_tap_loop: '连点结束', watch_timeout: '盯梢兜底闸门超时',
+  captcha_seen: '出现滑块验证码', captcha_evidence: '验证码取证结果', agent_stopping: '手机回报「我要退了」', diag_saved: '已保存现场证据',
+  page_refreshed: '自动刷新页面', selftest_result: '通道自测结果',
+  script_verified: '手机脚本自检', ticket_status_change: '余票状态变化',
+};
+/** 这些是噪音事件, 不进复盘记录 */
+const DIGEST_SKIP = new Set(['task_cancel_requested', 'device_hello', 'heartbeat', 'device_online', 'device_offline', 'device_result_ack']);
+
+/** 单条事件 → 一行人话 (未知事件只列关键字段, 不整段 JSON) */
+function digestLine(o) {
+  const t = new Date(o.at || Date.parse(o.receivedAt || '') || Date.now()).toTimeString().slice(0, 8);
+  const d = o.detail || {};
+  const cn = DIGEST_EVENT_CN[o.event] || o.event;
+  if (o.event === 'log') return `- \`${t}\` ${d.msg || ''}`;
+  if (o.event === 'console_op') return `- \`${t}\` **【人工/控制台】${d.msg || ''}**`;
+  if (o.event === 'step') return `- \`${t}\` [步骤] ${d.step} → ${d.status}${d.detail ? ' · ' + d.detail : ''}`;
+  if (o.event === 'task_dispatched') return `- \`${t}\` [任务下发] ${d.mode} · ${d.target || ''}`;
+  if (o.event === 'task_started') return `- \`${t}\` [手机开始执行] ${d.mode} ${d.target || ''}`;
+  if (o.event === 'task_result') return `- \`${t}\` **[结果] ${d.outcome} — ${d.message || d.evidence || ''}**`;
+  if (o.event === 'submit_tap_loop') return `- \`${t}\` [连点结束] 共 ${d.totalClicks} 下 · 最快 ${d.peakPerSec}/秒 · 弹窗补点 ${d.popupClicks} · 原因 ${d.endReason}${d.injectFails ? ' · 发不出去 ' + d.injectFails + ' 下' : ''}`;
+  if (o.event === 'blind_fire') return `- \`${t}\` [到点盲点一发] 晚 ${d.deltaMs}ms · 方式 ${d.viaName || '-'}`;
+  if (o.event === 'first_tap_sent') return `- \`${t}\` [首击已发出] 晚 ${d.deltaMs}ms · 方式 ${d.viaName || 'hub预置'} · 落点 (${d.x},${d.y})`;
+  if (o.event === 'first_tap_failed') return `- \`${t}\` **[首击打不出去] ${d.why || ''}**`;
+  if (o.event === 'popup_retry_click') return `- \`${t}\` [点弹窗] 第 ${d.n} 下 (${d.x},${d.y} via=${d.via})`;
+  if (o.event === 'popup_first_seen') return `- \`${t}\` [首次发现「继续尝试」弹窗] 命中方式 ${d.via} · 落点 (${d.x},${d.y})${d.nodeText ? ' · 节点文字「' + d.nodeText + '」' : ''}`;
+  if (o.event === 'captcha_seen') return `- \`${t}\` **[出现滑块验证码] 已停止连点, 剩下交给人工**`;
+  if (o.event === 'agent_stopping') return `- \`${t}\` **[手机回报「我要退了」] 中枢已即时判定"已停止" (${d.reason || ''})**`;
+  if (o.event === 'timesync_done') return `- \`${t}\` [对时] 手机比大麦 ${d.damaiOffsetMs >= 0 ? '快' : '慢'} ${Math.abs(d.damaiOffsetMs)}ms（来回 ${d.damaiRttMs}ms）${d.pageSellText ? ' · 页面开抢「' + d.pageSellText + '」' : ''}`;
+  if (o.event === 'anchor_ok') return `- \`${t}\` [按钮位置锁定] (${d.x},${d.y}) · 来源 ${d.src} · 预约结构 ${String(d.presale || '').split(' ')[0]}`;
+  if (o.event === 'grab_armed') return `- \`${t}\` [布防参数] 商品 ${d.itemId} · ${d.test ? '测试' : '正式'} · 盲点 ${d.blindFire ? '开' : '关'} · 双读 ${d.doubleReadMs}ms`;
+  if (o.event === 'channel_probe') return `- \`${t}\` [通道预检] ${d.ok ? d.ms + 'ms 合格' : '不通'}${d.url ? ' · ' + d.url : ''}`;
+  if (o.event === 'diag_saved') return `- \`${t}\` [现场证据] ${(d.files || []).map((f) => String(f).split(/[\\/]/).pop()).join(' + ')}`;
+  if (o.event === 'selftest_result') return `- \`${t}\` [通道自测] 基线抖动 ${d.baselineChanges} 次 · 读取 ${d.readsPerSec}/秒 · 发现延迟 ${d.detectMs}ms`;
+  if (o.event === 'watch_timeout') return `- \`${t}\` [盯梢超时] 等了 ${Math.round((d.waitedMs || 0) / 1000)}s 页面无变化, 未点击`;
+  const parts = Object.entries(d).filter(([, v]) => v !== null && v !== undefined && v !== '')
+    .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : String(v)}`).join(' · ');
+  return `- \`${t}\` [${cn}] ${parts.slice(0, 200)}`;
+}
+
+/** 生成一次抢购的可读记录 (同时落盘 data/grab/digest/*.md), 返回 markdown 给控制台 */
+function buildDigest({ taskId, sinceMs }) {
+  const from = sinceMs > 0 ? sinceMs : (taskId ? 0 : Date.now() - 2 * 3600 * 1000);
+  let raw = '';
+  try { raw = fs.readFileSync(EVENTS_FILE, 'utf8'); } catch (e) { return { ok: false, error: '读不到事件文件: ' + e.message }; }
+  const kept = [];
+  let total = 0;
+  for (const ln of raw.split('\n')) {
+    if (!ln.trim()) continue;
+    total++;
+    let o; try { o = JSON.parse(ln); } catch (e) { continue; }
+    if (DIGEST_SKIP.has(o.event)) continue;
+    if (taskId) {
+      // 该任务的事件 + 时间窗内的"人工/控制台操作"（后者没有 taskId）
+      if (o.taskId !== taskId && !(o.event === 'console_op' && (o.at || 0) >= from)) continue;
+    } else if ((o.at || 0) < from) continue;
+    kept.push(o);
+  }
+  const out = [
+    `# 抢购全程记录 · ${taskId || '（最近 2 小时全部）'}`,
+    '',
+    `- 导出时间: ${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+    `- 来源: \`data/grab/device-events.jsonl\`（共扫 ${total} 条, 取用 ${kept.length} 条）`,
+    '- 读法: **【人工/控制台】** = 你在控制台/手机上手动做了什么; 其余 = 手机脚本自己做的事',
+    '',
+    '## 时间线',
+    '',
+  ];
+  if (!kept.length) out.push('_(这个时间窗内没有任何记录)_');
+  else out.push(...kept.map(digestLine));
+
+  // 关键结论
+  const first = kept.find((o) => o.event === 'first_tap_sent');
+  const blind = kept.find((o) => o.event === 'blind_fire');
+  const loop = kept.find((o) => o.event === 'submit_tap_loop');
+  const res = [...kept].reverse().find((o) => o.event === 'task_result');
+  const captcha = kept.some((o) => o.event === 'captcha_seen');
+  const popupFirst = kept.find((o) => o.event === 'popup_first_seen');
+  const popupClicks = kept.filter((o) => o.event === 'popup_retry_click').reduce((m, o) => Math.max(m, (o.detail || {}).n || 0), 0);
+  out.push('', '## 关键结论', '');
+  out.push(`- **首击**: ${first ? `发出, 比开抢时刻晚 ${first.detail.deltaMs}ms（方式 ${first.detail.viaName || 'hub预置'}）` : (blind ? '只打了"到点盲点"那一发' : '没有发出')}`);
+  out.push(`- **到点盲点一发**: ${blind ? '打出了, 晚 ' + blind.detail.deltaMs + 'ms' : '未触发（开关关 / 或检测到页面变化先出手了）'}`);
+  out.push(`- **连点链**: ${loop ? `${loop.detail.totalClicks} 下, 最快 ${loop.detail.peakPerSec} 下/秒, 弹窗补点 ${loop.detail.popupClicks} 下, 结束原因 ${loop.detail.endReason}` : '未进入'}`);
+  out.push(`- **「继续尝试」弹窗**: ${popupFirst ? `本次探到并按了 ${popupClicks} 下` : '全程没探到（这条本身就是重要结论 —— 下次可据此判断它到底长什么样）'}`);
+  out.push(`- **滑块验证码**: ${captcha ? '出现过（脚本已自动停止连点, 交给人工）' : '未出现'}`);
+  out.push(`- **最终结果**: ${res ? `${res.detail.outcome} — ${res.detail.message || res.detail.evidence || ''}` : '没有结果记录（任务还在跑 / 未回传）'}`);
+
+  const markdown = out.join('\n') + '\n';
+  let file = null;
+  try {
+    const dir = path.join(GRAB_DIR, 'digest');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    file = path.join(dir, new Date().toISOString().replace(/[:.]/g, '-') + '-' + (taskId || 'all') + '.md');
+    fs.writeFileSync(file, markdown, 'utf8');
+  } catch (e) { /* 落盘失败也把内容回给控制台 */ }
+  return { ok: true, file, count: kept.length, markdown };
 }
 
 // 启动预热: 去重集 + 事件历史
@@ -538,7 +732,7 @@ function dispatchTask(task, targetDeviceId = null) {
       mode: task.mode,
       target: task.target?.name,
       itemId: task.target?.itemId,
-      grabMode: task.grab ? (task.grab.selfTest ? 'selftest' : task.grab.dryRun ? 'rehearsal' : 'live') : undefined,
+      grabMode: task.grab ? (task.grab.selfTest ? 'selftest' : task.grab.dryRun ? 'test' : 'live') : undefined,
       session: task.target?.session,
       price: task.target?.priceText,
       viewers: task.target?.viewers || [task.target?.viewer || ''],
@@ -830,7 +1024,7 @@ const server = http.createServer(async (req, res) => {
     try { hubAgentScriptSize = fs.statSync(AGENT_SCRIPT).size; } catch (eS) { /* 忽略 */ }
     return sendJson(res, 200, {
       uptimeSec: Math.floor(process.uptime()),
-      onlineDevices: [...devices.values()].map(d => ({ ...d, isAlive: Date.now() - d.lastSeen < 15000 })),
+      onlineDevices: [...devices.values()].map(d => ({ ...d, isAlive: (Date.now() - d.lastSeen < 15000) && !d.stoppingAt })),
       lanIps: getLocalIps(),
       hubAgentScriptSize,   // 电脑端 main.js 体积: 与设备上报的 scriptSize 对账即可判断"手机脚本是否最新"
       serverTime: Date.now(),
@@ -858,16 +1052,22 @@ const server = http.createServer(async (req, res) => {
     try {
       const data = await readJsonBody(req);
       if (!data.deviceId) return sendJson(res, 400, { error: '缺少 deviceId' });
+      // ★ 2026-10-10: 中枢重启后设备表是空的, 而手机只在**脚本启动时**发一次 hello →
+      //   分辨率/版本号/运行时等"注册时才有"的字段会一直空着, 控制台就会误报"版本号未上报(旧脚本)"。
+      //   这里告诉手机"我还不认识你", 它收到会立刻补发 hello 重新注册。
+      const registeredBefore = devices.has(data.deviceId);
       const dev = devices.get(data.deviceId) || {
         deviceId: data.deviceId, registeredAt: Date.now(),
         clientIp: isLoopback ? '127.0.0.1' : clientIp,
         connectionMode: isLoopback ? 'USB (adb reverse)' : `Wi-Fi (${clientIp})`,
       };
+      if (!registeredBefore) log(`[重新注册] 中枢不认识 ${data.deviceId} (刚重启?) → 已通知手机补发 hello`);
       dev.lastSeen = Date.now();
       dev.state = data.state || dev.state || 'idle';
       dev.battery = data.battery ?? dev.battery;
       dev.charging = data.charging ?? dev.charging;
       dev.accessibility = data.accessibility ?? dev.accessibility;
+      if (data.agentVersion) dev.agentVersion = String(data.agentVersion).slice(0, 20);   // ★ 心跳也带版本号, 不再只依赖 hello
       if (data.shizuku) dev.shizuku = data.shizuku;   // 手机自主点击能力 (Shizuku 本地注入) 状态随心跳更新
       dev.currentTaskId = data.taskId ?? null;
       if (Number.isFinite(Number(data.scriptSize))) dev.scriptSize = Number(data.scriptSize);
@@ -895,10 +1095,23 @@ const server = http.createServer(async (req, res) => {
       } else if (deviceCancelOverride.has(data.deviceId)) {
         deviceCancelOverride.delete(data.deviceId);   // 设备空了, 兜底标记作废
       }
+      // ★ 停止复探 (2026-10-10 用户口径): 手机回报过"我要退了", 可它还在发心跳 (>3 秒宽限) ⇒ 停止没生效, 撤回标记
+      if (dev.stopConfirmedAt && Date.now() - dev.stopConfirmedAt > 3000) {
+        discardStopMark(dev, '回报停止后仍在发心跳');
+      }
+      // 停止指令下了却没等来"退场告知", 且脚本还活着 ⇒ 重新下发 (最多 3 次)
+      if (!dev.stoppingAt && dev.stopPushedAt && !dev.stopRequested
+          && Date.now() - dev.stopPushedAt > 10000 && (dev.stopPushCount || 0) < 3) {
+        dev.stopRequested = true;
+        dev.stopPushedAt = Date.now();
+        dev.stopPushCount = (dev.stopPushCount || 0) + 1;
+        log(`[停止指令] ⚠ 设备 ${data.deviceId} 10 秒未回报"退场" → 重新下发 (第 ${dev.stopPushCount} 次)`);
+      }
       // 停止手机端脚本 / 局域网自更新: 一次性下发, 发过即清
       if (dev.stopRequested) {
         pushControl({ stopAgent: true });
         dev.stopRequested = false;
+        dev.stopPushedAt = Date.now();
         log(`[停止指令] 已下发「停止脚本」→ 设备 ${data.deviceId}`);
       }
       if (dev.selfUpdateRequested) {
@@ -914,7 +1127,11 @@ const server = http.createServer(async (req, res) => {
       }
       // ★ 心跳回带当前通道: 手机据此决定 ADB 类操作是打中枢还是走本地 (避免 WiFi 下白等超时)
       const ch = resolveChannel(data.deviceId);
-      return sendJson(res, 200, { status: 'ok', serverTime: Date.now(), channel: ch, ...(control ? { control } : {}) });
+      return sendJson(res, 200, {
+        status: 'ok', serverTime: Date.now(), channel: ch,
+        registered: registeredBefore,   // false = 中枢刚重启/还没这台设备的注册信息 → 手机会立刻补发 hello
+        ...(control ? { control } : {}),
+      });
     } catch (e) {
       return sendJson(res, 400, { error: e.message });
     }
@@ -923,7 +1140,12 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/device/poll-task' && req.method === 'GET') {
     const deviceId = url.searchParams.get('deviceId');
     if (!deviceId) return sendJson(res, 400, { error: '缺少 deviceId' });
-    if (devices.has(deviceId)) devices.get(deviceId).lastSeen = Date.now();
+    if (devices.has(deviceId)) {
+      const d0 = devices.get(deviceId);
+      d0.lastSeen = Date.now();
+      // ★ 停止复探 (同心跳): 手机回报过"我要退了"却还在轮询任务 → 停止没生效, 撤回标记
+      if (d0.stopConfirmedAt && Date.now() - d0.stopConfirmedAt > 3000) discardStopMark(d0, '回报停止后仍在轮询任务');
+    }
 
     const queue = taskQueues.get(deviceId);
     if (queue && queue.length > 0) {
@@ -972,6 +1194,32 @@ const server = http.createServer(async (req, res) => {
     recentEvents.length = 0;
     log('[事件清空] 控制台日志已清空 (水位: ' + eventsClearedAt + ')');
     return sendJson(res, 200, { status: 'ok', clearedAt: eventsClearedAt });
+  }
+
+  /* ---- 控制台本页操作落盘 (2026-10-10): 只追加到 events 文件, **不回灌事件环**（否则控制台会重复显示一遍） ---- */
+  if (pathname === '/api/events/console' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const rec = {
+        event: 'console_op',
+        at: Number(body.at) || Date.now(),
+        taskId: body.taskId ? String(body.taskId) : null,
+        detail: { tag: String(body.tag || '[操作]').slice(0, 24), msg: String(body.msg || '').slice(0, 400) },
+        receivedAt: new Date().toISOString(),
+      };
+      try { fs.appendFileSync(EVENTS_FILE, JSON.stringify(rec) + '\n'); } catch (e) {}
+      return sendJson(res, 200, { status: 'ok' });
+    } catch (e) { return sendJson(res, 400, { error: e.message }); }
+  }
+
+  /* ---- 抢购全程记录导出 (2026-10-10): 事件文件 → 人话 Markdown（含人工操作）, 落盘 data/grab/digest/ ---- */
+  if (pathname === '/api/record/digest' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const r = buildDigest({ taskId: String(body.taskId || '').trim(), sinceMs: Number(body.sinceMs || 0) || 0 });
+      if (r.ok) log(`[记录导出] ${r.count} 条 → ${r.file || '(未落盘)'}`);
+      return sendJson(res, r.ok ? 200 : 500, r);
+    } catch (e) { return sendJson(res, 500, { error: e.message }); }
   }
 
   /* ---- 任务结果 ---- */
@@ -1115,11 +1363,15 @@ const server = http.createServer(async (req, res) => {
     const mergedList = [];
     const matchedSerials = new Set();
     for (const d of httpList) {
-      const isAlive = Date.now() - d.lastSeen < 20000;
+      // ★ isAlive = "Agent(脚本) 真的在跑": 心跳新鲜 且 没被按过停止。
+      //   以前这里在"USB 线插着"时会强制 isAlive=true —— 于是点了停止脚本后,
+      //   只要数据线还插着, 控制台就永远显示"在线"、还能下发任务。现在拆成两个概念:
+      //   isAlive = 脚本在跑;  usbAttached = 数据线插着 (两者独立)。
+      const isAlive = (Date.now() - d.lastSeen < 20000) && !d.stoppingAt;
       const matchedAdb = adbList.find(a => d.deviceId.includes(a.serial) || isLoopbackIp(d.clientIp));
       if (matchedAdb) {
         matchedSerials.add(matchedAdb.serial);
-        mergedList.push({ ...d, isAlive: true, usbAttached: true, model: matchedAdb.model || d.model });
+        mergedList.push({ ...d, isAlive, usbAttached: true, model: matchedAdb.model || d.model });
       } else {
         mergedList.push({ ...d, isAlive, usbAttached: false });
       }
@@ -1255,7 +1507,7 @@ const server = http.createServer(async (req, res) => {
       if (!Number.isFinite(x) || !Number.isFinite(y)) return sendJson(res, 400, { error: '缺少 x/y' });
       const count = Math.max(1, Math.min(60, parseInt(body.count, 10) || 1));
       const gapMs = Math.max(0, Math.min(1000, parseInt(body.gapMs, 10) || 0));
-      const jitter = Math.max(0, Math.min(24, parseInt(body.jitter, 10) || 0));
+      const jitter = Math.max(0, Math.min(100, parseInt(body.jitter, 10) || 0));   // 与锚点抖动上限对齐 (旧值 24 会静默夹小)
       const pressMs = Math.max(0, Math.min(400, parseInt(body.pressMs, 10) || 0));
       const adbList = scanAdbDevices();
       if (!adbList.length) return sendJson(res, 503, { error: '连发点击需要 USB 数据线（ADB input 注入）', needUsb: true, mode: resolveChannel().mode });
@@ -1340,19 +1592,6 @@ const server = http.createServer(async (req, res) => {
             note: '手机将用本地 deep-link 打开商品页 (WiFi 通道)',
           });
         }
-        case 'gesture': {
-          // USB → ADB 注入 (可靠); WiFi → 下发手机本地无障碍手势 (自绘控件可能无效, 已如实标注)
-          if (ch.mode === 'usb') {
-            const x = Number(params.x), y = Number(params.y);
-            if (!Number.isFinite(x) || !Number.isFinite(y)) return sendJson(res, 400, { error: '缺少 x/y' });
-            const adbList = scanAdbDevices();
-            if (adbWriteLines([`input tap ${Math.round(x)} ${Math.round(y)}`])) return sendJson(res, 200, { status: 'ok', via: 'usb-persist', channel: ch });
-            runAdb(`adb -s ${adbList[0].serial} shell input tap ${Math.round(x)} ${Math.round(y)}`, 2500);
-            return sendJson(res, 200, { status: 'ok', via: 'usb-exec', channel: ch });
-          }
-          const r = dispatchPhoneOp('gesture', { x: params.x, y: params.y, pressMs: params.pressMs }, ch.deviceId);
-          return sendJson(res, 200, { status: 'dispatched', via: 'wifi', taskId: r.task.taskId, channel: ch, degraded: true, note: 'WiFi 通道: 走手机无障碍手势, 大麦自绘按钮可能无效' });
-        }
         case 'capabilities':
           return sendJson(res, 200, { status: 'ok', channel: ch });
         default:
@@ -1415,22 +1654,182 @@ const server = http.createServer(async (req, res) => {
         step('Agent 未在线', false, '脚本已推送; 点「一键连接」即可拉起 (全程不触碰无障碍)');
         return sendJson(res, 500, { ok: false, steps, error: 'Agent 未在线 — 脚本已推送, 请点「一键连接」拉起 Agent' });
       }
+      const beforeSize = Number(devices.get(devId).scriptSize || 0);
       devices.get(devId).restartRequested = true;
       step('下发自重启指令', true, 'Agent 将自行换引擎加载新脚本 (心跳回带, 最多 4 秒)');
-      // 等重新注册: scriptSize 对账一致 + 心跳新鲜
+      // 等重新注册: scriptSize 对账一致 + 心跳新鲜 (★ hello 现在也带 scriptSize → 新引擎一上线就能对上, 不用等下一次心跳)
       const wantSize = fs.statSync(AGENT_SCRIPT).size;
       let done = false;
-      for (let i = 0; i < 30; i++) {
+      let lastSeenSize = beforeSize;
+      for (let i = 0; i < 40; i++) {          // 20 秒 (原来 15 秒, 手机上换引擎有时会慢)
         await sleep(500);
         const d = devices.get(devId);
+        if (d && Number(d.scriptSize) > 0) lastSeenSize = Number(d.scriptSize);
         if (d && Number(d.scriptSize) === wantSize && Date.now() - (d.lastSeen || 0) < 8000) { done = true; break; }
       }
       step('Agent 重启上线', done, done
-        ? '新版已生效 (scriptSize 对账一致)'
-        : '15s 内未确认 — 手机脚本较旧时请手动重开一次脚本, 之后即可全自动');
-      return sendJson(res, done ? 200 : 500, { ok: done, steps, error: done ? null : 'Agent 未能自动重启 (手机脚本过旧或已离线)' });
+        ? `新版已生效 (手机上报 ${(wantSize / 1024).toFixed(1)} KB, 与电脑端一致)`
+        : `20s 内没等到新脚本上线 (手机最近上报 ${lastSeenSize ? (lastSeenSize / 1024).toFixed(1) + ' KB' : '未上报'} / 电脑端 ${(wantSize / 1024).toFixed(1)} KB)`);
+      if (done) return sendJson(res, 200, { ok: true, steps });
+      // ★ 脚本**已经推成功 + 重启指令也下发了**, 只是没在窗口内确认到 —— 不该报成"失败", 而是"待确认"
+      return sendJson(res, 200, {
+        ok: false, warn: true, steps,
+        error: '脚本已推送、重启指令已下发, 但 20 秒内没等到新脚本上线（手机可能还在重启 / 网络慢）。'
+             + '点「🔍 验证手机脚本是否最新」复核；若仍不是最新, 在手机上手动重开一次脚本即可（旧脚本不认识自重启指令）',
+      });
     } catch (e) {
       return sendJson(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  /* ---- 验证手机脚本是否为最新 (2026-10-10 用户口令: 提示要"全面", 手机与控制台都要提示) ----
+   * 三源判据 (全部真实凭据, 不看页面文案):
+   *   ① 体积对账: 手机心跳上报的 scriptSize  vs  电脑上 main.js 的字节数
+   *   ② 版本对账: 手机 hello 上报的 agentVersion vs 电脑脚本里内嵌的 AGENT_VERSION
+   *   ③ 指令能力: 手机脚本认不认 phone_op verify_script (≥1.3.0 才认 → 它自己能弹"我不是最新")
+   * 手机侧提示: 优先下发 phone_op verify_script (手机本地 toast + 震动);
+   *   旧脚本认不出该指令时, USB 通道尽力补一条系统通知 —— 两条都不成也如实说明(不假装成功)。
+   */
+  if (pathname === '/api/device/verify-script' && req.method === 'POST') {
+    try {
+      const TOL = 2048;                       // 体积"接近"的宽容带 (与卡片里的被动提示口径一致)
+      const steps = [];
+      const step = (name, ok, detail = '') => { steps.push({ name, ok, detail }); return ok; };
+
+      let hubSize = 0;
+      try { hubSize = fs.statSync(AGENT_SCRIPT).size; } catch (eS) { /* 忽略 */ }
+      let hubVersion = '';
+      try {
+        const m = fs.readFileSync(AGENT_SCRIPT, 'utf8').match(/agent_?version\s*:\s*"([\d.]+)"/i);
+        if (m) hubVersion = m[1];
+      } catch (eR) { /* 忽略 */ }
+      step('电脑端脚本', hubSize > 0,
+        hubSize > 0 ? `${(hubSize / 1024).toFixed(1)} KB${hubVersion ? ' · v' + hubVersion : ' · 版本号未识别'}` : '读不到 main.js');
+
+      // 2026-10-10: 支持 body.deviceId 指定校验哪一台 (多台在线时不再"只校验第一台"、结果随机)
+      const body = await readJsonBody(req).catch(() => ({}));
+      const wantId = String((body && body.deviceId) || '').trim();
+      const live = [...devices.values()].filter(d => !d.isAdbOnly && Date.now() - (d.lastSeen || 0) < 15000);
+      const agents = wantId ? live.filter(d => d.deviceId === wantId) : live;
+      const dev = agents[0] || null;
+      const adbList = scanAdbDevices();
+      const hub = { size: hubSize, version: hubVersion };
+
+      if (!dev) {
+        step('手机 Agent 在线', false, adbList.length
+          ? `${adbList[0].model || 'USB 设备'} 只插着数据线, Agent 没在跑`
+          : 'USB 与 Wi-Fi 都没连上 Agent');
+        const n = notifyPhoneViaAdb('QG 手机脚本校验', '手机 Agent 未在线, 控制台无法校验脚本版本 —— 请点「一键连接设备」重新部署。');
+        return sendJson(res, 200, {
+          status: 'ok', verdict: 'offline', steps, hub,
+          headline: '无法校验：手机 Agent 不在线',
+          hint: '点「⚡ 一键连接设备」把 Agent 拉起来, 再点本按钮校验。',
+          phonePrompt: { delivered: !!n.ok, via: n.via, note: n.note },
+        });
+      }
+
+      const phoneSize = Number(dev.scriptSize || 0);
+      const phoneVersion = String(dev.agentVersion || '');
+      step('手机 Agent 在线', true, `${dev.model || dev.deviceId} · ${dev.connectionMode || ''} · 状态 ${dev.state || 'idle'}`
+        + (agents.length > 1 ? ` · ⚠ 在线 ${agents.length} 台, 本次只校验第一台` : ''));
+      // 体积完全一致 = 同一份代码 (这是最硬的凭据, 与版本号无关)
+      const sizeExact = phoneSize > 0 && hubSize > 0 && phoneSize === hubSize;
+      step('手机脚本体积已上报', phoneSize > 0, phoneSize > 0
+        ? `${(phoneSize / 1024).toFixed(1)} KB`
+        : '未上报（心跳里没带体积 —— 设备可能刚上线, 等 4 秒再看）');
+      // ★ 版本号拿不到 ≠ 旧脚本: 体积字节级一致就是同一份代码 (这是最硬的凭据)
+      step('手机端版本号', !!phoneVersion || sizeExact, phoneVersion
+        ? 'v' + phoneVersion
+        : (sizeExact ? '未上报（但体积与电脑端字节级一致 = 同一份代码, 不影响判定）' : '未上报'));
+
+      // 指令能力: **体积完全一致 ⇒ 就是同一份代码, 必然认识 phone_op**; 否则按版本号 (≥1.3.0) 判
+      const [vmaj, vmin] = phoneVersion.split('.').map(n => parseInt(n, 10) || 0);
+      const versionOk = !!phoneVersion && (vmaj > 1 || (vmaj === 1 && vmin >= 3));
+      const canVerifyOp = sizeExact || versionOk;
+      step('手机认识「自检版本」指令', canVerifyOp, canVerifyOp
+        ? (versionOk ? '可以 (手机能自己弹出校验结果)' : '可以（体积与电脑端完全一致 = 同一份代码, 认识 phone_op）')
+        : (phoneVersion ? `不能 — 端侧 v${phoneVersion} < v1.3.0, 升级后手机侧也能弹提示` : '不能 — 这台手机的脚本不是当前这一版'));
+
+      // ---- 判定 ----
+      let verdict = 'unknown', headline = '', hint = '';
+      const diff = (phoneSize > 0 && hubSize > 0) ? phoneSize - hubSize : null;
+      if (!phoneSize || !hubSize) {
+        verdict = 'unknown';
+        headline = '无法判定：有一侧的体积拿不到';
+        hint = '先点「📦 更新手机脚本并重启 Agent」把脚本重新推一遍, 再回来校验。';
+      } else if (diff === 0) {
+        verdict = 'latest';
+        headline = '✅ 手机脚本就是电脑上这一版（字节数完全一致）';
+        hint = '无需操作。抢购前可直接开抢。';
+        step('体积对账', true, `${phoneSize} B = ${hubSize} B（完全一致）`);
+      } else if (Math.abs(diff) <= TOL) {
+        verdict = 'near';
+        headline = '⚠ 体积接近但不完全一致（差 ' + diff + ' B）';
+        hint = '内容可能有细微差异（例如推送时被改动）。抢购前建议点「📦 更新手机脚本并重启 Agent」对齐。';
+        step('体积对账', false, `手机 ${phoneSize} B / 电脑 ${hubSize} B（差 ${diff} B, 在 ±${TOL} 宽容带内）`);
+      } else {
+        verdict = 'stale';
+        headline = '⚠ 手机脚本不是最新版（差 ' + Math.abs(diff) + ' B）';
+        hint = '点「📦 更新手机脚本并重启 Agent」推送最新脚本, 再回来校验。';
+        step('体积对账', false, `手机 ${(phoneSize / 1024).toFixed(1)} KB / 电脑 ${(hubSize / 1024).toFixed(1)} KB（差 ${Math.abs(diff)} B）`);
+      }
+      // 版本对账只作"佐证", 不改判定 (判定以体积为准: 字节数不同就是不同一份脚本)
+      if (phoneVersion || hubVersion) {
+        const vMatch = !!phoneVersion && !!hubVersion && phoneVersion === hubVersion;
+        // ★ 体积已经字节级一致时, 版本号不一致只是"旧数据"(设备没重新注册 / 心跳还没带上新版号),
+        //   不能显示成❌ —— 否则会像用户遇到的那样, 明明是最新版却一排红叉。
+        const vOk = vMatch || sizeExact;
+        const vDetail = vMatch
+          ? `手机 v${phoneVersion} / 电脑 v${hubVersion}（一致）`
+          : (sizeExact
+            ? `体积字节级一致 = 同一份脚本；手机上报的 v${phoneVersion || '?'} 是旧数据（设备还没重新注册）, 以体积为准`
+            : `手机 ${phoneVersion ? 'v' + phoneVersion : '未上报'} / 电脑 ${hubVersion ? 'v' + hubVersion : '未识别'}（不一致）`);
+        step('版本对账', vOk, vDetail);
+        if (vMatch && diff !== null && diff !== 0 && (verdict === 'stale' || verdict === 'near')) {
+          headline += '（版本号却一致 —— 多半是电脑端脚本被改过但没重新推送）';
+        }
+      }
+
+      // ---- 手机侧提示 ----
+      let phonePrompt = { delivered: false, via: 'none', note: '' };
+      if (dev.state === 'busy') {
+        phonePrompt = { delivered: false, via: 'skipped-busy', note: `手机正忙（${dev.currentTaskId || '任务进行中'}）, 没打扰它 —— 跑完再点本按钮` };
+      } else if (canVerifyOp) {
+        try {
+          const r = dispatchPhoneOp('verify_script', { hubSize, hubVersion, phoneSizeHint: phoneSize }, dev.deviceId);
+          let said = null;
+          for (let i = 0; i < 14; i++) {           // 最多等 ~3.5s 回收手机回执
+            await sleep(250);
+            const st = taskStates.get(r.task.taskId);
+            if (st && st.result) { said = st.result; break; }
+          }
+          if (said) {
+            phonePrompt = {
+              delivered: said.outcome === 'success', via: 'agent-toast', taskId: r.task.taskId,
+              note: (said.evidence || said.message || '手机已弹出校验结果') + '（手机侧已 toast + 震动）',
+              phoneSaid: said.data || null,
+            };
+          } else {
+            phonePrompt = { delivered: false, via: 'no-ack', taskId: r.task.taskId, note: '已下发但 3.5 秒内没收到手机回执（可能刚掉线）' };
+          }
+        } catch (eP) {
+          phonePrompt = { delivered: false, via: 'error', note: '下发手机提示失败: ' + eP.message };
+        }
+      } else {
+        const n = notifyPhoneViaAdb('QG 手机脚本校验', `手机脚本不是最新版（手机 ${phoneSize} B / 电脑 ${hubSize} B），请在控制台点「更新手机脚本并重启 Agent」。`);
+        phonePrompt = { delivered: !!n.ok, via: n.via, note: n.note };
+      }
+
+      log(`[脚本校验] ${verdict} | 手机 ${phoneSize}B v${phoneVersion || '?'} / 电脑 ${hubSize}B v${hubVersion || '?'} | 手机提示: ${phonePrompt.via}`);
+      return sendJson(res, 200, {
+        status: 'ok', verdict, headline, hint, steps, hub,
+        phone: { deviceId: dev.deviceId, model: dev.model, size: phoneSize, version: phoneVersion, state: dev.state || 'idle' },
+        size: { phone: phoneSize, hub: hubSize, diff, exact: diff === 0 },
+        version: { phone: phoneVersion, hub: hubVersion, match: phoneVersion === hubVersion },
+        phonePrompt,
+      });
+    } catch (e) {
+      return sendJson(res, 500, { error: e.message });
     }
   }
 
@@ -1586,32 +1985,35 @@ const server = http.createServer(async (req, res) => {
           : null;
         const gapMin = clampInt(ig.gapMinMs, 0, 1000, 55);   // 间隔可到 0 (由节拍反解得出)
         const pressMin = clampInt(ig.pressMinMs, 0, 300, 38);
-        const rateMin = clampInt(ig.rateMin, 1, 20, 8);      // 节拍下限 (击/秒)
+        const rateMin = clampInt(ig.rateMin, 1, 50, 8);      // 节拍下限 (击/秒) —— 上限 50, 不做风控硬约束
         task.grab = {
-          dryRun: !!ig.dryRun,
+          dryRun: !!ig.dryRun,                 // 测试按钮 (跳过变化检测, 到点直接出手)
           selfTest: !!ig.selfTest,
-          hammer: !!ig.hammer,
           button: validXY(ig.button),
           submit: validXY(ig.submit),
           popup: validXY(ig.popup),   // 「继续尝试」弹窗按钮 (2026-10-10; 缺省由手机端按提交锚点推算)
           calibScreen: calib,
           rateMin,
-          rateMax: Math.max(rateMin, clampInt(ig.rateMax, 1, 20, 12)),   // 硬上限 20 击/秒
+          rateMax: Math.max(rateMin, clampInt(ig.rateMax, 1, 50, 12)),
           chainMs: clampInt(ig.chainMs, 3000, 60000, 12000),
-          maxChainMs: clampInt(ig.maxChainMs, 3000, 60000, 12000),
-          humanMs: clampInt(ig.humanMs, 500, 20000, 2400),
-          rehearsalMs: clampInt(ig.rehearsalMs, 1000, 60000, 4000),
           gapMinMs: gapMin,
           gapMaxMs: Math.max(gapMin, clampInt(ig.gapMaxMs, 0, 2000, 85)),
           pressMinMs: pressMin,
           pressMaxMs: Math.max(pressMin, clampInt(ig.pressMaxMs, 0, 400, 56)),
           // 抖动上限 = 统一锚点三键交集的几何余量 (X ±100 / Y ±40, 2026-10-10 实测); 超界必出按钮
-          jitterPx: clampInt(ig.jitterPx, 0, 100, 3),
-          jitterXPx: clampInt(ig.jitterXPx !== undefined ? ig.jitterXPx : ig.jitterPx, 0, 100, 3),
-          jitterYPx: clampInt(ig.jitterYPx !== undefined ? ig.jitterYPx : ig.jitterPx, 0, 40, 3),
+          // ★ 默认值/范围与控制台、手机端(applyClickCfg)三处必须完全一致: X 默认 30 / Y 默认 12
+          jitterPx: clampInt(ig.jitterPx, 0, 100, 30),
+          jitterXPx: clampInt(ig.jitterXPx !== undefined ? ig.jitterXPx : ig.jitterPx, 0, 100, 30),
+          jitterYPx: clampInt(ig.jitterYPx !== undefined ? ig.jitterYPx : ig.jitterPx, 0, 40, 12),
           autoRefresh: !!ig.autoRefresh,   // 开售前自动刷新 (默认关)
           firstTapTries: clampInt(ig.firstTapTries, 1, 5, 1),   // 默认不重试 (2026-10-10 用户口径: 等超时票就没了)
           firstTapTimeoutMs: clampInt(ig.firstTapTimeoutMs, 30, 3000, 50),   // 50ms 超过即认为卡住 → 立即 Shizuku
+          // ↓↓↓ 2026-10-10 新增 (控制台可调; 范围/默认值三处一致)
+          doubleReadMs: clampInt(ig.doubleReadMs, 0, 500, 50),      // 双读确认延迟
+          blindFire: !!ig.blindFire,                                // 到点盲点一发开关
+          popupDelayMs: clampInt(ig.popupDelayMs, 0, 3000, 300),    // 弹窗处置起始延迟
+          popupPollMs: clampInt(ig.popupPollMs, 10, 1000, 50),      // 弹窗探测间隔
+          watchPollMs: clampInt(ig.watchPollMs, 50, 5000, 400),     // 终态看护间隔
         };
       }
       const result = dispatchTask(task, body.deviceId);
@@ -1621,19 +2023,56 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  /* ---- 手机「退场告知」(2026-10-10 用户口径): 脚本真退**之前**回报, 中枢据此立刻刷新状态 ---- */
+  if (pathname === '/api/device/stopping' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const deviceId = String(body.deviceId || '').trim();
+      if (!deviceId) return sendJson(res, 400, { error: '缺少 deviceId' });
+      const r = markStopConfirmed(deviceId, body.reason);
+      const rec = {
+        event: 'agent_stopping', at: Date.now(), taskId: null,
+        detail: { deviceId, reason: String(body.reason || '').slice(0, 80), version: String(body.version || ''), confirmed: r.ok },
+        receivedAt: new Date().toISOString(),
+      };
+      addRecentEvent(rec);
+      try { fs.appendFileSync(EVENTS_FILE, JSON.stringify(rec) + '\n'); } catch (e) {}
+      return sendJson(res, 200, {
+        status: r.ok ? 'ok' : 'ignored', channel: resolveChannel(deviceId),
+        note: r.ok ? '中枢已确认, 状态已即时刷新为"未在线"' : r.note,
+      });
+    } catch (e) { return sendJson(res, 400, { error: e.message }); }
+  }
+
   /* ---- 停止手机端脚本 (USB/WiFi 均可: 走心跳下发, 不用碰手机) ----
-   * 职责单一: 只停脚本。若当时有任务在跑, 由**手机端**退出前自行上报 cancelled (见 runner.stopAgentNow)。 */
+   * 职责单一: 只停脚本。若当时有任务在跑, 由**手机端**退出前自行上报 cancelled (见 runner.stopAgentNow)。
+   * ★ 2026-10-10 用户口径: 中枢不"假设"它停了 —— 先尽力即时送达指令, 等手机回报「退场告知」才刷新状态。 */
   if (pathname === '/api/device/stop-agent' && req.method === 'POST') {
     try {
       const body = await readJsonBody(req);
       const devId = String(body.deviceId || '').trim() || [...devices.keys()][0];
       const dev = devices.get(devId);
       if (!dev) return sendJson(res, 404, { error: '设备不在线（可能已经停掉了）', channel: resolveChannel() });
+      // 设备本来就没心跳了 → 直接判定已停止, 不必等手机回报
+      if (Date.now() - (dev.lastSeen || 0) >= 20000) {
+        markStopConfirmed(devId, '设备本身已离线, 直接判定停止');
+        return sendJson(res, 200, {
+          status: 'offline_stopped', deviceId: devId, channel: resolveChannel(devId),
+          note: '这台设备本来就不在线, 已直接标记为已停止',
+        });
+      }
+      // 先试"即时送达"(手机闲着时通常正挂在长轮询上 → 秒级收到)
       dev.stopRequested = true;
-      log(`[停止指令] 已登记 → 设备 ${devId}（下一次心跳下发, 最多 4 秒）`);
+      dev.stopPushedAt = Date.now();
+      dev.stopPushCount = (dev.stopPushCount || 0) + 1;
+      const delivered = deliverControlNow(devId, { stopAgent: true });
+      if (delivered) dev.stopRequested = false;
+      log(`[停止指令] → 设备 ${devId} (${delivered ? '经长轮询即时送达' : '下一次心跳下发, 最多 4 秒'})`);
       return sendJson(res, 200, {
         status: 'pending', deviceId: devId, runningTaskId: dev.currentTaskId || null,
-        channel: resolveChannel(devId), note: '手机最多 4 秒内收到并退出脚本',
+        channel: resolveChannel(devId), delivered,
+        note: delivered ? '指令已即时送到手机；它退出前会回报，届时状态立刻刷新'
+                        : '手机最多 4 秒内收到；它退出前会回报，届时状态立刻刷新（不用等心跳超时）',
       });
     } catch (e) { return sendJson(res, 500, { error: e.message }); }
   }
@@ -1649,7 +2088,13 @@ const server = http.createServer(async (req, res) => {
       try { localSize = fs.statSync(AGENT_SCRIPT).size; } catch (eS) { /* 忽略 */ }
       dev.selfUpdateRequested = true;
       log(`[自更新] 已登记 → 设备 ${devId}（电脑端脚本 ${Math.round(localSize / 1024)}KB）`);
-      return sendJson(res, 200, { status: 'pending', deviceId: devId, localSize, note: '手机最多 4 秒内开始下载并覆盖本地脚本, 随后自动重启' });
+      // ★ 2026-10-10 修: 这里原来只回 {status:'pending'} 没有 ok 字段 → 控制台按 r.ok 判成功,
+      //   于是**一定**走"更新未完成"分支 (明明已经下发成功)。现在明确回 ok:true + pending:true,
+      //   由控制台随后用"手机上报体积 vs 电脑体积"的真实凭据复核。
+      return sendJson(res, 200, {
+        ok: true, pending: true, status: 'pending', deviceId: devId, localSize,
+        note: '手机最多 4 秒内开始下载并覆盖本地脚本, 随后自动重启',
+      });
     } catch (e) { return sendJson(res, 500, { error: e.message }); }
   }
 

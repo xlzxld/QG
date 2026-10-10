@@ -1,6 +1,6 @@
 {
   "_说明": "大麦演出项目已探测库。探针真实采集（H5 详情接口），控制台直接下拉选择。巡演按 tourId 分组，含多城市站。",
-  "updatedAt": "2026-10-09T09:19:53.106Z",
+  "updatedAt": "2026-10-10T05:29:23.325Z",
   "items": [
     {
       "id": "st-1085142029424",
@@ -190,6 +190,32 @@
       ],
       "venueAddr": "四川省成都市龙泉驿区体育公园路16号",
       "duration": "约150分钟（以现场为准）"
+    },
+    {
+      "id": "st-1079986171474",
+      "itemId": "1079986171474",
+      "projectId": "240065024",
+      "tourId": "",
+      "tourName": "王嘉尔 JACKSON WANG MAGICMAN2 WORLD TOUR2025-2027",
+      "stationName": "杭州站",
+      "name": "杭州·王嘉尔 JACKSON WANG MAGICMAN2 WORLD TOUR2025-2027—杭州站",
+      "city": "杭州市",
+      "venue": "杭州奥体AT中心体育馆",
+      "venueAddr": "杭州萧山区盈丰街道博奥路2657号",
+      "showTime": "2026.11.14-11.15",
+      "stationShowTime": "",
+      "saleStatus": "",
+      "status": "在售",
+      "priceRange": "399-2999",
+      "purchaseLimit": "4",
+      "duration": "约120分钟（以现场为准）",
+      "saleTimeHints": [],
+      "fullData": true,
+      "source": "damai-h5-live",
+      "updatedAt": "2026-10-10T05:29:23.325Z",
+      "sessions": [],
+      "priceTiers": [],
+      "stations": []
     }
   ]
 }

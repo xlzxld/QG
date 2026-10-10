@@ -5,7 +5,8 @@
  *   1. 无 USB 无 Agent  → /api/channel = none; perf-boost 回 needUsb; open-item 闸门先行 (400/403)
  *   2. 仅 WiFi Agent    → /api/channel = wifi; /api/phone/cmd 打开商品页 = 下发 phone_op 任务
  *                         (WiFi 下不再被「无 USB 设备」挡住)
- *   3. 通道能力矩阵     → openItem/gesture 两通道可用; armTap/perfBoost/diagSnapshot USB 独占
+ *   3. 通道能力矩阵     → openItem/tapShizuku 两通道可用; armTap/perfBoost/diagSnapshot USB 独占
+ *      (无障碍手势已按用户口径删除 —— 对自绘按钮无效)
  *   4. 控制台 UI        → 通道徽标 / 「抢购」「停止」改名 / 独立「局域网更新」按钮已并入 /
  *                         「查询」按钮已移除 / 「停止手机脚本」在设备卡片
  *
@@ -81,7 +82,8 @@ try {
   ok(hello.status === 200 && hello.body.channel, 'hello 注册成功且回带 channel');
   const ch1 = await j('/api/channel');
   ok(ch1.body.channel.mode === 'wifi' && ch1.body.channel.wifi === true, `通道模式 = ${ch1.body.channel.mode}`);
-  ok(ch1.body.channel.caps.openItem === true && ch1.body.channel.caps.gesture === true, 'WiFi 能力: openItem/gesture 可用');
+  ok(ch1.body.channel.caps.openItem === true && ch1.body.channel.caps.tapShizuku === true, 'WiFi 能力: openItem / tapShizuku(手机本地注入) 可用');
+  ok(ch1.body.channel.caps.gesture === undefined, '无障碍手势已从能力矩阵移除 (对自绘按钮无效)');
   ok(ch1.body.channel.caps.perfBoost === false && ch1.body.channel.caps.armTap === false, 'WiFi 能力: perfBoost/armTap 明确 USB 独占');
 
   const op = await post('/api/phone/cmd', { op: 'open_item', params: { itemId: '1085142029424' } });

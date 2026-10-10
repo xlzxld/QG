@@ -117,7 +117,7 @@ function restartWithLatestScript() {
     }
 }
 
-/** 停止脚本: 先把在跑的任务收尾上报 (避免控制台一直显示"执行中"), 再退出 */
+/** 停止脚本: 先把在跑的任务收尾上报 (避免控制台一直显示"执行中"), 再告知中枢"我要走了", 最后退出 */
 function stopAgentNow() {
     var tid = Transport.currentTaskId || null;
     console.warn("【停止】收到中枢停止指令, 脚本退出" + (tid ? " (同时终止任务 " + tid + ")" : ""));
@@ -126,24 +126,21 @@ function stopAgentNow() {
     } catch (e1) {}
     try { Transport.sendEvent(null, "log", { msg: "【停止】收到中枢停止指令, 脚本退出" }); } catch (e2) {}
     try { toast("🛑 已按控制台指令停止脚本"); } catch (e3) {}
-    sleep(500);
-    try { engines.stopAll(); } catch (e4) {}
-    try { exit(); } catch (e5) {}
-}
-
-/** 手机本地手势 (WiFi 通道下 phone_op/gesture 用; 不需要 ADB) */
-function localGesture(x, y, pressMs) {
-    try {
-        if (typeof press === "function") return press(x, y, pressMs || 40) !== false;
-        if (typeof click === "function") return click(x, y) !== false;
-    } catch (e) {}
-    return false;
+    // ★ 2026-10-10 (用户口径): 退场前"打个招呼" —— 中枢收到这条就**立刻**把设备标成已停止并开始复探,
+    //   不用再傻等 20 秒心跳超时。万一条没送到, 中枢那边仍有心跳超时兜底, 不影响退出。
+    var told = false;
+    try { told = Transport.notifyStopping("收到控制台「停止手机脚本」指令"); } catch (e4) {}
+    console.log("【停止】退场告知 " + (told ? "已送达中枢, 状态应立刻刷新" : "未送达 (中枢会按心跳超时兜底)"));
+    sleep(400);
+    try { engines.stopAll(); } catch (e5) {}
+    try { exit(); } catch (e6) {}
 }
 
 /**
  * 手机本地执行指令 (mode=phone_op) —— 2026-10-09 新增。
  * 中枢在 WiFi 通道下没有 ADB, 无法代为操作手机; 改为把指令下发到端侧, 由本地能力执行。
- * 支持的 op: open_item (本地 deep-link 打开商品页) / gesture (本地无障碍手势)
+ * 支持的 op: open_item (本地 deep-link 打开商品页) / verify_script (手机本地自检"我是不是最新版")
+ *   ★ 2026-10-10: 删掉 gesture (本地无障碍手势) —— 对自绘控件无效, 徒增代码; 点击一律走 ADB / Shizuku。
  */
 function executePhoneOp(task) {
     var tid = task.taskId;
@@ -161,12 +158,35 @@ function executePhoneOp(task) {
             out.evidence = landed ? ("已打开 (" + (r.hit || "") + ")") : ("未落到详情页: " + ((r && r.error) || ""));
             out.data = { hit: (r && r.hit) || "", tried: (r && r.tried) || [], via: "local" };
             Transport.sendEvent(tid, "step", { step: "item_open", status: landed ? "done" : "failed", detail: out.evidence });
-        } else if (op === "gesture") {
-            var gx = Number(p.x), gy = Number(p.y);
-            var okG = (isFinite(gx) && isFinite(gy)) ? localGesture(gx, gy, Number(p.pressMs) || 40) : false;
-            out.outcome = okG ? "success" : "failed";
-            out.message = "手机本地无障碍手势";
-            out.evidence = okG ? ("已注入手势 (" + gx + "," + gy + ")") : "手势注入失败 (无障碍通道异常)";
+        } else if (op === "verify_script") {
+            // 手机本地自检"我是不是最新版": 比对自己脚本体积 vs 中枢给的电脑端体积, 并当面提示(手机也要有提示)
+            var mySize = Transport.scriptSize();
+            var myVer = Transport.AGENT_VERSION || "?";
+            var hubSize = Number(p.hubSize) || 0;
+            var hubVer = String(p.hubVersion || "");
+            var kb = function (n) { return (n / 1024).toFixed(1) + "KB"; };
+            var exact = (mySize > 0 && hubSize > 0 && mySize === hubSize);
+            out.outcome = mySize > 0 ? "success" : "failed";
+            out.message = "手机本地自检脚本是否最新";
+            if (mySize <= 0) {
+                out.evidence = "读不到本机脚本体积, 无法自检 (脚本路径异常?)";
+                try { toast("⚠ 读不到手机脚本体积, 无法自检版本\n请在控制台点「📦 更新手机脚本并重启 Agent」重新部署"); } catch (eT0) {}
+                try { device.vibrate(200); } catch (eV0) {}
+            } else if (exact) {
+                out.evidence = "手机脚本与电脑完全一致 (" + mySize + "B · v" + myVer + ")";
+                try { toast("✅ 手机脚本已是最新版\nv" + myVer + " · " + kb(mySize)); } catch (eT1) {}
+                try { device.vibrate(120); } catch (eV1) {}
+            } else {
+                out.evidence = "手机脚本与电脑不一致: 手机 " + mySize + "B" + (hubSize ? " / 电脑 " + hubSize + "B" : " / 电脑未知");
+                try {
+                    toast("⚠ 手机脚本不是最新版!\n手机 v" + myVer + " " + kb(mySize)
+                        + (hubSize ? " / 电脑 " + kb(hubSize) + (hubVer ? " v" + hubVer : "") : "")
+                        + "\n请在控制台点「📦 更新手机脚本并重启 Agent」");
+                } catch (eT2) {}
+                try { device.vibrate(180); sleep(200); device.vibrate(180); } catch (eV2) {}
+            }
+            out.data = { mySize: mySize, myVersion: myVer, hubSize: hubSize, hubVersion: hubVer, exact: exact };
+            Transport.sendEvent(tid, "script_verified", out.data);
         } else {
             out.evidence = "未知 phone_op: " + op;
         }
@@ -355,8 +375,8 @@ function executeDamaiRush(task) {
 /**
  * 大麦「链接抢购」执行流水线 (2026-10-09 重写)
  * 就位(链接直达) → 页面核对 → 信号锚定 → 对时 → 低频预监视
- * → T0-1s 高频突变检测 → 瞬间首击(纯ADB) → 拟人连点链 → 提交风暴 → 结果
- * 彩排(dryRun) 例外: 不检测变化, 到点直接真打 (首击 + 4s 固定锚点超高频连点), 只测点击链路
+ * → T0-1s 高频突变检测 → 瞬间首击 → 高频连点链 → 结果
+ * 测试按钮 (grab.dryRun) 例外: 不等页面变化, 到点直接出手; 之后**走同一条连点链** (整条链都能演练到)。
  */
 function executeDamaiGrab(task) {
     var tid = task.taskId;
@@ -368,9 +388,10 @@ function executeDamaiGrab(task) {
     Transport.sendEvent(tid, "channel_probe", { ms: chanProbe.ms, ok: chanProbe.ok, url: chanProbe.url });
     Transport.sendEvent(tid, "grab_armed", {
         itemId: task.target && task.target.itemId,
-        dryRun: !!grab.dryRun,
+        test: !!grab.dryRun,
         selfTest: !!grab.selfTest,
-        hammer: !!grab.hammer,
+        blindFire: !!grab.blindFire,
+        doubleReadMs: grab.doubleReadMs,
         fireAt: task.timing && task.timing.fireAtEpochMs
     });
 
@@ -435,6 +456,11 @@ function executeDamaiGrab(task) {
         }
     } catch (eSell) {}
     Transport.sendEvent(tid, "timesync_done", syncEvidence);
+    try {
+        sendLog(tid, "[对时] 手机跟大麦服务器对过表了: 手机比大麦"
+            + (sync.offset >= 0 ? "快 " : "慢 ") + Math.abs(sync.offset) + "ms（一次来回 " + sync.rtt + "ms）"
+            + " —— 开抢时刻就是按这个校正过的表算的");
+    } catch (eSL) {}
     if (isTaskCancelled(tid)) { reportCancelled(tid, "对时后被手动终止"); return; }
 
     // 5. 通道自测分支 (盯按钮区域 + 触发一次真实变化测发现延迟)
@@ -451,22 +477,9 @@ function executeDamaiGrab(task) {
         return;
     }
 
-    // 6. 预监视 → 高频突变检测 → 首击 (彩排模式: 不检测变化, 到点直接真打)
+    // 6. 预监视 → 高频突变检测 → 首击 (测试模式: 不等页面变化, 到点直接出手)
     var watch = DamaiAdapter.grabWatchAndFire(task, anchor, tid, !!grab.dryRun);
     if (watch.cancelled) { reportCancelled(tid, "监视阶段被手动终止"); return; }
-    if (grab.dryRun) {
-        Transport.sendResult({
-            taskId: tid, platform: "damai",
-            outcome: watch.fired ? "success" : "failed",
-            reason: "rehearsal_tap",
-            message: "彩排: 到点首击 ΔT0 " + watch.deltaMs + "ms, 接拟人连点 " + (watch.taps || 0) + " 击",
-            evidence: "首击 ΔT0 " + watch.deltaMs + "ms · 连点 " + (watch.taps || 0) + " 击 / " + (watch.burstMs || 0)
-                + "ms = 均 " + (watch.tapsPerSec || 0) + " 击/秒 · 峰值 " + (watch.peakPerSec || 0) + " 击/秒"
-                + " (固定锚点 " + anchor.cx + "," + anchor.cy + ", 抖动间隔且 ≤20 击/秒, 彩排不打提交)",
-            data: { deltaMs: watch.deltaMs, taps: watch.taps, tapsPerSec: watch.tapsPerSec, peakPerSec: watch.peakPerSec, burstMs: watch.burstMs }
-        });
-        return;
-    }
     if (watch.late) {
         Transport.sendResult({ taskId: tid, platform: "damai", outcome: "failed", reason: "late_armed", evidence: "已过开抢时刻超过 5 秒, 拒绝出手 (防误点)" });
         return;
@@ -484,7 +497,7 @@ function executeDamaiGrab(task) {
     }
     if (isTaskCancelled(tid)) { reportCancelled(tid, "首击后被手动终止"); return; }
 
-    // 7. 连点链 + 提交风暴 (拟人连点直到跳转 → 右下角超高频直到提交)
+    // 7. 高频连点链 (正式开抢与测试按钮走**同一条链**, 含侧车弹窗处置 + 终态看护)
     var chain = DamaiAdapter.grabChain(task, anchor, tid);
     if (chain.cancelled) { reportCancelled(tid, "连点链被手动终止"); return; }
 
